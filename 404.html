@@ -3,16 +3,18 @@
   <head>
     <meta charset="utf-8">
      <script>
-       const parts = location.pathname.split('/').filter(Boolean);
-       const root = location.hostname.endsWith('github.io') && parts.length ? `/${parts[0]}/` : '/';
-       location.replace(root);
+       function pageRoot() {
+         const parts = location.pathname.split('/').filter(Boolean);
+         return location.hostname.endsWith('github.io') && parts.length ? `/${parts[0]}/` : '/';
+       }
+       location.replace(pageRoot());
      </script>
      <title>Redirection…</title>
   </head>
   <body>
      <p>Redirection vers l’application… <a id="app-link" href="/">Ouvrir l’application</a></p>
      <script>
-       document.getElementById('app-link').href = location.hostname.endsWith('github.io') && parts.length ? `/${parts[0]}/` : '/';
+       document.getElementById('app-link').href = pageRoot();
      </script>
   </body>
 </html>
