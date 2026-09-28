@@ -15,7 +15,7 @@
       try {
         sessionStorage.setItem('msplomberie_redirect', spaPath);
       } catch (e) {}
-      setTimeout(() => location.replace(root), 100);
+      setTimeout(() => location.replace(new URL(root, location.origin)), 100);
     </script>
   </body>
 </html>
