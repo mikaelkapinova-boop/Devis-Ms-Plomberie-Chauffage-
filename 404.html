@@ -3,11 +3,7 @@
   <head>
     <meta charset="utf-8">
      <script>
-       function pageRoot() {
-         const parts = location.pathname.split('/').filter(Boolean);
-         return location.hostname.endsWith('github.io') && parts.length ? `/${parts[0]}/` : '/';
-       }
-       const root = pageRoot();
+       const root = '/Devis-Ms-Plomberie-Chauffage-/';
        const spaPath = location.pathname.startsWith(root)
          ? `/${location.pathname.slice(root.length).replace(/^\/+/, '')}${location.search}${location.hash}`
          : `${location.pathname}${location.search}${location.hash}`;
