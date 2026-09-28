@@ -2,10 +2,17 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8">
-    <meta http-equiv="refresh" content="0; url=./index.html">
-    <title>Redirection…</title>
+     <script>
+       const parts = location.pathname.split('/').filter(Boolean);
+       const root = location.hostname.endsWith('github.io') && parts.length ? `/${parts[0]}/` : '/';
+       location.replace(root);
+     </script>
+     <title>Redirection…</title>
   </head>
   <body>
-    <p>Redirection vers l’application… <a href="./index.html">Ouvrir l’application</a></p>
+     <p>Redirection vers l’application… <a id="app-link" href="/">Ouvrir l’application</a></p>
+     <script>
+       document.getElementById('app-link').href = location.hostname.endsWith('github.io') && parts.length ? `/${parts[0]}/` : '/';
+     </script>
   </body>
 </html>
