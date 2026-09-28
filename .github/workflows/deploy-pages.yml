@@ -31,7 +31,11 @@ jobs:
       - name: Prepare site artifact
         run: |
           mkdir -p _site
-          cp index.html 404.html _site/
+          rsync -av ./ _site/ \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude '_site/' \
+            --exclude 'README.md'
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
