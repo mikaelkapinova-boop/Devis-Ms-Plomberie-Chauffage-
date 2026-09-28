@@ -2,22 +2,20 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8">
-     <script>
-       const root = '/Devis-Ms-Plomberie-Chauffage-/';
-       const spaPath = location.pathname.startsWith(root)
-         ? `/${location.pathname.slice(root.length).replace(/^\/+/, '')}${location.search}${location.hash}`
-         : `${location.pathname}${location.search}${location.hash}`;
-       try {
-         sessionStorage.setItem('msplomberie_redirect', spaPath);
-       } catch (e) {}
-       location.replace(root);
-     </script>
-     <title>Redirection…</title>
+    <title>Redirection…</title>
   </head>
   <body>
-     <p>Redirection vers l’application… <a id="app-link" href="/Devis-Ms-Plomberie-Chauffage-/">Ouvrir l’application</a></p>
-     <script>
-       document.getElementById('app-link').href = root;
-     </script>
+    <p>Redirection vers l’application… <a id="app-link" href="/Devis-Ms-Plomberie-Chauffage-/">Ouvrir l’application</a></p>
+    <script>
+      const root = '/Devis-Ms-Plomberie-Chauffage-/';
+      const spaPath = location.pathname.startsWith(root)
+        ? `/${location.pathname.slice(root.length).replace(/^\/+/, '')}${location.search}${location.hash}`
+        : `${location.pathname}${location.search}${location.hash}`;
+      document.getElementById('app-link').href = root;
+      try {
+        sessionStorage.setItem('msplomberie_redirect', spaPath);
+      } catch (e) {}
+      setTimeout(() => location.replace(root), 100);
+    </script>
   </body>
 </html>

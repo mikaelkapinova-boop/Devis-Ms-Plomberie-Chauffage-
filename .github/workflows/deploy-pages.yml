@@ -31,11 +31,12 @@ jobs:
       - name: Prepare site artifact
         run: |
           mkdir -p _site
-          rsync -av ./ _site/ \
-            --exclude '.git/' \
-            --exclude '.github/' \
-            --exclude '_site/' \
-            --exclude 'README.md'
+          find . -mindepth 1 -maxdepth 1 \
+            ! -name '.git' \
+            ! -name '.github' \
+            ! -name '_site' \
+            ! -name 'README.md' \
+            -exec cp -R {} _site/ \;
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
