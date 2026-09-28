@@ -5,13 +5,14 @@
 :root[data-theme=dark]{--bg:#0e141a;--cd:#17202a;--ink:#e7ecf1;--mu:#92a0ac;--hd:#a9c2d6;--ln:#28343f;--in:#101820;--ok:#3fbf75;--rd:#ef5a63}
 *{box-sizing:border-box}html{background:var(--bg);-webkit-text-size-adjust:100%;scroll-padding-top:calc(80px + env(safe-area-inset-top,0px));scroll-padding-bottom:calc(var(--bar-h) + 48px)}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif}
+img{max-width:100%;height:auto}
 #hd{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--sl);color:#fff;display:flex;align-items:center;gap:10px;padding:10px 12px}#hd b{flex:1;font-size:18px}
 .ib{width:40px;height:40px;border:0;border-radius:10px;background:#fff3;color:#fff;font-size:20px}
 #ov{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;background:#0007;z-index:19;display:none}#ov.o{display:block}
 #nv{position:fixed;top:0;left:0;bottom:0;width:78%;max-width:300px;background:var(--cd);z-index:20;transform:translateX(-105%);transition:transform .2s;padding:calc(20px + env(safe-area-inset-top,0px)) 0 20px}#nv.o{transform:none}
 .brand{display:block;padding:0 22px 14px;color:var(--cu);font-size:18px}
 .ni{display:block;width:100%;text-align:left;padding:15px 22px;border:0;background:none;color:var(--ink);font:inherit;font-size:17px}.ni.a{background:var(--in);color:var(--cu);font-weight:700}
-main{max-width:720px;margin:auto;padding:12px 12px 100px}
+main{max-width:720px;margin:auto;padding:12px 12px 100px;overflow-x:hidden}
 .c{background:var(--cd);border:1px solid var(--ln);border-radius:14px;padding:14px;margin-bottom:12px}.c h3{margin:0 0 10px;font-size:15px;color:var(--hd)}
 input,select,textarea{width:100%;font:inherit;font-size:16px;padding:10px;border:1px solid var(--ln);border-radius:10px;background:var(--in);color:var(--ink)}
 label{display:block;font-size:12px;color:var(--mu);margin:0 0 8px}label input,label select{margin-top:3px}
@@ -81,6 +82,8 @@ input[type=date]{min-width:0;max-width:100%;-webkit-appearance:none;appearance:n
 .hero b{font-size:clamp(26px,9vw,34px);overflow-wrap:anywhere}.k{min-width:0}.k b{overflow-wrap:anywhere}
 body.lk{overflow:hidden}body.kb #bar{display:none!important}
 @media(min-width:520px){#bar .b{flex:1 1 0}}
+@media(max-width:520px){.g2:not(.qa),.pho{grid-template-columns:1fr}.tr{flex-wrap:wrap}.tr>b{white-space:normal}#nv{width:min(88vw,320px)}}
+@media(max-width:380px){#hd .ib{padding:8px 10px}.ln{grid-template-columns:64px minmax(0,1fr) 78px}}
 @media(max-width:340px){#hd .toplogo{display:none}}
 </style></head><body>
 <header id="hd"><button class="ib" onclick="tg()" aria-label="Menu"><span>Menu</span></button><b id="ttl"></b><button class="ib" id="ad" onclick="add()" aria-label="Ajouter"><span>Ajouter</span></button><img class="toplogo" alt="Logo"></header>
