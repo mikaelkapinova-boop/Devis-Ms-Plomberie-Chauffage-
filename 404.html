@@ -7,17 +7,21 @@
          const parts = location.pathname.split('/').filter(Boolean);
          return location.hostname.endsWith('github.io') && parts.length ? `/${parts[0]}/` : '/';
        }
+       const root = pageRoot();
+       const spaPath = location.pathname.startsWith(root)
+         ? `/${location.pathname.slice(root.length).replace(/^\/+/, '')}${location.search}${location.hash}`
+         : `${location.pathname}${location.search}${location.hash}`;
        try {
-         sessionStorage.setItem('msplomberie_redirect', location.pathname + location.search + location.hash);
+         sessionStorage.setItem('msplomberie_redirect', spaPath);
        } catch (e) {}
-       location.replace(pageRoot());
+       location.replace(root);
      </script>
      <title>Redirection…</title>
   </head>
   <body>
      <p>Redirection vers l’application… <a id="app-link" href="/">Ouvrir l’application</a></p>
      <script>
-       document.getElementById('app-link').href = pageRoot();
+       document.getElementById('app-link').href = root;
      </script>
   </body>
 </html>
