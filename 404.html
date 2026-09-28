@@ -7,7 +7,9 @@
          const parts = location.pathname.split('/').filter(Boolean);
          return location.hostname.endsWith('github.io') && parts.length ? `/${parts[0]}/` : '/';
        }
-       sessionStorage.setItem('msplomberie_redirect', location.pathname + location.search + location.hash);
+       try {
+         sessionStorage.setItem('msplomberie_redirect', location.pathname + location.search + location.hash);
+       } catch (e) {}
        location.replace(pageRoot());
      </script>
      <title>Redirection…</title>
