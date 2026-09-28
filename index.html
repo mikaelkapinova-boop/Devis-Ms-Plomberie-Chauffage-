@@ -125,7 +125,7 @@ if(ch&&!['e','ce'].includes(V.v))render()}
 function toast(m){const t=$('#ts');t.textContent=m;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,2400)}
 function arm2(b,fn){if(arm===b){arm=null;fn()}else{arm=b;b.textContent='Confirmer ?';setTimeout(()=>{if(arm===b){arm=null;b.textContent=b.dataset.t}},3000)}}
 let nvf=null;
-function tg(o){const n=$('#nv'),ov=$('#ov'),on=o===undefined?!n.classList.contains('o'):!!o,was=n.classList.contains('o');n.classList.toggle('o',on);ov.classList.toggle('o',on);document.body.classList.toggle('lk',on);if(on&&!was){nvf=document.activeElement;const f=n.querySelector('.ni,button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])');if(f&&f.focus)f.focus()}if(!on&&was&&nvf&&nvf.focus){nvf.focus();nvf=null}}
+function tg(o){const n=$('#nv'),ov=$('#ov'),on=o===undefined?!n.classList.contains('o'):!!o,was=n.classList.contains('o');n.classList.toggle('o',on);ov.classList.toggle('o',on);document.body.classList.toggle('lk',on);if(on&&!was){nvf=document.activeElement;const f=n.querySelector('.ni,button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])');if(f&&f.focus)f.focus()}if(!on&&was){const p=nvf;nvf=null;if(p&&p.focus)p.focus()}}
 function go(v,id){V={v,id};tg(0);render();scrollTo(0,0)}
 function render(){const t=V.v,d=t==='e'?cur():0;
 if(t==='e'&&!d){V.v='d';return render()}
