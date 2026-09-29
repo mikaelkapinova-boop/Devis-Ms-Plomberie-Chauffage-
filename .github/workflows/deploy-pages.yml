@@ -31,7 +31,7 @@ jobs:
       - name: Prepare site artifact
         run: |
           mkdir -p _site
-          for path in index.html 404.html assets css js img images fonts; do
+          for path in index.html 404.html manifest.webmanifest sw.js .nojekyll assets css js img images fonts inbox data; do
             if [ -e "$path" ]; then
               cp -R "$path" _site/
             fi

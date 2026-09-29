@@ -1,0 +1,16 @@
+{
+  "name": "Ms Plomberie & Chauffage – Devis & Factures",
+  "short_name": "Ms Devis",
+  "description": "Devis, factures, rapports, planning et assistant pour Ms Plomberie & Chauffage",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f1f4f7",
+  "theme_color": "#3b556a",
+  "lang": "fr",
+  "icons": [
+    {"src": "img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
