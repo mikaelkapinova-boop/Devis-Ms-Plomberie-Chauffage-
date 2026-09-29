@@ -40,7 +40,7 @@ ${precV()}
 <div class="c"><h3>Accès</h3><p class="mu" style="margin:0 0 8px;font-size:13px">L'appli est protégée par identifiant et mot de passe. Les données envoyées hors de l'appareil (GitHub, boîte de réception) sont chiffrées avec ce mot de passe.</p><button class="b gh sm" onclick="authLogout()">Se déconnecter</button></div>
 <div class="c"><h3>Zone sensible</h3><button class="b rd sm" data-t="Tout effacer sur cet appareil" onclick="arm2(this,wipe)">Tout effacer sur cet appareil</button></div>
 <p class="mu" style="text-align:center;font-size:12px">Version ${APPV}</p>`}
-const APPV='3.2';
+const APPV='3.3';
 function wipe(){for(const k in S)localStorage.removeItem('ms_'+k);localStorage.removeItem('ms_stamp');localStorage.removeItem('ms_key');sessionStorage.removeItem('ms_key');idbPut('pack',null);location.reload()}
 
 /* ---------- Sauvegarde / restauration ---------- */
@@ -98,7 +98,8 @@ Quand l'utilisateur t'envoie une liste, un devis (texte, PDF ou photo), un relev
 {"client":{"nom":"","adresse":"","cp_ville":"","tel":""},"objet":"résumé court des travaux","F":[{"d":"désignation fourniture","q":1,"p":0}],"M":[{"d":"désignation main-d'œuvre","q":1,"p":0}]}
 \`\`\`
 Règles : F = fournitures et matériels, M = main-d'œuvre, déplacements et interventions. q = quantité (nombre), p = prix unitaire HT en euros (nombre, 0 si inconnu). Reprends les prix lus sur le document ; si tu dois estimer, dis-le dans ta réponse. Si le message ne contient rien à chiffrer, réponds simplement sans bloc JSON.`;
-function chatV(){const c=S.cfg,hasKey=!!c.ai.key,hasPx=!!c.px,msgs=S.chat.slice(-60);
+const PXM=['Meilleur (automatique)','Sonar','GPT','Claude','Gemini','Grok','Kimi'];
+function chatV(){const c=S.cfg,cm=c.cm||'pc',hasKey=!!c.ai.key,hasPx=!!c.px,msgs=S.chat.slice(-60);
 return `<div class="c" style="padding:12px 14px"><div style="display:flex;gap:10px;align-items:center"><img src="${LGD}" alt="" style="width:40px;height:40px"><div style="flex:1;min-width:0"><b>Assistant devis</b><br><small class="mu">${hasKey?'IA directe activée ('+(c.ai.model||AIM[c.ai.pv])+')':hasPx?'Relié à Perplexity via '+esc(c.px):'Mode liste rapide (sans clé). Relie Perplexity dans Réglages.'}</small></div><button class="b gh sm" onclick="go('s')"><span>Réglages</span></button></div></div>
 <div id="inbx"></div>
 <div id="cm" class="cm">${msgs.length?msgs.map((m,i)=>bub(m,S.chat.length-msgs.length+i)).join(''):`<div class="bub a"><b>Bonjour.</b> Envoie-moi une liste de matériel, un ancien devis en PDF ou une photo : j'en fais un nouveau devis vierge prêt à modifier.<br><br>Exemples de listes comprises tout de suite :<br><code>Chauffe-eau 200 L ; 1 ; 420</code><br><code>2 x Robinet thermostatique 45 €</code><br><code>Pose et raccordement 3h 55€</code></div>`}</div>
@@ -106,8 +107,10 @@ return `<div class="c" style="padding:12px 14px"><div style="display:flex;gap:10
 <textarea id="cin" rows="2" placeholder="Écris ta demande ou colle une liste…" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))chatSend()"></textarea>
 <div class="crow"><label class="b gh sm" title="Photo ou PDF"><span>📎 Joindre</span><input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="attAdd(this.files)"></label><label class="b gh sm" title="Prendre une photo"><span>📷 Photo</span><input type="file" accept="image/*" capture="environment" style="display:none" onchange="attAdd(this.files)"></label>
 <button class="b sm" onclick="chatSend()"><span>${hasKey?'Envoyer':'Créer le devis'}</span></button></div>
-<div class="crow"><button class="b cu sm" onclick="pxSend()"><span>Envoyer à Perplexity${hasPx?'':' (à relier)'}</span></button><button class="b gh sm" onclick="pxOpen()"><span>Ouvrir dans Perplexity</span></button><button class="b gh sm" onclick="chatClear(this)" data-t="Vider la conversation"><span>Vider</span></button></div>
-<p class="mu" style="font-size:12px;margin:6px 2px 0">« Envoyer à Perplexity » : par e-mail, l'assistant Computer travaille seul et dépose le résultat ici (« Reçus de Perplexity »). « Ouvrir dans Perplexity » : sans crédits Computer, ta demande s'ouvre dans le chat Perplexity normal avec les bonnes consignes ; colle ensuite sa réponse ici et le devis se crée tout seul.</p></div>`}
+<div class="seg" role="tablist"><button class="${cm==='pc'?'on':''}" onclick="cs('cm','pc');render()">Computer</button><button class="${cm==='px'?'on':''}" onclick="cs('cm','px');render()">Perplexity (chat normal)</button></div>
+${cm==='px'?`<label style="margin:8px 0 0">Modèle à choisir dans Perplexity<select onchange="cs('pm',this.value)">${PXM.map(m=>`<option ${c.pm===m?'selected':''}>${m}</option>`).join('')}</select></label>`:''}
+<div class="crow"><button class="b cu sm" onclick="${cm==='px'?'pxOpen()':'pxSend()'}"><span>${cm==='px'?'Ouvrir dans Perplexity':'Envoyer à Computer'+(hasPx?'':' (à relier)')}</span></button><button class="b gh sm" onclick="chatClear(this)" data-t="Vider la conversation"><span>Vider</span></button></div>
+<p class="mu" style="font-size:12px;margin:6px 2px 0">${cm==='px'?'Sans crédits Computer : ta demande s\'ouvre dans le chat Perplexity normal avec les consignes ; choisis le modèle indiqué dans son sélecteur, puis colle sa réponse ici et appuie sur « Créer le devis ».':'Computer travaille seul (e-mail) : il lit tes listes, photos et PDF, cherche les prix et dépose le devis prêt dans « Reçus de Perplexity ».'}</p></div>`}
 function bub(m,i){const q=m.q,at=(m.att||[]).map(a=>`<span class="chip s">${a.k==='pdf'?'📄':'🖼️'} ${esc(a.n)}</span>`).join('');
 return `<div class="bub ${m.r}">${at?`<div class="atts">${at}</div>`:''}${esc(m.t).replace(/\n/g,'<br>')}${q?qCard(q,i):''}<small>${m.ts?new Date(m.ts).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):''}</small></div>`}
 function qCard(q,i){const F=q.F||[],M=q.M||[],tot2=[...F,...M].reduce((s,l)=>s+n(l.q)*n(l.p),0),open=S.docs.filter(d=>d.t==='d'&&d.st!=='fac');
@@ -152,11 +155,11 @@ Ma demande :
 `;
 async function pxOpen(){const c=S.cfg,txt=($('#cin')?.value||'').trim();if(!txt&&!ATT.length)return toast('Écris ta demande d\'abord');toast(ATT.length?'Lecture des fichiers…':'Ouverture…');
 const{texts,names}=await prepAtt();const prompt=PXQ.replace('${co}',c.co)+(txt||'Analyse les documents joints.')+(texts.length?'\n\n'+texts.join('\n\n'):'');
-chatPush({r:'u',t:txt||'(fichier joint)',att:names});chatPush({r:'a',t:'Demande ouverte dans Perplexity. Quand la réponse est prête, copie-la entièrement (avec le bloc json) et colle-la ici, puis « Créer le devis ».'+(names.some(a=>a.k==='img')?' Les photos : ajoute-les dans Perplexity avec le trombone (elles ne passent pas par le lien).':'')});
+chatPush({r:'u',t:txt||'(fichier joint)',att:names});chatPush({r:'a',t:'Demande ouverte dans Perplexity'+(c.pm&&!/^Meilleur/.test(c.pm)?' (modèle conseillé : '+c.pm+')':'')+'. Quand la réponse est prête, copie-la entièrement (avec le bloc json) et colle-la ici, puis « Créer le devis ».'+(names.some(a=>a.k==='img')?' Les photos : ajoute-les dans Perplexity avec le trombone (elles ne passent pas par le lien).':'')});
 const files=ATT.filter(a=>a.k==='img').map(a=>a.f);ATT=[];render();
 try{await navigator.clipboard.writeText(prompt)}catch(e){}
 if(files.length&&navigator.canShare&&navigator.canShare({files})){try{await navigator.share({files,title:'Devis',text:prompt.slice(0,1800)});toast('Choisis Perplexity dans le partage');return}catch(e){if(e&&e.name==='AbortError')return}}
-window.open('https://www.perplexity.ai/search?q='+enc(prompt.slice(0,6000)),'_blank');toast('Consignes copiées aussi dans le presse-papiers')}
+window.open('https://www.perplexity.ai/search?q='+enc(prompt.slice(0,6000)),'_blank');toast((c.pm&&!/^Meilleur/.test(c.pm)?'Choisis '+c.pm+' dans Perplexity · ':'')+'consignes copiées aussi')}
 
 /* ---------- Envoi à Perplexity (sans clé) : e-mail + pièces jointes ---------- */
 async function pxSend(){const c=S.cfg,txt=($('#cin')?.value||'').trim();if(!c.px){toast('Renseigne l\'adresse Gmail reliée à Perplexity dans Réglages');return go('s')}if(!txt&&!ATT.length)return toast('Écris ta demande d\'abord');
