@@ -174,7 +174,7 @@ if(k!=='ph'&&k!=='chat')ghSched()}
 async function persistAll(){const pack={};for(const key in S)pack[key]=S[key];pack._t=Date.now();await idbPut('pack',pack)}
 async function boot(){for(const k in S)try{const t=localStorage.getItem('ms_'+k);if(t)S[k]=JSON.parse(t)}catch(e){}
 try{const pack=await idbGet('pack');if(pack){const stamp=Number(localStorage.getItem('ms_stamp')||0);const empty=!S.docs.length&&!S.clients.length&&!S.rep.length&&!S.cat.length;if(empty||(pack._t||0)>=stamp){for(const k of ['clients','cat','docs','cfg','seq','rep','ph','chat','plan'])if(pack[k]!=null)S[k]=pack[k]}}}catch(e){}
-cfgInit();applyTheme();render();pwa();inbxLoad().then(()=>{inbxRender();homeInbx()});ghPull(0)}
+cfgInit();applyTheme();render();pwa();if(typeof impHash==='function')impHash();inbxLoad().then(()=>{inbxRender();homeInbx()});ghPull(0)}
 function toast(m){const t=$('#ts');t.textContent=m;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,2400)}
 function arm2(b,fn){if(arm===b){arm=null;fn()}else{arm=b;b.textContent='Confirmer ?';setTimeout(()=>{if(arm===b){arm=null;b.textContent=b.dataset.t}},3000)}}
 function tg(o){const on=o===undefined?!$('#nv').classList.contains('o'):!!o;$('#nv').classList.toggle('o',on);$('#ov').classList.toggle('o',on);document.body.classList.toggle('lk',on)}
