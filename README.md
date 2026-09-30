@@ -16,6 +16,19 @@ Site : https://mikaelkapinova-boop.github.io/Devis-Ms-Plomberie-Chauffage-/
 Depuis l'onglet **Assistant**, « Envoyer à Perplexity » envoie la demande par e-mail (sujet `[DEVIS]`).
 Une automatisation Perplexity lit l'e-mail, prépare le résultat et le dépose dans `inbox/` (ou modifie l'appli), puis l'appli le propose à l'import.
 
+## Assistant v3.5
+
+- **Conversations séparées** (☰) : chaque sujet garde son historique, sa demande, son IA, son modèle et son mode.
+- **Menu Demande** : créer / modifier un devis ou une facture, faire un rapport, recherche de prix, améliorer l'appli, projet IA, autre. Les réponses JSON créent ou modifient automatiquement le document (modification annulable).
+- **Menu IA** :
+  - *Perplexity* (dans l'appli, PC et iPhone) : Agent API `https://api.perplexity.ai/v1/agent`, clé API Perplexity (facturée à l'usage, séparée de l'abonnement Pro). Tous les modèles de l'API avec leur identifiant exact.
+  - *Computer* (dans l'appli) : pont `serveur.py` (MCP + OAuth, crédits Computer). Le modèle choisi est demandé à Computer comme sous-agent.
+  - *Perplexity Pro* : ouvre le chat Perplexity pré-rempli ; coller la réponse dans l'appli pour l'appliquer.
+  - *Computer e-mail* et *Sans IA* (liste rapide).
+- **Modes** : Rapide / Raisonnement / Profond (méthode de travail + `reasoning.effort` low / medium / high).
+- **Orchestre** (`js/models.js`) : fiche de chaque modèle (façon de raisonner, points forts, consignes), règles communes, et orchestrateur « Auto » qui choisit le modèle selon la demande et le mode.
+- Service worker « réseau d'abord » : les mises à jour s'affichent sans vider le cache.
+
 ## Computer dans l'appli (v3.4)
 1. Sur le PC : double-clic sur `lancer.bat` (Python 3 requis, rien à installer). L'appli s'ouvre sur http://127.0.0.1:8765.
 2. Onglet **Assistant** → mode « Computer (dans l'appli) » → **Se connecter** (compte Perplexity, une seule fois).

@@ -91,18 +91,19 @@ function trRestore(idx) {
   save(e.k); save('trash'); render(); toast('Restauré : ' + (e.it.num || 'document'));
 }
 function trKill(idx, b) { arm2(b, () => { S.trash.splice(idx, 1); save('trash'); render(); toast('Supprimé définitivement'); }); }
-function trList(t) { return S.trash.map((e, i) => ({e, i})).filter(x => x.e.k === colOf(t) && (t === 'x' || x.e.it.t === t)); }
+function trList(t) { return S.trash.map((e, i) => ({e, i})).filter(x => t === 'all' || (x.e.k === colOf(t) && (t === 'x' || x.e.it.t === t))); }
+function trOpenAll() { go('d'); TRV = 'all'; render(); scrollTo(0, 0); }
 function trAll(b) { const L = trList(TRV); if (!L.length) return; arm2(b, () => { L.reverse().forEach(x => trRestore(x.i)); }); }
 function trEmpty(b) { const L = trList(TRV); if (!L.length) return; arm2(b, () => { const del = new Set(L.map(x => x.i)); S.trash = S.trash.filter((_, i) => !del.has(i)); save('trash'); render(); toast('Corbeille vidée'); }); }
 function trOpen() { TRV = V.v; SELM = false; SELS.clear(); render(); scrollTo(0, 0); }
 function trClose() { TRV = null; render(); }
 function trV() {
-  const t = TRV, L = trList(t), nm = {d:'devis', f:'factures', x:'rapports'}[t];
-  return `<div class="selbar"><button class="b gh sm" onclick="trClose()"><span>← Retour aux ${nm}</span></button>
+  const t = TRV, L = trList(t), nm = {d:'devis', f:'factures', x:'rapports', all:'documents'}[t];
+  return `<div class="selbar"><button class="b gh sm" onclick="trClose()"><span>‹ ${t === 'all' ? 'Devis' : 'Retour aux ' + nm}</span></button>
 <button class="b sm" onclick="trAll(this)" data-t="Tout restaurer"><span>Tout restaurer</span></button>
 <button class="b sm" style="background:#e53935;color:#fff" onclick="trEmpty(this)" data-t="Vider la corbeille"><span>Vider la corbeille</span></button></div>
 <p class="mu" style="margin:0 4px 10px;font-size:12px">Corbeille · ${L.length} élément(s). Les ${nm} supprimés restent ici jusqu'à ce que tu vides la corbeille.</p>
-${L.length ? L.map(({e, i}) => { const d = e.it; return `<div class="r trr"><div><b>${esc(d.num || '')}</b><br><small class="mu">${esc(d.cn || 'Sans client')} · ${fd(d.date)} · supprimé le ${new Date(e.at).toLocaleDateString('fr-FR')}</small></div><div style="display:flex;gap:6px"><button class="b sm" onclick="trRestore(${i})"><span>Restaurer</span></button><button class="b gh sm" onclick="trKill(${i},this)" data-t="Effacer"><span>Effacer</span></button></div></div>`; }).join('') : '<p class="mu">La corbeille est vide.</p>'}`;
+${L.length ? L.map(({e, i}) => { const d = e.it; return `<div class="r trr"><div><b>${esc(d.num || '')}</b><br><small class="mu">${e.k === 'rep' ? 'Rapport' : d.t === 'f' ? 'Facture' : 'Devis'} · ${esc(d.cn || 'Sans client')} · ${fd(d.date)} · supprimé le ${new Date(e.at).toLocaleDateString('fr-FR')}</small></div><div style="display:flex;gap:6px"><button class="b sm" onclick="trRestore(${i})"><span>Restaurer</span></button><button class="b gh sm" onclick="trKill(${i},this)" data-t="Effacer"><span>Effacer</span></button></div></div>`; }).join('') : '<p class="mu">La corbeille est vide.</p>'}`;
 }
 
 /* Suppression depuis l'éditeur : passe par la corbeille */
@@ -195,168 +196,7 @@ function draftsHook() {
 }
 function draftClear(id) { localStorage.removeItem(DR(id)); }
 addEventListener('pagehide', () => { const e = $('#cin'); if (e) try { localStorage.setItem(DR('cin'), e.value); } catch (x) {} });
-document.addEventListener('visibilitychange', () => { if (document.hidden) { const e = $('#cin'); if (e) try { localStorage.setItem(DR('cin'), e.value); } catch (x) {} } else if (V.v === 'a') mcStatus(); });
-
-/* =====================================================================
-   3. TCHAT : catégories + Computer dans l'appli
-   ===================================================================== */
-const _chatPush = chatPush;
-chatPush = function (m) { if (!m.g) m.g = CG(); return _chatPush(m); };
-chatClear = function (b) { arm2(b, () => { const g = CG(); S.chat = S.chat.filter(m => (m.g || 'docs') !== g); S.cfg.mct[g] = ''; save('chat'); save('cfg'); render(); }); };
-
-function linkify(h) { return h.replace(/\[([^\]<]{1,120})\]\((https?:\/\/[^)\s<"]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>').replace(/(^|[\s>(])(https?:\/\/[^\s<"')]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>'); }
-const _bub = bub;
-bub = function (m, i) {
-  let h = linkify(_bub(m, i));
-  if (m.ix && i === S.chat.length - 1 && !MCBUSY) {
-    const B = (l, f, cl = 'b sm') => `<button class="${cl}" onclick="${f}"><span>${l}</span></button>`;
-    const x = m.ix, tid = esc(x.tid || '');
-    const btns = x.type === 'ask_user_question' ? B('Répondre', `mcAnswer('${tid}')`)
-      : x.type === 'confirm_action' ? B('Approuver', `mcAct('approve','${tid}')`) + B('Refuser', `mcAct('deny','${tid}')`, 'b gh sm')
-      : x.type === 'auth_required' ? (x.url ? `<a class="b gh sm" href="${esc(x.url)}" target="_blank" rel="noopener"><span>Connecter le service</span></a>` : '') + B("C'est connecté → continuer", `mcAct('connected','${tid}')`)
-      : B('Continuer / voir l\'avancement', `mcAct('continue','${tid}')`);
-    h = h.replace(/<small>([^<]*)<\/small><\/div>$/, `<div class="ixb">${btns}</div><small>$1</small></div>`);
-  }
-  return h;
-};
-
-chatV = function () {
-  const c = S.cfg, cm = c.cm || 'pc', hasKey = !!c.ai.key, hasPx = !!c.px, g = CG(), k = CK();
-  const all = S.chat.map((m, i) => ({m, i})).filter(x => (x.m.g || 'docs') === g).slice(-60);
-  const sub = cm === 'mc' ? `<span class="mcst"><span class="mcdot ${MCOK ? 'on' : ''}" id="mcdot"></span><span id="mctx">${MCOK === null ? 'Vérification du pont…' : MCOK ? 'Computer connecté dans l\'appli' : 'Computer non connecté'}</span></span>`
-    : hasKey ? 'IA directe activée (' + (c.ai.model || AIM[c.ai.pv]) + ')' : hasPx ? 'Relié à Perplexity via ' + esc(c.px) : 'Mode liste rapide (sans clé). Relie Perplexity dans Réglages.';
-  const opt = (gg, lab) => `<optgroup label="${lab}">${Object.entries(CAT2).filter(([, v]) => v.g === gg).map(([kk, v]) => `<option value="${kk}" ${kk === k ? 'selected' : ''}>${v.l}</option>`).join('')}</optgroup>`;
-  const welcome = g === 'app'
-    ? `<div class="bub a"><b>Conversation « Application ».</b> Demande une amélioration de l'appli, un nouveau projet IA ou autre chose. Les réponses sont en mode codage (code complet, explications étape par étape).</div>`
-    : `<div class="bub a"><b>Bonjour.</b> Envoie-moi une liste de matériel, un ancien devis en PDF ou une photo : j'en fais un nouveau devis vierge prêt à modifier.<br><br>Exemples de listes comprises tout de suite :<br><code>Chauffe-eau 200 L ; 1 ; 420</code><br><code>2 x Robinet thermostatique 45 €</code><br><code>Pose et raccordement 3h 55€</code></div>`;
-  const busy = MCBUSY ? `<div class="bub a"><span class="mcspin"></span>Computer travaille… (quelques secondes à plusieurs minutes). Tu peux changer d'onglet, la réponse arrivera ici.</div>` : '';
-  const mainBtn = cm === 'mc' ? `<button class="b sm" onclick="mcSend()" ${MCBUSY ? 'disabled' : ''}><span>Envoyer à Computer</span></button>`
-    : `<button class="b sm" onclick="chatSend()"><span>${hasKey ? 'Envoyer' : 'Créer le devis'}</span></button>`;
-  const help = cm === 'mc'
-    ? `Computer répond ici même, sans quitter l'appli ni clé API (connexion avec ton compte Perplexity). Nécessite le pont <b>serveur.py</b> lancé sur ton PC (double-clic sur <b>lancer.bat</b>). ${g === 'docs' ? 'Les devis/factures reconnus sont créés automatiquement.' : ''}`
-    : cm === 'px' ? 'Sans crédits Computer : ta demande s\'ouvre dans le chat Perplexity normal avec les consignes ; choisis le modèle indiqué dans son sélecteur, puis colle sa réponse ici et appuie sur « Créer le devis ».'
-    : 'Computer travaille seul (e-mail) : il lit tes listes, photos et PDF, cherche les prix et dépose le devis prêt dans « Reçus de Perplexity ».';
-  return `<div class="c" style="padding:12px 14px"><div style="display:flex;gap:10px;align-items:center"><img src="${LGD}" alt="" style="width:40px;height:40px"><div style="flex:1;min-width:0"><b>Assistant</b><br><small class="mu">${sub}</small></div>${cm === 'mc' ? `<button class="b gh sm" id="mcconn" onclick="mcConnect()" style="${MCOK ? 'display:none' : ''}"><span>Se connecter</span></button>` : ''}<button class="b gh sm" onclick="go('s')"><span>Réglages</span></button></div>
-<label class="cat2">Type de demande<select onchange="cs('cat2',this.value);render()">${opt('docs', 'Documents : devis, factures, rapports…')}${opt('app', 'Application et projets IA')}</select></label></div>
-<div id="inbx"></div>
-<div id="cm" class="cm">${all.length ? all.map(x => bub(x.m, x.i)).join('') : welcome}${busy}</div>
-<div class="cmp"><div id="atts" class="atts">${ATT.map((a, i) => `<span class="chip">${a.k === 'pdf' ? '📄' : '🖼️'} ${esc(a.f.name.slice(0, 22))}<button onclick="ATT.splice(${i},1);render()" aria-label="Retirer">×</button></span>`).join('')}</div>
-<textarea id="cin" rows="2" placeholder="${g === 'app' ? 'Décris l\'amélioration ou le projet…' : 'Écris ta demande ou colle une liste…'}" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))${cm === 'mc' ? 'mcSend()' : 'chatSend()'}"></textarea>
-<div class="crow"><label class="b gh sm" title="Photo ou PDF"><span>📎 Joindre</span><input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="attAdd(this.files)"></label><label class="b gh sm" title="Prendre une photo"><span>📷 Photo</span><input type="file" accept="image/*" capture="environment" style="display:none" onchange="attAdd(this.files)"></label>
-${mainBtn}</div>
-<div class="seg" role="tablist"><button class="${cm === 'mc' ? 'on' : ''}" onclick="cs('cm','mc');render()">Computer (dans l'appli)</button><button class="${cm === 'pc' ? 'on' : ''}" onclick="cs('cm','pc');render()">Computer (e-mail)</button><button class="${cm === 'px' ? 'on' : ''}" onclick="cs('cm','px');render()">Perplexity (chat normal)</button></div>
-${cm === 'px' ? `<label style="margin:8px 0 0">Modèle à choisir dans Perplexity<select onchange="cs('pm',this.value)">${PXM.map(m => `<option ${c.pm === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>` : ''}
-${cm === 'mc' ? `<label style="margin:8px 0 0">Adresse du pont (serveur.py)<input value="${esc(c.mcu || MC_DEF)}" onchange="cs('mcu',this.value.trim()||'${MC_DEF}');mcStatus()"></label>` : ''}
-<div class="crow">${cm === 'mc' ? '' : `<button class="b cu sm" onclick="${cm === 'px' ? 'pxOpen2()' : 'pxSend2()'}"><span>${cm === 'px' ? 'Ouvrir dans Perplexity' : 'Envoyer à Computer' + (hasPx ? '' : ' (à relier)')}</span></button>`}<button class="b gh sm" onclick="chatClear(this)" data-t="Nouvelle conversation"><span>Nouvelle conversation</span></button></div>
-<p class="mu" style="font-size:12px;margin:6px 2px 0">${help}</p></div>`;
-};
-
-/* La catégorie est ajoutée en tête des demandes envoyées par e-mail ou ouvertes dans Perplexity */
-function tagCin() { const e = $('#cin'); if (e && e.value.trim() && !/^\[/.test(e.value)) e.value = '[' + CAT2[CK()].l + '] ' + e.value.trim(); draftClear('cin'); }
-function cinReset() { const e = $('#cin'); if (e) e.value = ''; draftClear('cin'); }
-async function pxSend2() { tagCin(); const p = pxSend(); cinReset(); return p; }
-async function pxOpen2() {
-  if (CG() === 'docs') { tagCin(); const p = pxOpen(); cinReset(); return p; }
-  const txt = ($('#cin')?.value || '').trim(); if (!txt) return toast('Écris ta demande d\'abord');
-  const prompt = PROMPT_APP + '\n\nMa demande : [' + CAT2[CK()].l + '] ' + txt;
-  cinReset(); chatPush({r: 'u', t: txt}); chatPush({r: 'a', t: 'Demande ouverte dans Perplexity (consignes copiées aussi).'}); render();
-  try { await navigator.clipboard.writeText(prompt); } catch (e) {}
-  window.open('https://www.perplexity.ai/search?q=' + enc(prompt.slice(0, 6000)), '_blank');
-}
-const _chatSend = chatSend;
-chatSend = function () { const p = _chatSend(); cinReset(); return p; };
-
-/* ---------- Pont local → Perplexity Computer (MCP) ---------- */
-async function mcFetch(p, body, raw) {
-  const o = raw ? {method: 'POST', body: raw.b, headers: raw.h} : body ? {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)} : {cache: 'no-store'};
-  const r = await fetch(mcBase() + p, o);
-  let j = {}; try { j = await r.json(); } catch (e) {}
-  if (!r.ok) { const er = new Error(j.message || j.erreur || ('HTTP ' + r.status)); er.code = r.status; er.kind = j.erreur; throw er; }
-  return j;
-}
-async function mcStatus() {
-  try { const s = await mcFetch('/api/status'); MCOK = !!s.connecte; }
-  catch (e) { MCOK = false; const t = $('#mctx'); if (t) t.textContent = 'Pont introuvable : lance serveur.py (lancer.bat) sur ton PC'; const d = $('#mcdot'); if (d) d.className = 'mcdot'; return; }
-  const d = $('#mcdot'), t = $('#mctx'), b = $('#mcconn');
-  if (d) d.className = 'mcdot' + (MCOK ? ' on' : '');
-  if (t) t.textContent = MCOK ? 'Computer connecté dans l\'appli (sans clé API)' : 'Computer non connecté';
-  if (b) b.style.display = MCOK ? 'none' : '';
-}
-function mcConnect() { window.open(mcBase() + '/oauth/start', '_blank'); toast('Connecte-toi dans l\'onglet ouvert puis reviens ici'); }
-
-function mcFirstPrompt(txt) {
-  const lab = '[' + CAT2[CK()].l + '] ';
-  return (CG() === 'docs' ? PXQ.replace('${co}', S.cfg.co) : PROMPT_APP + '\n\nMa demande :\n') + lab + txt;
-}
-async function mcUpload() {
-  const urls = [], names = [];
-  for (const a of ATT) {
-    names.push({n: a.f.name, k: a.k});
-    const j = await mcFetch('/api/upload', null, {b: a.f, h: {'X-Filename': encodeURIComponent(a.f.name), 'X-Mime': a.f.type || 'application/octet-stream'}});
-    urls.push(j.attachment_url);
-  }
-  return {urls, names};
-}
-async function mcSend() {
-  if (MCBUSY) return;
-  const ta = $('#cin'), txt = (ta ? ta.value : '').trim();
-  if (!txt && !ATT.length) return toast('Écris un message ou joins un fichier');
-  const g = CG(), tid = S.cfg.mct[g] || '';
-  let up = {urls: [], names: []};
-  try { if (ATT.length) { toast('Envoi des fichiers…'); up = await mcUpload(); } }
-  catch (e) { return mcErr(e); }
-  const msg = tid ? '[' + CAT2[CK()].l + '] ' + (txt || 'Analyse les fichiers joints.') : mcFirstPrompt(txt || 'Analyse les fichiers joints.');
-  chatPush({r: 'u', t: txt || '(fichier joint)', att: up.names}); ATT = []; draftClear('cin'); if (ta) ta.value = '';
-  await mcCall('/api/chat', {message: msg, thread_id: tid || undefined, attachment_urls: up.urls}, g);
-}
-async function mcCall(p, body, g) {
-  g = g || CG(); MCBUSY = true; render();
-  try { mcHandle(await mcFetch(p, body), g); }
-  catch (e) { mcErr(e); }
-  finally { MCBUSY = false; render(); }
-}
-function mcErr(e) {
-  if (e.code === 401 || e.kind === 'non_connecte') { MCOK = false; chatPush({r: 'a', t: 'Connecte-toi d\'abord à Computer (bouton « Se connecter »), puis renvoie ton message.'}); }
-  else if (e instanceof TypeError) chatPush({r: 'a', t: 'Pont introuvable à ' + (mcBase() || location.origin) + '. Lance serveur.py sur ton PC (double-clic sur lancer.bat), puis réessaie.'});
-  else chatPush({r: 'a', t: 'Erreur : ' + (e.message || e)});
-  render();
-}
-function mcHandle(j, g) {
-  if (j.thread_id) { S.cfg.mct[g] = j.thread_id; save('cfg'); }
-  const tid = j.thread_id || S.cfg.mct[g], ev = j.event || 'complete', txt = j.text || '';
-  const P = (t, extra) => chatPush(Object.assign({r: 'a', t, g}, extra || {}));
-  if (ev === 'complete') {
-    if (g === 'docs') {
-      const pa = parseAI(txt);
-      P(pa.text || txt || '(réponse vide)', pa.q ? {q: pa.q} : null);
-      const k = CK();
-      if (pa.q && (k === 'devis' || k === 'facture')) {
-        const d = qMake(pa.q, k === 'facture' ? 'f' : 'd');
-        P(`✔ ${k === 'facture' ? 'Facture' : 'Devis'} ${d.num} créé(e) automatiquement (${E(tot(d).t)}). Vérifie les prix : onglet ${k === 'facture' ? 'Factures' : 'Devis'}.`);
-      }
-    } else P(txt || '(réponse vide)');
-  } else if (['ask_user_question', 'confirm_action', 'auth_required'].includes(ev)) {
-    const url = j.interactive && j.interactive.auth_url;
-    P(txt || (ev === 'auth_required' ? 'Un service doit être connecté.' : 'Computer attend ta réponse.'), {ix: {type: ev, tid, url}});
-  } else if (['sleep', 'waiting', 'timeout'].includes(ev)) {
-    P((txt ? txt + '\n\n' : '') + 'La tâche continue côté Computer.', {ix: {type: 'continue', tid}});
-  } else if (ev === 'insufficient_credits') P('Crédits Computer insuffisants. ' + txt);
-  else if (ev === 'access_denied') P('Computer n\'est pas disponible sur ce compte. ' + txt);
-  else P('Tâche ' + ev + (txt ? ' : ' + txt : ''));
-}
-function mcAnswer(tid) { const r = prompt('Ta réponse à Computer :'); if (r === null || !r.trim()) return; chatPush({r: 'u', t: r}); mcCall('/api/answer', {thread_id: tid, texte: r, answers: {reponse: r}}); }
-function mcAct(a, tid) {
-  const map = {approve: ['/api/approve', 'Approuvé'], deny: ['/api/deny', 'Refusé'], connected: ['/api/connected', 'Service connecté'], continue: ['/api/chat', 'Continuer']};
-  const [p, l] = map[a]; chatPush({r: 'u', t: l});
-  mcCall(p, a === 'continue' ? {thread_id: tid, message: 'Continue et donne-moi le résultat final.'} : {thread_id: tid, texte: l});
-}
-/* Création d'un document sans quitter le tchat (même logique que qNew) */
-function qMake(q, t) {
-  const y = new Date().getFullYear(), k = t + y, s = S.seq[k] = (S.seq[k] || 0) + 1;
-  const d = {id: nw(), t, num: (t === 'd' ? 'DEV-' : 'FAC-') + y + '-' + String(s).padStart(3, '0'), date: td(), val: S.cfg.val, cn: '', ca: '', cc: '', ct: '', sn: '', sa: '', sc: '', o: '', F: [], M: [], acc: S.cfg.acc, ap: false, paid: false, pd: '', cost: '', st: 'att', tva: S.cfg.tva ? n(S.cfg.tvr) : 0, rm: ''};
-  qApply(d, q); if (d.cn && !d.sn && !d.sa) Object.assign(d, {sn: d.cn, sa: d.ca, sc: d.cc});
-  S.docs.unshift(d); save('docs'); save('seq'); return d;
-}
+document.addEventListener('visibilitychange', () => { if (document.hidden) { const e = $('#cin'); if (e) try { localStorage.setItem(DR('cin'), e.value); } catch (x) {} } else if (V.v === 'a' && typeof mcStatus === 'function') mcStatus(); });
 
 /* =====================================================================
    4. Branchements sur le rendu et la navigation existants
@@ -367,10 +207,8 @@ const _render = render;
 render = function () {
   const ci = $('#cin'); if (ci && ci.value) try { localStorage.setItem(DR('cin'), ci.value); } catch (e) {}
   _render.apply(this, arguments);
-  if (TRV && TRV === V.v) { $('#app').innerHTML = trV(); $('#ad').style.display = 'none'; }
+  if (TRV && (TRV === V.v || TRV === 'all')) { $('#app').innerHTML = trV(); $('#ad').style.display = 'none'; if (TRV === 'all') { $('#ttl').textContent = 'Corbeille'; document.querySelectorAll('.ni').forEach(b => b.classList.toggle('a', b.dataset.v === 't')); } }
   else listDecorate();
-  if (V.v === 'a') {
-    if (MCOK === null || (S.cfg.cm === 'mc' && !MCBUSY)) setTimeout(mcStatus, 0);
-  }
+  if (V.v === 'a' && typeof asAfter === 'function') asAfter();
   draftsHook();
 };
