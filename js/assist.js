@@ -27,7 +27,8 @@ const ENG = {
   cmp:  {l: 'Computer', s: "Dans l'appli · via le pont serveur.py sur ton PC · crédits Computer"},
   pro:  {l: 'Perplexity Pro', s: "Ouvre le chat Perplexity (abonnement Pro) · tu colles la réponse ici"},
   mail: {l: 'Computer e-mail', s: 'Envoi par e-mail · le résultat arrive dans « Reçus »'},
-  loc:  {l: 'Sans IA', s: "Lit une liste de matériel directement sur l'appareil"}
+  loc:  {l: 'Sans IA', s: "Lit une liste de matériel directement sur l'appareil"},
+  apple: {l: 'Apple Intelligence', s: "iPhone 18 Pro · Outils d'écriture sur l'appareil · pas un appel, pas Siri"}
 };
 const MOD_CMP2 = [{id: 'auto', n: "Auto (orchestrateur de l'appli)", f: null, d: 'Choisit le modèle selon la demande et le mode'}, ...MOD_CMP];
 
@@ -157,7 +158,7 @@ function modEff(t) { /* modèle réellement utilisé (résout « Auto ») */
   return modByApi(t.m) || modByApi(ORCH[o][t.r]);
 }
 function iaLabel(t) {
-  if (t.ai === 'loc' || t.ai === 'mail') return ENG[t.ai].l;
+  if (t.ai === 'loc' || t.ai === 'mail' || t.ai === 'apple') return ENG[t.ai].l;
   const m = modCur(t), e = modEff(t);
   return ENG[t.ai].l + ' · ' + (m.id === 'auto' ? 'Auto' + (e ? ' → ' + e.n : '') : m.n) + ' · ' + MODES[t.r].l;
 }
@@ -181,7 +182,7 @@ chatV = function () {
 <div class="cmp2">
 <div class="pills"><button class="pill" onclick="sheetOpen('dem')">${d.ic} ${esc(d.l)} ▾</button>${d.mod ? `<button class="pill" onclick="sheetOpen('doc')">${doc ? esc(doc.num) : 'Document ?'} ▾</button>` : ''}<button class="pill" onclick="sheetOpen('ia')">${t.ai === 'cmp' ? `<span class="mcdot ${MCOK ? 'on' : ''}" id="mcdot"></span>` : ''}${esc(iaLabel(t))} ▾</button></div>
 <div class="atts2">${ATT.map((a, i) => `<span class="chip">${a.k === 'pdf' ? '📄' : '🖼️'} ${esc(a.f.name.slice(0, 22))}<button onclick="ATT.splice(${i},1);render()" aria-label="Retirer">×</button></span>`).join('')}</div>
-<div class="crow2"><button class="plus" onclick="sheetOpen('plus')" aria-label="Ajouter">+</button><textarea id="cin" rows="1" placeholder="${t.ai === 'pro' ? 'Écris ta demande… ou colle ici la réponse de Perplexity' : 'Écris ta demande…'}" oninput="cinGrow(this)" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))asSend()"></textarea><button class="send" id="sendb" onclick="asSend()" ${ASBUSY ? 'disabled' : ''} aria-label="Envoyer">↑</button></div>
+<div class="crow2"><button class="plus" onclick="sheetOpen('plus')" aria-label="Ajouter">+</button><textarea id="cin" rows="1" placeholder="${t.ai === 'pro' ? 'Écris ta demande… ou colle ici la réponse de Perplexity' : t.ai === 'apple' ? 'Écris ou dicte, puis Outils d\'écriture…' : 'Écris ta demande…'}" oninput="cinGrow(this)" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))asSend()"></textarea><button class="send" id="sendb" onclick="asSend()" ${ASBUSY ? 'disabled' : ''} aria-label="Envoyer">↑</button></div>
 <input type="file" id="fpick" accept="image/*,application/pdf" multiple hidden onchange="attAdd(this.files)"><input type="file" id="fcam" accept="image/*" capture="environment" hidden onchange="attAdd(this.files)">
 </div>`;
 };
@@ -230,14 +231,15 @@ function sheetRender() {
     h = `<h2>${typ === 'd' ? 'Devis' : 'Facture'} à modifier<button data-a="close">OK</button></h2><div class="grp">${L.length ? L.map(x => IT('doc', x.id, typ === 'd' ? '📄' : '🧾', esc(x.num) + ' · ' + esc(x.cn || 'Sans client'), fd(x.date) + ' · ' + E(tot(x).t) + (x.o ? ' · ' + esc(x.o.slice(0, 40)) : ''), t.doc === x.id)).join('') : `<p class="note" style="padding:12px">Aucun ${typ === 'd' ? 'devis' : 'facture'}.</p>`}</div>`;
   } else if (SHEET === 'ia') {
     const cur = modCur(t), eff = modEff(t);
-    h = `<h2>Sélectionner l'IA<button data-a="close">OK</button></h2><div class="grp">${Object.entries(ENG).map(([k, e]) => IT('eng', k, k === 'api' ? '🔷' : k === 'cmp' ? '🖥️' : k === 'pro' ? '↗️' : k === 'mail' ? '✉️' : '⚡', e.l, e.s, t.ai === k)).join('')}</div>`;
+    h = `<h2>Sélectionner l'IA<button data-a="close">OK</button></h2><div class="grp">${Object.entries(ENG).map(([k, e]) => IT('eng', k, k === 'api' ? '🔷' : k === 'cmp' ? '🖥️' : k === 'pro' ? '↗️' : k === 'mail' ? '✉️' : k === 'apple' ? 'IA' : '⚡', e.l, e.s, t.ai === k)).join('')}</div>`;
     if (t.ai === 'api' && !pk()) h += `<div class="gl">Clé API Perplexity</div><div class="grp" style="padding:10px"><input id="pkin" type="password" placeholder="pplx-…" autocomplete="off"><button class="b sm" style="width:100%;margin-top:8px" data-a="pk"><span>Enregistrer la clé</span></button></div><p class="note">Nécessaire pour utiliser Perplexity sans quitter l'appli (facturation à l'usage sur console.perplexity.ai, séparée de l'abonnement Pro). La clé reste sur cet appareil.</p>`;
     if (t.ai === 'cmp') h += `<p class="note"><span class="mcdot ${MCOK ? 'on' : ''}"></span>${MCOK ? 'Computer connecté' : MCOK === false ? 'Pont non joignable ou non connecté' : 'Vérification…'} · adresse du pont : ${esc(mcBase() || location.origin)}</p><div class="grp">${IT('mcconn', '', '🔑', 'Se connecter à Computer', 'Compte Perplexity, une seule fois (pont serveur.py lancé sur le PC)')}</div>`;
-    if (t.ai === 'mail' || t.ai === 'loc') h += `<p class="note">${t.ai === 'mail' ? 'Pas de choix de modèle : Computer traite l\'e-mail avec son réglage.' : 'Aucun modèle : lecture locale des listes « désignation ; quantité ; prix ».'}</p>`;
+    if (t.ai === 'apple') h += `<p class="note">Apple Intelligence ne s'appelle pas comme Perplexity : Apple ne donne pas son modèle à un site. Sur l'iPhone 18 Pro, ce sont les Outils d'écriture, sur l'appareil. Écris ou dicte dans le champ, ouvre les Outils d'écriture, puis envoie. Une liste ou un JSON crée le document ici.</p><div class="grp">${IT('apple', '', 'IA', "Ouvrir les Outils d'écriture", "Sélectionne le texte pour le menu Apple, au-dessus du clavier")}</div>`;
+    else if (t.ai === 'mail' || t.ai === 'loc') h += `<p class="note">${t.ai === 'mail' ? 'Pas de choix de modèle : Computer traite l\'e-mail avec son réglage.' : 'Aucun modèle : lecture locale des listes « désignation ; quantité ; prix ».'}</p>`;
     else {
       h += `<div class="gl">Mode de raisonnement</div><div class="seg">${Object.entries(MODES).map(([k, m]) => `<button class="${t.r === k ? 'on' : ''}" data-a="mode" data-v="${k}">${m.l}</button>`).join('')}</div><p class="note">${MODES[t.r].s}.</p>`;
       h += `<div class="gl">Modèle${t.ai === 'pro' ? ' (à sélectionner aussi dans Perplexity)' : ''}</div><div class="grp">${modList(t).map(m => IT('mod', m.id, m.id === 'auto' || m.id === 'defaut' ? '🎼' : '·', m.n, (t.ai === 'api' && m.id !== 'auto' ? m.id + ' · ' : '') + m.d, cur.id === m.id)).join('')}</div>`;
-      if (eff) h += `<div class="gl">Comment ${esc(eff.n)} va travailler</div><div class="fiche">${esc(modFiche(eff.f))}\n\n${esc(MODES[t.r].methode)}</div>`;
+      if (eff) h += `<div class="gl">Attitude imposée · ${esc(eff.n)} · ${esc(MODES[t.r].l)}</div><div class="fiche">${esc(modFiche(eff, t.r))}\n\n${esc(MODES[t.r].methode)}</div>`;
       if (t.ai === 'cmp') h += `<p class="note">Computer exécute la tâche avec le modèle choisi (sous-agent). Le modèle principal de Computer se règle dans ton compte Perplexity.</p>`;
     }
   } else if (SHEET === 'fils') {
@@ -272,40 +274,66 @@ function sheetAct(a, v, b) {
   if (a === 'mod') { if (t.ai === 'cmp') { t.mc = v; S.cfg.as.mc = v; } else { t.m = v; S.cfg.as.m = v; } thSave(); save('cfg'); render(); return sheetRender(); }
   if (a === 'pk') { const k = ($('#pkin')?.value || '').trim(); if (!k) return toast('Colle ta clé API'); S.cfg.pk = k; save('cfg'); toast('Clé enregistrée'); render(); return sheetRender(); }
   if (a === 'mcconn') return mcConnect();
+  if (a === 'apple') { sheetClose(); return appleTools(); }
 }
 
 /* =====================================================================
    PROMPTS : règles + fiche du modèle + méthode du mode + consigne de la demande
    ===================================================================== */
+const DOM_CHANTIER = `DOMAINE DE CETTE TÂCHE SEULEMENT (ne change pas ta façon générale de raisonner) : plomberie, chauffage, rénovation, France 2026. Prix unitaires HT. Sépare fournitures (F) et main-d'œuvre ou déplacement (M). Applique les règles de l'art et les DTU quand c'est technique. Signale les risques (gaz, électricité, amiante, dégâts des eaux) s'ils existent. N'invente pas une référence produit sans la marquer comme exemple.`;
 const J_DOC = '{"client":{"nom":"","adresse":"","cp_ville":"","tel":""},"objet":"","F":[{"d":"désignation fourniture","q":1,"p":0}],"M":[{"d":"main-d\'œuvre ou déplacement","q":1,"p":0}],"note":""}';
 const J_RAP = '{"rapport":{"ty":"Dégât des eaux | Recherche de fuite | Panne de chauffage | Diagnostic plomberie | Autre","cn":"nom du client","ca":"adresse du sinistre","cc":"code postal ville","ct":"téléphone","ass":"assurance","sn":"n° de sinistre","mo":"motif / circonstances","co":"constatations","org":"origine / cause probable","tr":"travaux réalisés / mesures conservatoires","pr":"préconisations"}}';
 const J_PRIX = '{"items":[{"d":"désignation","t":"F","pa":0,"mg":35,"ref":"","fo":"fournisseur"}]}';
 function docJSON(d) { return JSON.stringify({num: d.num, client: {nom: d.cn, adresse: d.ca, cp_ville: d.cc, tel: d.ct}, objet: d.o, F: d.F.filter(l => l.d || n(l.p)).map(l => ({d: l.d, q: n(l.q), p: n(l.p)})), M: d.M.filter(l => l.d || n(l.p)).map(l => ({d: l.d, q: n(l.q), p: n(l.p)}))}); }
 function demConsigne(t) {
   const k = t.k, co = S.cfg.co;
-  if (k === 'devis' || k === 'facture') return `TÂCHE : ${k === 'devis' ? 'préparer un devis' : 'préparer une facture'} pour ${co}. Analyse la demande et les pièces jointes (liste, ancien devis, photo). Termine TOUJOURS par un bloc \`\`\`json strictement de cette forme (prix unitaires HT en euros, nombres sans symbole) :\n${J_DOC}\nF = fournitures, M = main-d'œuvre et déplacement. Les estimations sont signalées dans "note".`;
-  if (DEM[k].mod) { const d = S.docs.find(x => x.id === t.doc); return `TÂCHE : modifier ${DEM[k].mod === 'd' ? 'le devis' : 'la facture'} ci-dessous selon la demande. Document actuel (JSON) :\n${d ? docJSON(d) : '(aucun document choisi)'}\nRends le document COMPLET après modification (toutes les lignes, pas seulement les changements), dans un bloc \`\`\`json de cette forme :\n${J_DOC}\nExplique en 1 à 3 lignes ce que tu as changé.`; }
-  if (k === 'rapport') return `TÂCHE : rédiger un rapport d'intervention professionnel (style constat pour l'assurance, factuel, précis). Termine TOUJOURS par un bloc \`\`\`json de cette forme :\n${J_RAP}`;
-  if (k === 'prix') return `TÂCHE : recherche de prix fournisseurs. Donne le tableau article | fournisseur | prix HT | lien, indique où ce fournisseur se fournit (fabricant, usine, importateur) et si l'achat direct est possible. Termine par un bloc \`\`\`json :\n${J_PRIX}\n(pa = prix d'achat HT, mg = marge en %).`;
+  if (k === 'devis' || k === 'facture') return DOM_CHANTIER + `\n\nTÂCHE : ${k === 'devis' ? 'préparer un devis' : 'préparer une facture'} pour ${co}. Analyse la demande et les pièces jointes (liste, ancien devis, photo). Termine TOUJOURS par un bloc \`\`\`json strictement de cette forme (prix unitaires HT en euros, nombres sans symbole) :\n${J_DOC}\nF = fournitures, M = main-d'œuvre et déplacement. Les estimations sont signalées dans "note".`;
+  if (DEM[k].mod) { const d = S.docs.find(x => x.id === t.doc); return DOM_CHANTIER + `\n\nTÂCHE : modifier ${DEM[k].mod === 'd' ? 'le devis' : 'la facture'} ci-dessous selon la demande. Document actuel (JSON) :\n${d ? docJSON(d) : '(aucun document choisi)'}\nRends le document COMPLET après modification (toutes les lignes, pas seulement les changements), dans un bloc \`\`\`json de cette forme :\n${J_DOC}\nExplique en 1 à 3 lignes ce que tu as changé.`; }
+  if (k === 'rapport') return DOM_CHANTIER + `\n\nTÂCHE : rédiger un rapport d'intervention professionnel (style constat pour l'assurance, factuel, précis). Termine TOUJOURS par un bloc \`\`\`json de cette forme :\n${J_RAP}`;
+  if (k === 'prix') return DOM_CHANTIER + `\n\nTÂCHE : recherche de prix fournisseurs. Donne le tableau article | fournisseur | prix HT | lien, indique où ce fournisseur se fournit (fabricant, usine, importateur) et si l'achat direct est possible. Termine par un bloc \`\`\`json :\n${J_PRIX}\n(pa = prix d'achat HT, mg = marge en %).`;
   if (k === 'app' || k === 'projet') return PROMPT_APP + (k === 'projet' ? "\nTÂCHE : concevoir un nouveau projet IA : objectif, architecture, fichiers complets, installation pas à pas sous Windows/PowerShell." : "\nTÂCHE : améliorer l'application. Donne les fichiers modifiés complets et explique où les placer.");
   return 'TÂCHE : répondre à la question de façon claire et concise.';
 }
 function sysPrompt(t, eff) {
   return [REGLES,
-    eff ? `MODÈLE QUI EXÉCUTE : ${eff.n}${eff.id && eff.id.includes('/') ? ' (' + eff.id + ')' : ''}.\n${modFiche(eff.f)}` : '',
-    MODES[t.r].methode,
+    eff ? `MODÈLE QUI EXÉCUTE : ${eff.n}${eff.id && eff.id.includes('/') ? ' (' + eff.id + ')' : ''}. Ce n'est pas un décor : tu raisonnes comme CE modèle, avec l'attitude, la recherche, la réflexion et le code imposés ci-dessous. Tu ne raisonnes pas « plombier » par défaut. Tu t'adaptes à la situation.` : '',
+    eff && eff.f ? modFiche(eff, t.r) : '',
+    'MÉTHODE GÉNÉRALE DU MODE (à combiner avec la fiche, sans la contredire) :\n' + MODES[t.r].methode,
     demConsigne(t)].filter(Boolean).join('\n\n');
 }
 
 /* =====================================================================
    ENVOI
    ===================================================================== */
+
+function appleTools() {
+  chatPush({r: 'a', t: "Apple Intelligence, sur ton iPhone 18 Pro.\n\nCe n'est pas un appel, et ce n'est pas Siri. Apple ne permet pas à l'appli d'interroger son modèle toute seule. Les Outils d'écriture tournent sur l'appareil, dans le champ de texte.\n\n1. Écris ou dicte ta demande dans le champ (le micro du clavier).\n2. Le texte est sélectionné : touche Outils d'écriture, au-dessus du clavier.\n3. Choisis Réécrire, Corriger, Résumer ou Composer.\n4. Envoie avec ↑. Si le texte est une liste ou un JSON, le devis, la facture ou le rapport est créé ici.", via: 'Apple Intelligence'});
+  render();
+  setTimeout(function () {
+    const ta = $('#cin');
+    if (!ta) return;
+    ta.focus();
+    if (ta.value) ta.select();
+  }, 60);
+}
+function appleSend(t, txt, clear) {
+  if (/```json|\{"(client|F|M|items|rapport)"/.test(txt)) {
+    chatPush({r: 'u', t: txt});
+    clear();
+    asReply(t, txt, 'Apple Intelligence');
+    return render();
+  }
+  const p = chatSend();
+  clear();
+  return p;
+}
 async function asSend() {
   if (ASBUSY) return;
   const t = TH(), ta = $('#cin'), txt = (ta ? ta.value : '').trim();
   if (!txt && !ATT.length) return toast('Écris un message ou joins un fichier');
   if (DEM[t.k].mod && !t.doc) return sheetOpen('doc');
   const clear = () => { if (ta) { ta.value = ''; cinGrow(ta); } draftClear('cin'); };
+  if (t.ai === 'apple') return appleSend(t, txt, clear);
   if (t.ai === 'loc') { const p = chatSend(); clear(); return p; }
   if (t.ai === 'mail') { if (ta && txt) ta.value = '[' + DEM[t.k].l + '] ' + txt; const p = pxSend(); clear(); return p; }
   if (t.ai === 'pro') {
@@ -378,7 +406,9 @@ async function cmpSend(t, txt, clear) {
   catch (e) { return mcErr(e); }
   const eff = modEff(t), dem = '[' + DEM[t.k].l + '] ' + (txt || 'Analyse les fichiers joints.');
   const pre = t.mc !== 'defaut' && eff ? `Exécute cette demande avec le modèle « ${eff.n} » (sous-agent), en mode ${MODES[t.r].l.toLowerCase()}. Si ce modèle n'est pas disponible, utilise le plus proche et dis-le.\n\n` : `Mode ${MODES[t.r].l.toLowerCase()}.\n\n`;
-  const msg = pre + (t.tid && !DEM[t.k].mod ? 'Rappel du mode : ' + MODES[t.r].methode.split('\n')[0] + '\n\nMA DEMANDE : ' + dem : sysPrompt(t, eff) + '\n\nMA DEMANDE : ' + dem);
+  const msg = pre + (t.tid && !DEM[t.k].mod
+    ? ('RAPPEL — tu restes ' + (eff ? eff.n : 'le modèle choisi') + '. ' + (eff && eff.f ? modFiche(eff, t.r) : MODES[t.r].methode) + '\n\nMA DEMANDE : ' + dem)
+    : sysPrompt(t, eff) + '\n\nMA DEMANDE : ' + dem);
   chatPush({r: 'u', t: txt || '(fichier joint)', att: names}); ATT = []; clear();
   await mcCall('/api/chat', {message: msg, thread_id: t.tid || undefined, attachment_urls: urls}, t, eff);
 }
@@ -456,19 +486,21 @@ function qMake(q, t) {
 /* ---------- Nouveautés v3.5 (affichées une fois) ---------- */
 function newsShow() {
   const d = document.createElement('div'); d.className = 'news';
-  d.innerHTML = `<div><h2>Nouveautés 3.5</h2><ul>
+  d.innerHTML = `<div><h2>Nouveautés 3.6</h2><ul>
 <li><b>Assistant repensé</b> : bouton <b>+</b> en bas à gauche (photo, PDF, réglages), zone de texte large qui s'agrandit.</li>
 <li><b>Menu « Demande »</b> : Créer un devis, Créer une facture, Modifier un devis, Modifier une facture, Faire un rapport, Recherche de prix, Améliorer l'appli, Projet IA, Autre.</li>
 <li><b>Menu « IA »</b> : Perplexity ou Computer dans l'appli, avec le choix du modèle (Claude Fable 5.1, Claude Opus 5.5, GPT 6 Sol, Gemini 3.8 Flash, Grok 4.7…) et du mode Rapide / Raisonnement / Profond.</li>
 <li><b>Conversations séparées</b> : bouton ☰ pour reprendre chaque sujet là où tu en étais.</li>
 <li><b>Corbeille</b> dans le menu ; dans Devis, Factures et Rapports : glisse une ligne vers la gauche → « Supprimer », ou « Sélectionner » pour tout supprimer d'un coup.</li>
+<li><b>Raisonnement</b> : chaque modèle a une attitude imposée (chercher, réfléchir, coder) selon le mode. Il s'adapte à la situation. La plomberie n'est plus le moule.</li>
+<li><b>Logo sur l'écran d'accueil</b> : supprime l'icône grise avec le M, ouvre l'appli dans Safari, Partager, Sur l'écran d'accueil. iPhone ne change jamais une icône déjà posée.</li>
 <li>Nouvelle icône avec ton logo et écran d'ouverture.</li></ul>
 <button class="b" style="width:100%;margin-top:10px" onclick="this.closest('.news').remove()"><span>Compris</span></button></div>`;
   d.addEventListener('click', e => { if (e.target === d) d.remove(); });
   document.body.appendChild(d);
 }
 const _boot35 = boot;
-boot = async function () { const r = await _boot35.apply(this, arguments); try { if (S.cfg && !S.cfg.news35) { S.cfg.news35 = 1; save('cfg'); setTimeout(newsShow, 1300); } } catch (e) {} return r; };
+boot = async function () { const r = await _boot35.apply(this, arguments); try { if (S.cfg && !S.cfg.news36) { S.cfg.news36 = 1; save('cfg'); setTimeout(newsShow, 1300); } } catch (e) {} return r; };
 /* Mise à jour automatique : vérifie sw.js sans cache et recharge une fois quand une nouvelle version s'installe */
 pwa = function () {
   if (!('serviceWorker' in navigator) || !location.protocol.startsWith('http')) return;
