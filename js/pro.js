@@ -1,37 +1,17 @@
-/* Perplexity Pro sans clé API.
-   Perplexity n'autorise pas une autre appli à interroger le chat Pro à sa place.
-   Ce fichier ouvre le vrai chat Pro (compte déjà connecté) et ramène la réponse ici en un geste. */
+/* Envoi en caché, sans quitter l'appli, sans clé API.
+   Le chat Pro du site ne peut pas être appelé en secret (Perplexity l'interdit).
+   L'envoi passe par la connexion du compte déjà prévue (pont), et les précodes disent quoi créer.
+   L'appli applique le JSON : devis, facture, rapport, tarifs. Aucune fenêtre ne s'ouvre. */
 'use strict';
 
-let PRO_LAST = '';
-
-(function () {
-  const st = document.createElement('style');
-  st.textContent = `
-#probar{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:70;display:none;background:var(--cd);color:var(--ink);border-radius:22px;padding:14px;box-shadow:0 16px 50px #00000033,0 0 0 1px var(--ln)}
-#probar.on{display:block}
-#probar b{display:block;font-size:16px;margin-bottom:4px}
-#probar p{margin:0 0 10px;color:var(--mu);font-size:13.5px;line-height:1.35}
-#probar textarea{min-height:72px;margin:0 0 8px;font-size:15px}
-#probar .row{display:flex;gap:8px}
-#probar .row .b{flex:1}
-`;
-  document.head.appendChild(st);
-  const bar = document.createElement('div');
-  bar.id = 'probar';
-  bar.innerHTML = `<b>Réponse du chat Pro</b><p>Dans Perplexity, copie toute la réponse. Reviens ici et touche Appliquer. Le devis, la facture ou le rapport se crée dans l'appli. Aucune clé API.</p><textarea id="propaste" placeholder="Ou colle la réponse ici"></textarea><div class="row"><button class="b" onclick="proApply()"><span>Appliquer</span></button><button class="b gh" onclick="proBar(0)"><span>Plus tard</span></button></div>`;
-  document.body.appendChild(bar);
-  document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && $('#probar') && $('#probar').classList.contains('on')) {
-      const e = $('#propaste'); if (e) e.focus();
-    }
-  });
-})();
-
-function proBar(on) {
-  const b = $('#probar'); if (!b) return;
-  b.classList.toggle('on', !!on);
-}
+const PRECODES = `PRÉCODES D'ORCHESTRE — tu exécutes, l'appli applique. L'artisan ne doit pas quitter l'appli.
+Choisis un seul précode et termine par UN bloc json, rien après.
+P1 DEVIS ou FACTURE : {"client":{"nom":"","adresse":"","cp_ville":"","tel":""},"objet":"","F":[{"d":"fourniture","q":1,"p":0}],"M":[{"d":"main-d'œuvre ou déplacement","q":1,"p":0}],"note":""}
+P2 MODIFIER : le document complet, mêmes clés que P1, toutes les lignes, pas seulement le changement.
+P3 RAPPORT : {"rapport":{"ty":"Dégât des eaux | Recherche de fuite | Panne de chauffage | Diagnostic plomberie | Autre","cn":"","ca":"","cc":"","ct":"","ass":"","sn":"","mo":"","co":"","org":"","tr":"","pr":""}}
+P4 PRIX : tableau article | fournisseur | prix HT | lien, puis {"items":[{"d":"","t":"F","pa":0,"mg":35,"ref":"","fo":""}]}
+P5 PHOTO : identifie l'objet, cherche un correspondant vendu en France, puis P1 ou P4.
+Prix unitaires HT, nombres, marché français 2026. Estimation marquée dans note. Pas de référence inventée.`;
 
 const _cfgPro = cfgInit;
 cfgInit = function () {
@@ -42,38 +22,31 @@ cfgInit = function () {
 
 proOpen = async function (t, txt, clear) {
   const eff = modEff(t);
-  let prep = {texts: [], names: []};
-  try { prep = await prepAtt(); } catch (e) {}
-  const demande = txt || 'Analyse les documents joints.';
-  const prompt = sysPrompt(t, eff) + '\n\nMA DEMANDE : ' + demande + (prep.texts.length ? '\n\n' + prep.texts.join('\n\n') : '');
-  PRO_LAST = prompt;
-  const files = ATT.filter(a => a.k === 'img').map(a => a.f);
-  chatPush({r: 'u', t: demande, att: prep.names});
-  chatPush({r: 'a', t: 'Envoyé au chat Perplexity Pro, sans clé API. Connecte-toi avec ton abonnement si ce n\'est pas déjà fait. Choisis ' + (eff ? eff.n : 'ton modèle') + ' dans Perplexity. Copie toute la réponse, reviens ici, touche Appliquer.', via: 'Perplexity Pro'});
-  ATT = []; if (clear) clear(); render();
-  try { await navigator.clipboard.writeText(prompt); } catch (e) {}
-  proBar(1);
-  const court = (demande + (prep.texts[0] ? '\n' + prep.texts[0].slice(0, 400) : '')).replace(/\s+/g, ' ').slice(0, 1200);
-  const q = court + ' Réponds en français. Termine par un bloc json.';
-  if (files.length && navigator.canShare && navigator.canShare({files: files})) {
-    try { await navigator.share({files: files, text: q}); return; }
-    catch (e) { if (e && e.name === 'AbortError') return; }
+  let names = [];
+  const urls = [];
+  const demande = txt || 'Analyse les fichiers joints.';
+  try {
+    for (const a of ATT) {
+      names.push({n: a.f.name, k: a.k});
+      const j = await mcFetch('/api/upload', null, {b: a.f, h: {'X-Filename': encodeURIComponent(a.f.name), 'X-Mime': a.f.type || 'application/octet-stream'}});
+      if (j.attachment_url) urls.push(j.attachment_url);
+    }
+  } catch (e) {
+    chatPush({r: 'u', t: demande});
+    if (clear) clear();
+    return proStay(e);
   }
-  const w = window.open('https://www.perplexity.ai/search/new?q=' + enc(q), 'pplxpro');
-  if (!w) toast('Autorise les fenêtres, ou ouvre Perplexity : la question est copiée');
+  chatPush({r: 'u', t: demande, att: names});
+  ATT = [];
+  if (clear) clear();
+  const msg = PRECODES + '\n\n' + sysPrompt(t, eff) + '\n\nMA DEMANDE : ' + demande + '\nExécute le précode qui correspond. Réponds dans l\'appli, pas dans une autre fenêtre.';
+  await mcCall('/api/chat', {message: msg, thread_id: t.tid || undefined, attachment_urls: urls}, t, eff);
 };
 
-async function proApply() {
-  const box = $('#propaste');
-  let txt = (box && box.value || '').trim();
-  if (!txt) {
-    try { txt = (await navigator.clipboard.readText() || '').trim(); } catch (e) { txt = ''; }
-  }
-  if (!txt) return toast('Copie la réponse dans Perplexity, puis Appliquer');
-  if (PRO_LAST && txt === PRO_LAST) return toast('C\'est la question, pas la réponse. Copie la réponse de Perplexity.');
-  if (box) box.value = '';
-  chatPush({r: 'u', t: '(réponse du chat Pro)'});
-  asReply(TH(), txt, 'Perplexity Pro');
-  proBar(0);
+function proStay(e) {
+  const hors = e instanceof TypeError || (e && e.code === 401);
+  chatPush({r: 'a', t: hors
+    ? 'Envoi en caché impossible pour l\'instant : le petit programme du compte Perplexity n\'est pas joignable sur cet appareil. Je n\'ouvre pas Perplexity et je ne te sors pas de l\'appli. Sur le PC, lance lancer.bat une fois, connecte le compte (sans clé), puis renvoie. Le chat Pro du site ne peut pas recevoir un message caché.'
+    : 'Envoi en caché arrêté : ' + ((e && e.message) || e) + '. Tu restes dans l\'appli.', via: 'En caché'});
   render();
 }
