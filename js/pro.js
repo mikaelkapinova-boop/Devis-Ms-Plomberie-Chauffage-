@@ -40,13 +40,26 @@ proOpen = async function (t, txt, clear) {
   chatPush({r: 'u', t: demande, att: prep.names});
   ATT = [];
   if (clear) clear();
-  chatPush({r: 'a', t: 'Ouvert dans Safari, pas dans l\'appli. Perplexity utilise ta session déjà connectée et lance la question, comme la flèche d\'envoi. Copie la réponse, reviens, touche Appliquer.', via: 'Safari'});
+  if (dansPanneau()) {
+    chatPush({r: 'a', t: 'Envoyé dans le chat de cette page Perplexity. Aucune autre appli ne s\'ouvre.', via: 'Perplexity'});
+    render();
+    try { parent.postMessage({ type: 'ms-envoi', text: prompt }, '*'); } catch (e) { toast('Le panneau n\'est pas sur la page Perplexity'); }
+    return;
+  }
+  chatPush({r: 'a', t: 'Ouvert dans Safari, pas dans l\'appli. Copie la réponse, reviens, touche Appliquer.', via: 'Safari'});
   render();
   try { await navigator.clipboard.writeText(prompt); } catch (e) {}
   proBar(1);
   const q = (demande + ' Réponds en français. Termine par un bloc json.').replace(/\s+/g, ' ').slice(0, 1500);
   proSafari(q);
 };
+function dansPanneau() {
+  try { return /[?&]panneau=1/.test(location.search) || window.parent !== window; } catch (e) { return false; }
+}
+window.addEventListener('message', function (e) {
+  if (!e.data || e.data.type !== 'ms-envoi-etat') return;
+  toast(e.data.ok ? 'Envoyé sur la page Perplexity' : 'Zone de saisie Perplexity introuvable. Touche ↺ sur le panneau, puis renvoie.');
+});
 
 function proStay(e) {
   const hors = e instanceof TypeError || (e && e.code === 401);

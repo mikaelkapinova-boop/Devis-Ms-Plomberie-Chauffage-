@@ -109,11 +109,89 @@
     }, sauver);
 
     window.addEventListener('message', function (e) {
-      if (!e.data || e.data.type !== 'ms-chat') return;
-      if (e.data.which === 'moi' || e.data.which === 'pplx') choisir(e.data.which);
+      const frame = document.querySelector('#ms-panneau iframe');
+      if (!e.data || !frame || e.source !== frame.contentWindow) return;
+      if (e.data.type === 'ms-chat' && (e.data.which === 'moi' || e.data.which === 'pplx')) choisir(e.data.which);
+      if (e.data.type === 'ms-envoi' && e.data.text) envoyerSurLaPage(String(e.data.text));
     });
     window.addEventListener('resize', appliquer);
     appliquer();
+  }
+
+
+  function champSaisie() {
+    const nodes = Array.from(document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"]'));
+    const visibles = nodes.filter(function (n) {
+      if (n.closest('#ms-panneau')) return false;
+      const r = n.getBoundingClientRect();
+      return r.width > 80 && r.height > 16 && r.bottom > 40 && r.top < window.innerHeight;
+    });
+    visibles.sort(function (a, b) { return b.getBoundingClientRect().bottom - a.getBoundingClientRect().bottom; });
+    return visibles[0] || null;
+  }
+  function ecrireChamp(el, texte) {
+    el.focus();
+    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+      const proto = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')
+        || Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+      if (proto && proto.set) proto.set.call(el, texte);
+      else el.value = texte;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
+    const sel = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    document.execCommand('insertText', false, texte);
+    if (!(el.innerText || '').includes(texte.slice(0, 24))) {
+      el.textContent = texte;
+      el.dispatchEvent(new InputEvent('input', { bubbles: true, data: texte, inputType: 'insertText' }));
+    }
+  }
+  function boutonEnvoi(el) {
+    const racine = el.closest('form') || el.parentElement || document.body;
+    const zone = racine.getBoundingClientRect();
+    const boutons = Array.from(document.querySelectorAll('button, [role="button"]')).filter(function (b) {
+      if (b.closest('#ms-panneau') || b.disabled) return false;
+      const r = b.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) return false;
+      const pres = Math.abs(r.top - zone.bottom) < 220 || (r.top >= zone.top - 40 && r.bottom <= zone.bottom + 80);
+      return pres;
+    });
+    const mot = /send|submit|envoyer|soumettre|ask/i;
+    const nomme = boutons.find(function (b) {
+      return mot.test((b.getAttribute('aria-label') || '') + ' ' + (b.getAttribute('title') || '') + ' ' + (b.getAttribute('data-testid') || ''));
+    });
+    if (nomme) return nomme;
+    boutons.sort(function (a, b) { return b.getBoundingClientRect().right - a.getBoundingClientRect().right; });
+    return boutons[0] || null;
+  }
+  function ecrireEtEnvoyer(texte) {
+    const el = champSaisie();
+    if (!el) return false;
+    ecrireChamp(el, texte);
+    const b = boutonEnvoi(el);
+    if (b) { b.click(); return true; }
+    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+    return true;
+  }
+  function envoyerSurLaPage(texte) {
+    const p = document.getElementById('ms-panneau');
+    etat.mini = true;
+    etat.mode = 'moi';
+    appliquer();
+    if (p) p.style.pointerEvents = 'none';
+    setTimeout(function () {
+      const ok = ecrireEtEnvoyer(texte);
+      if (p) p.style.pointerEvents = '';
+      const frame = document.querySelector('#ms-panneau iframe');
+      if (frame && frame.contentWindow) frame.contentWindow.postMessage({ type: 'ms-envoi-etat', ok: ok }, '*');
+      if (ok) { etat.mode = 'pplx'; etat.mini = false; }
+      sauver();
+      appliquer();
+    }, 250);
   }
 
   function deplacer(el, onMove, onFin) {
