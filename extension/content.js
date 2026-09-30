@@ -1,7 +1,7 @@
 /* Panneau Ms Devis sur perplexity.ai uniquement.
    Ne lit pas le chat Perplexity, n'envoie rien à sa place, ne touche pas aux cookies. */
 (function () {
-  const SITE = 'https://mikaelkapinova-boop.github.io/Devis-Ms-Plomberie-Chauffage-/?panneau=1';
+  const SITE = 'https://mikaelkapinova-boop.github.io/Devis-Ms-Plomberie-Chauffage-/index.html?panneau=1&v=44';
   const KEY = 'ms-panneau';
   const BAS = 150;
 
@@ -69,7 +69,7 @@
       + '<button type="button" data-act="plus" title="Agrandir">+</button>'
       + '<button type="button" data-act="reset" title="Réinitialiser">↺</button>'
       + '<button type="button" data-act="ferm" title="Fermer">×</button></header>'
-      + '<iframe title="Ms Devis" src="' + SITE + '" allow="camera; microphone; clipboard-read; clipboard-write"></iframe>'
+      + '<iframe title="Ms Devis" src="' + SITE + '" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals" allow="camera; microphone; clipboard-read; clipboard-write" referrerpolicy="no-referrer"></iframe>'
       + '<div id="ms-poignee" title="Taille"></div>';
     document.documentElement.appendChild(p);
     const rouvrir = document.createElement('button');
@@ -160,13 +160,14 @@
       const pres = Math.abs(r.top - zone.bottom) < 220 || (r.top >= zone.top - 40 && r.bottom <= zone.bottom + 80);
       return pres;
     });
-    const mot = /send|submit|envoyer|soumettre|ask/i;
+    const mot = /^(send|submit|envoyer|soumettre)$/i;
     const nomme = boutons.find(function (b) {
-      return mot.test((b.getAttribute('aria-label') || '') + ' ' + (b.getAttribute('title') || '') + ' ' + (b.getAttribute('data-testid') || ''));
+      if (b.tagName === 'A' || b.closest('a') || b.getAttribute('href')) return false;
+      const nom = ((b.getAttribute('aria-label') || '') + ' ' + (b.getAttribute('title') || '')).trim();
+      if (/app|ouvrir|open|download|edge/i.test(nom)) return false;
+      return mot.test(b.getAttribute('aria-label') || '') || mot.test(b.getAttribute('data-testid') || '');
     });
-    if (nomme) return nomme;
-    boutons.sort(function (a, b) { return b.getBoundingClientRect().right - a.getBoundingClientRect().right; });
-    return boutons[0] || null;
+    return nomme || null;
   }
   function joindre(files) {
     const list = Array.from(files || []).filter(function (f) { return f && f.size; });

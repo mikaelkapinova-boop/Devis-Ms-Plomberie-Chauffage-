@@ -1,6 +1,13 @@
 /* Perplexity Pro sans clé. La page s'ouvre dans Safari, jamais dans l'appli.
    L'adresse /search/new?q= lance la question, comme la flèche d'envoi, avec la session déjà connectée. */
 'use strict';
+if (/[?&]panneau=1/.test(location.search)) {
+  window.open = function () { return null; };
+  document.addEventListener('click', function (e) {
+    const a = e.target.closest && e.target.closest('a');
+    if (a && a.target === '_blank') { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+}
 
 let PRO_LAST = '';
 
