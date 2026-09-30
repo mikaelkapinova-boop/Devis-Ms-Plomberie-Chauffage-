@@ -180,7 +180,17 @@
     input.dispatchEvent(new Event('change', { bubbles: true }));
     return true;
   }
+  function dejaConnecte() {
+    const el = champSaisie();
+    if (el) return true;
+    const noeuds = Array.from(document.querySelectorAll('a, button'));
+    return !noeuds.some(function (b) {
+      if (b.closest('#ms-panneau')) return false;
+      return /sign in|log in|se connecter|connexion|s'inscrire/i.test((b.innerText || '') + ' ' + (b.getAttribute('aria-label') || ''));
+    });
+  }
   function ecrireEtEnvoyer(texte, files) {
+    if (!dejaConnecte()) return 'login';
     joindre(files);
     const el = champSaisie();
     if (!el) return false;
@@ -200,8 +210,8 @@
       const ok = ecrireEtEnvoyer(texte, files);
       if (p) p.style.pointerEvents = '';
       const frame = document.querySelector('#ms-panneau iframe');
-      if (frame && frame.contentWindow) frame.contentWindow.postMessage({ type: 'ms-envoi-etat', ok: ok }, '*');
-      if (ok) { etat.mode = 'pplx'; etat.mini = false; }
+      if (frame && frame.contentWindow) frame.contentWindow.postMessage({ type: 'ms-envoi-etat', ok: ok === true, raison: ok === 'login' ? 'login' : '' }, '*');
+      if (ok === true) { etat.mode = 'pplx'; etat.mini = false; }
       sauver();
       appliquer();
     }, 250);

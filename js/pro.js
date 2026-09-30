@@ -67,6 +67,7 @@ function dansPanneau() {
 }
 window.addEventListener('message', function (e) {
   if (!e.data || e.data.type !== 'ms-envoi-etat') return;
+  if (e.data.raison === 'login') return toast('Connecte-toi sur la page Perplexity, sous le panneau. Le mot de passe ne se met pas dans l\'appli.');
   toast(e.data.ok ? 'Envoyé sur la page Perplexity' : 'Zone de saisie Perplexity introuvable. Touche ↺ sur le panneau, puis renvoie.');
 });
 
