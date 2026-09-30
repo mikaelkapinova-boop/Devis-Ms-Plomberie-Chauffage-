@@ -364,7 +364,8 @@ async function apiSend(t, txt, clear) {
   chatPush({r: 'u', t: txt || '(fichier joint)', att: prep.names}); ATT = []; clear();
   const userText = [txt || 'Analyse les documents joints.', ...prep.texts].join('\n\n');
   const content = [{type: 'input_text', text: userText}, ...prep.imgs.slice(0, 6).map(u => ({type: 'input_image', image_url: u}))];
-  const tools = (['prix', 'devis', 'facture'].includes(t.k) || t.r === 'profond') && eff.f !== 'glm' ? [{type: 'web_search'}, {type: 'fetch_url'}] : undefined;
+  const forceWeb = !!window.PHOTOJOB;
+  const tools = (forceWeb || ['prix', 'devis', 'facture'].includes(t.k) || t.r === 'profond') && (forceWeb || eff.f !== 'glm') ? [{type: 'web_search'}, {type: 'fetch_url'}] : undefined;
   const body = {model: eff.id, instructions: sysPrompt(t, eff), input: [...hist, {role: 'user', content}], max_output_tokens: mode.tokens, reasoning: {effort: (t.k === 'app' || t.k === 'projet') && t.r === 'profond' ? 'xhigh' : mode.effort}};
   if (tools) body.tools = tools;
   ASBUSY = true; render();
