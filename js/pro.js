@@ -37,13 +37,15 @@ proOpen = async function (t, txt, clear) {
   const demande = txt || 'Analyse les documents joints.';
   const prompt = PRECODES + '\n\n' + sysPrompt(t, eff) + '\n\nMA DEMANDE : ' + demande + (prep.texts.length ? '\n\n' + prep.texts.join('\n\n') : '');
   PRO_LAST = prompt;
+  const photos = ATT.filter(function (a) { return a.k === 'img'; }).map(function (a) { return a.f; });
   chatPush({r: 'u', t: demande, att: prep.names});
   ATT = [];
   if (clear) clear();
   if (dansPanneau()) {
     chatPush({r: 'a', t: 'Envoyé dans le chat de cette page Perplexity. Aucune autre appli ne s\'ouvre.', via: 'Perplexity'});
     render();
-    try { parent.postMessage({ type: 'ms-envoi', text: prompt }, '*'); } catch (e) { toast('Le panneau n\'est pas sur la page Perplexity'); }
+    try { parent.postMessage({ type: 'ms-envoi', text: prompt, files: photos }, '*'); }
+    catch (e) { toast('Le panneau n\'est pas sur la page Perplexity'); }
     return;
   }
   chatPush({r: 'a', t: 'Ouvert dans Safari, pas dans l\'appli. Copie la réponse, reviens, touche Appliquer.', via: 'Safari'});
@@ -96,3 +98,17 @@ async function proApply() {
   proBar(0);
   render();
 }
+
+const _pxOpenPage = pxOpen;
+pxOpen = function () {
+  if (dansPanneau()) {
+    const t = TH();
+    t.ai = 'pro';
+    return proOpen(t, ($('#cin') && $('#cin').value || '').trim(), function () {
+      const ta = $('#cin');
+      if (ta) { ta.value = ''; if (typeof cinGrow === 'function') cinGrow(ta); }
+      draftClear('cin');
+    });
+  }
+  return _pxOpenPage();
+};

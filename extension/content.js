@@ -112,7 +112,7 @@
       const frame = document.querySelector('#ms-panneau iframe');
       if (!e.data || !frame || e.source !== frame.contentWindow) return;
       if (e.data.type === 'ms-chat' && (e.data.which === 'moi' || e.data.which === 'pplx')) choisir(e.data.which);
-      if (e.data.type === 'ms-envoi' && e.data.text) envoyerSurLaPage(String(e.data.text));
+      if (e.data.type === 'ms-envoi' && e.data.text) envoyerSurLaPage(String(e.data.text), e.data.files || []);
     });
     window.addEventListener('resize', appliquer);
     appliquer();
@@ -168,7 +168,19 @@
     boutons.sort(function (a, b) { return b.getBoundingClientRect().right - a.getBoundingClientRect().right; });
     return boutons[0] || null;
   }
-  function ecrireEtEnvoyer(texte) {
+  function joindre(files) {
+    const list = Array.from(files || []).filter(function (f) { return f && f.size; });
+    if (!list.length) return true;
+    const input = Array.from(document.querySelectorAll('input[type="file"]')).find(function (i) { return !i.closest('#ms-panneau'); });
+    if (!input) return false;
+    const dt = new DataTransfer();
+    list.forEach(function (f) { dt.items.add(f); });
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
+  function ecrireEtEnvoyer(texte, files) {
+    joindre(files);
     const el = champSaisie();
     if (!el) return false;
     ecrireChamp(el, texte);
@@ -177,14 +189,14 @@
     el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
     return true;
   }
-  function envoyerSurLaPage(texte) {
+  function envoyerSurLaPage(texte, files) {
     const p = document.getElementById('ms-panneau');
     etat.mini = true;
     etat.mode = 'moi';
     appliquer();
     if (p) p.style.pointerEvents = 'none';
     setTimeout(function () {
-      const ok = ecrireEtEnvoyer(texte);
+      const ok = ecrireEtEnvoyer(texte, files);
       if (p) p.style.pointerEvents = '';
       const frame = document.querySelector('#ms-panneau iframe');
       if (frame && frame.contentWindow) frame.contentWindow.postMessage({ type: 'ms-envoi-etat', ok: ok }, '*');

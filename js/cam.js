@@ -69,6 +69,7 @@ async function camOpen() {
   $('#camv').hidden = false;
   CAM.file = null;
   const hint = $('#camhint');
+  if (typeof dansPanneau === 'function' && dansPanneau() && hint) hint.textContent = 'Les 3 partent sur cette page Perplexity, sans ouvrir une autre appli.';
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     if (hint) hint.textContent = 'Ce navigateur n\'ouvre pas le viseur. La caméra iPhone va s\'ouvrir.';
     camNative();
@@ -128,8 +129,8 @@ function camShot(kind) {
     camStop();
     ATT = ATT.filter(a => !a._cam);
     ATT.push({ f: CAM.file, k: 'img', _cam: 1 });
-    if (kind === 'photo') { const h = $('#camhint'); if (h) h.textContent = 'Photo prise. Recherche, Demande, ou le gros bouton pour les 3.'; return; }
-    photoRun(kind);
+    if (kind === 'photo' && !(typeof dansPanneau === 'function' && dansPanneau())) { const h = $('#camhint'); if (h) h.textContent = 'Photo prise. Recherche, Demande, ou le gros bouton pour les 3.'; return; }
+    photoRun(kind === 'photo' ? 'all' : kind);
   }, 'image/jpeg', 0.86);
 }
 
