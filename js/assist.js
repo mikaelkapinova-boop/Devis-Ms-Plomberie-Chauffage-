@@ -25,7 +25,7 @@ const DEM_GRP = [['Documents', ['devis', 'facture', 'mdevis', 'mfact', 'rapport'
 const ENG = {
   api:  {l: 'Perplexity', s: "Dans l'appli · tous les modèles · marche aussi sur iPhone (clé API Perplexity)"},
   cmp:  {l: 'Computer', s: "Dans l'appli · via le pont serveur.py sur ton PC · crédits Computer"},
-  pro:  {l: 'Perplexity Pro', s: "Sans clé · envoi en caché dans l'appli · précodes, aucune fenêtre"},
+  pro:  {l: 'Perplexity Pro', s: "Sans clé · s'ouvre dans Safari, pas dans l'appli · session déjà connectée"},
   mail: {l: 'Computer e-mail', s: 'Envoi par e-mail · le résultat arrive dans « Reçus »'},
   loc:  {l: 'Sans IA', s: "Lit une liste de matériel directement sur l'appareil"},
   apple: {l: 'Apple Intelligence', s: "iPhone 18 Pro · Outils d'écriture sur l'appareil · pas un appel, pas Siri"}
