@@ -141,15 +141,14 @@ const PHOTO_TXT = {
 
 function photoEngine() {
   const t = TH();
-  if (t.ai === 'api' && pk()) return 'api';
   if (t.ai === 'cmp') return 'cmp';
-  if (pk()) return 'api';
-  return '';
+  if (t.ai === 'api' && pk()) return 'api';
+  return 'pro';
 }
 function photoRun(kind) {
   if (!ATT.some(a => a.k === 'img')) return toast('Prends d\'abord la photo');
   const eng = photoEngine();
-  if (!eng) { camClose(); toast('Pour chercher sur le web, choisis Perplexity et enregistre la clé'); sheetOpen('ia'); return; }
+  if (!eng) return toast('Choisis une IA');
   const want = kind === 'search' ? 'prix' : 'devis';
   const cur = TH();
   if (cur.msgs.length && cur.k !== want) thNew({ k: want, ai: eng, r: 'raison' });

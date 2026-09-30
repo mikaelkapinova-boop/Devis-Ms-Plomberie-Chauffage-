@@ -25,7 +25,7 @@ const DEM_GRP = [['Documents', ['devis', 'facture', 'mdevis', 'mfact', 'rapport'
 const ENG = {
   api:  {l: 'Perplexity', s: "Dans l'appli · tous les modèles · marche aussi sur iPhone (clé API Perplexity)"},
   cmp:  {l: 'Computer', s: "Dans l'appli · via le pont serveur.py sur ton PC · crédits Computer"},
-  pro:  {l: 'Perplexity Pro', s: "Ouvre le chat Perplexity (abonnement Pro) · tu colles la réponse ici"},
+  pro:  {l: 'Perplexity Pro', s: "Sans clé API · ton abonnement · le chat Pro, réponse ramenée dans l'appli"},
   mail: {l: 'Computer e-mail', s: 'Envoi par e-mail · le résultat arrive dans « Reçus »'},
   loc:  {l: 'Sans IA', s: "Lit une liste de matériel directement sur l'appareil"},
   apple: {l: 'Apple Intelligence', s: "iPhone 18 Pro · Outils d'écriture sur l'appareil · pas un appel, pas Siri"}
@@ -42,7 +42,7 @@ cfgInit = function () {
   _cfgInit2();
   if (!Array.isArray(S.threads)) S.threads = [];
   const c = S.cfg;
-  if (!c.as) c.as = {k: 'devis', ai: c.ai && c.ai.key && c.ai.pv === 'pplx' ? 'api' : 'api', m: 'auto', mc: 'auto', r: 'raison'};
+  if (!c.as) c.as = {k: 'devis', ai: 'pro', m: 'auto', mc: 'auto', r: 'raison'};
   if (!c.pk && c.ai && c.ai.pv === 'pplx' && c.ai.key) c.pk = c.ai.key;
   /* migration : ancienne conversation unique → fils */
   if (!S.threads.length && Array.isArray(S.chat) && S.chat.length) {
