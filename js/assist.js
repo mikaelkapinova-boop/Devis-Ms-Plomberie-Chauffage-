@@ -176,7 +176,8 @@ chatV = function () {
     t.k === 'app' || t.k === 'projet' ? 'Décris ce que tu veux : réponse en mode codage (code complet, étapes expliquées).' : 'Pose ta question.'
   }</div>`;
   const typing = ASBUSY ? `<div class="bub a"><span class="typing"><i></i><i></i><i></i></span> <small class="mu">${esc(iaLabel(t))}</small></div>` : '';
-  return `<div class="ash"><button class="icb" onclick="sheetOpen('fils')" aria-label="Conversations">☰</button><div class="ttl" onclick="thRename()">${esc(thTitle(t))}<small>${S.threads.length} conversation(s) · touche pour renommer</small></div><button class="icb" onclick="thNew();render()" aria-label="Nouvelle conversation">✎</button></div>
+  const ghBar = S.cfg.ai.gh !== false && !S.cfg.ai.ghOk ? `<div class="c" style="margin:8px 0"><b>Connexion GitHub</b><p class="mu" style="margin:4px 0 8px;font-size:13px">Une seule fois, dans le projet de ta clé API. Ensuite c'est gardé.</p><a class="b sm" href="https://console.perplexity.ai/project/connectors" target="_blank" rel="noopener">Ouvrir le lien de connexion</a> <button class="b gh sm" type="button" onclick="cs('ai.ghOk',true);render()"><span>C'est connecté</span></button></div>` : '';
+  return ghBar + `<div class="ash"><button class="icb" onclick="sheetOpen('fils')" aria-label="Conversations">☰</button><div class="ttl" onclick="thRename()">${esc(thTitle(t))}<small>${S.threads.length} conversation(s) · touche pour renommer</small></div><button class="icb" onclick="thNew();render()" aria-label="Nouvelle conversation">✎</button></div>
 <div id="inbx"></div>
 <div id="cm" class="cm">${msgs.length ? msgs.map((m, i) => bub2(m, off + i)).join('') : welcome}${typing}</div>
 <div class="cmp2">

@@ -5,7 +5,7 @@ if (/[?&]panneau=1/.test(location.search)) {
   window.open = function () { return null; };
   document.addEventListener('click', function (e) {
     const a = e.target.closest && e.target.closest('a');
-    if (a && a.target === '_blank') { e.preventDefault(); e.stopPropagation(); }
+    if (a && a.target === '_blank' && !/console\.perplexity\.ai/.test(a.href || '')) { e.preventDefault(); e.stopPropagation(); }
   }, true);
 }
 
