@@ -23,7 +23,7 @@ const DEM_GRP = [['Documents', ['devis', 'facture', 'mdevis', 'mfact', 'rapport'
 
 /* ---------- Moteurs ---------- */
 const ENG = {
-  api:  {l: 'Perplexity', s: "Dans l'appli · tous les modèles · marche aussi sur iPhone (clé API Perplexity)"},
+  api:  {l: 'Perplexity', s: "Dans l'appli · clé API · accès GitHub du projet si tu l'as connecté"},
   cmp:  {l: 'Computer', s: "Dans l'appli · via le pont serveur.py sur ton PC · crédits Computer"},
   pro:  {l: 'Perplexity Pro', s: "Sans clé · s'ouvre dans Safari, pas dans l'appli · session déjà connectée"},
   mail: {l: 'Computer e-mail', s: 'Envoi par e-mail · le résultat arrive dans « Reçus »'},
@@ -232,6 +232,7 @@ function sheetRender() {
   } else if (SHEET === 'ia') {
     const cur = modCur(t), eff = modEff(t);
     h = `<h2>Sélectionner l'IA<button data-a="close">OK</button></h2><div class="grp">${Object.entries(ENG).map(([k, e]) => IT('eng', k, k === 'api' ? '🔷' : k === 'cmp' ? '🖥️' : k === 'pro' ? '↗️' : k === 'mail' ? '✉️' : k === 'apple' ? 'IA' : '⚡', e.l, e.s, t.ai === k)).join('')}</div>`;
+    if (t.ai === 'api') h += `<p class="note">Accès GitHub : ${S.cfg.ai.gh === false ? 'désactivé' : 'activé'}. À connecter une fois dans le projet de la clé, page Connecteurs, service GitHub.</p>`;
     if (t.ai === 'api' && !pk()) h += `<div class="gl">Clé API Perplexity</div><div class="grp" style="padding:10px"><input id="pkin" type="password" placeholder="pplx-…" autocomplete="off"><button class="b sm" style="width:100%;margin-top:8px" data-a="pk"><span>Enregistrer la clé</span></button></div><p class="note">Nécessaire pour utiliser Perplexity sans quitter l'appli (facturation à l'usage sur console.perplexity.ai, séparée de l'abonnement Pro). La clé reste sur cet appareil.</p>`;
     if (t.ai === 'cmp') h += `<p class="note"><span class="mcdot ${MCOK ? 'on' : ''}"></span>${MCOK ? 'Computer connecté' : MCOK === false ? 'Pont non joignable ou non connecté' : 'Vérification…'} · adresse du pont : ${esc(mcBase() || location.origin)}</p><div class="grp">${IT('mcconn', '', '🔑', 'Se connecter à Computer', 'Compte Perplexity, une seule fois (pont serveur.py lancé sur le PC)')}</div>`;
     if (t.ai === 'apple') h += `<p class="note">Apple Intelligence ne s'appelle pas comme Perplexity : Apple ne donne pas son modèle à un site. Sur l'iPhone 18 Pro, ce sont les Outils d'écriture, sur l'appareil. Écris ou dicte dans le champ, ouvre les Outils d'écriture, puis envoie. Une liste ou un JSON crée le document ici.</p><div class="grp">${IT('apple', '', 'IA', "Ouvrir les Outils d'écriture", "Sélectionne le texte pour le menu Apple, au-dessus du clavier")}</div>`;
@@ -365,9 +366,11 @@ async function apiSend(t, txt, clear) {
   const userText = [txt || 'Analyse les documents joints.', ...prep.texts].join('\n\n');
   const content = [{type: 'input_text', text: userText}, ...prep.imgs.slice(0, 6).map(u => ({type: 'input_image', image_url: u}))];
   const forceWeb = !!window.PHOTOJOB;
-  const tools = (forceWeb || ['prix', 'devis', 'facture'].includes(t.k) || t.r === 'profond') && (forceWeb || eff.f !== 'glm') ? [{type: 'web_search'}, {type: 'fetch_url'}] : undefined;
-  const body = {model: eff.id, instructions: sysPrompt(t, eff), input: [...hist, {role: 'user', content}], max_output_tokens: mode.tokens, reasoning: {effort: (t.k === 'app' || t.k === 'projet') && t.r === 'profond' ? 'xhigh' : mode.effort}};
-  if (tools) body.tools = tools;
+  const tools = [];
+  if ((forceWeb || ['prix', 'devis', 'facture'].includes(t.k) || t.r === 'profond') && (forceWeb || eff.f !== 'glm')) tools.push({type: 'web_search'}, {type: 'fetch_url'});
+  if (S.cfg.ai.gh !== false) tools.push({type: 'connector', id: 'connector_github', server_label: 'github'});
+  const body = {model: eff.id, instructions: sysPrompt(t, eff) + (S.cfg.ai.gh !== false ? '\n\nTu as l\'accès GitHub du projet API (dépôt mikaelkapinova-boop/Devis-Ms-Plomberie-Chauffage-). Utilise-le si la demande concerne le code ou le dépôt. Ne demande pas le jeton.' : ''), input: [...hist, {role: 'user', content}], max_output_tokens: mode.tokens, reasoning: {effort: (t.k === 'app' || t.k === 'projet') && t.r === 'profond' ? 'xhigh' : mode.effort}};
+  if (tools.length) { body.tools = tools; if (S.cfg.ai.gh !== false) body.max_steps = 8; }
   ASBUSY = true; render();
   try {
     let j = await apiPost(body);
