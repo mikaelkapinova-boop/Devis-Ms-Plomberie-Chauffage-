@@ -1,6 +1,6 @@
 /* Service worker — Ms Plomberie & Chauffage. Cache de l'application pour un usage hors connexion. */
-const V='ms-v3.3.0';
-const SHELL=['./','index.html','js/logo.js','js/ext.js','manifest.webmanifest','img/icon-192.png','img/icon-512.png',
+const V='ms-v3.4.0';
+const SHELL=['./','index.html','js/logo.js','js/ext.js','js/chat2.js','manifest.webmanifest','img/icon-192.png','img/icon-512.png',
 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>Promise.allSettled(SHELL.map(u=>c.add(u)))).then(()=>self.skipWaiting()))});
