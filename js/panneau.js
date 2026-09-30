@@ -27,7 +27,7 @@ window.addEventListener('message', function (e) {
     if (which === 'pplx') {
       return barre + '<div class="c"><h3>Chat Perplexity</h3><p class="mu" style="margin:0">Son historique reste dans Perplexity. Il n\'est pas copié ici, et Mon chat garde le sien. Sur l\'ordinateur, l\'extension affiche ce panneau au-dessus de Perplexity sans mélanger les deux.</p></div>';
     }
-    return barre + '<p class="mu" style="font-size:12px;margin:0 0 8px">Historique de Mon chat, séparé de Perplexity.</p>' + _chatV();
+    return barre + '<p class="mu" style="font-size:12px;margin:0 0 8px">Historique de Mon chat, séparé de Perplexity. <button type="button" class="b gh sm" onclick="copieFiche()">Copier la fiche projet</button></p>' + _chatV();
   };
   if (/[?&]panneau=1/.test(location.search)) {
     const _boot = boot;

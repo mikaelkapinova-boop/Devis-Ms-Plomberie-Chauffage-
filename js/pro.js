@@ -11,6 +11,13 @@ if (/[?&]panneau=1/.test(location.search)) {
 
 let PRO_LAST = '';
 
+const FICHE = `MESSAGE DE L'APPLICATION MS DEVIS. Tu parles à l'appli, pas à un visiteur arrivé sur Perplexity.
+Projet : Ms Plomberie & Chauffage, Nancy. Appli de devis, factures, rapports, tarifs et photos de chantier.
+Objectif : comprendre la demande, rester sur ce projet dans tout ce fil, répondre en français, et finir par le JSON que l'appli applique. Ne change pas de rôle. Ne demande pas de quitter l'appli.`;
+function copieFiche() {
+  const txt = FICHE + '\n\n' + PRECODES;
+  navigator.clipboard.writeText(txt).then(function () { toast('Fiche projet copiée. Colle-la dans les instructions de ton espace Perplexity, puis Enregistrer.'); }, function () { toast('Copie impossible'); });
+}
 const PRECODES = `PRÉCODES D'ORCHESTRE — tu exécutes, l'appli applique. L'artisan ne doit pas quitter l'appli.
 Choisis un seul précode et termine par UN bloc json, rien après.
 P1 DEVIS ou FACTURE : {"client":{"nom":"","adresse":"","cp_ville":"","tel":""},"objet":"","F":[{"d":"fourniture","q":1,"p":0}],"M":[{"d":"main-d'œuvre ou déplacement","q":1,"p":0}],"note":""}
@@ -42,7 +49,7 @@ proOpen = async function (t, txt, clear) {
   let prep = {texts: [], names: []};
   try { prep = await prepAtt(); } catch (e) {}
   const demande = txt || 'Analyse les documents joints.';
-  const prompt = PRECODES + '\n\n' + sysPrompt(t, eff) + '\n\nMA DEMANDE : ' + demande + (prep.texts.length ? '\n\n' + prep.texts.join('\n\n') : '');
+  const prompt = FICHE + '\n\n' + PRECODES + '\n\n' + sysPrompt(t, eff) + '\n\nMA DEMANDE, DEPUIS L\'APPLI : ' + demande + (prep.texts.length ? '\n\n' + prep.texts.join('\n\n') : '');
   PRO_LAST = prompt;
   const photos = ATT.filter(function (a) { return a.k === 'img'; }).map(function (a) { return a.f; });
   chatPush({r: 'u', t: demande, att: prep.names});
