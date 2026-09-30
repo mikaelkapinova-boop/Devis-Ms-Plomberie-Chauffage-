@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Ms Devis sur Perplexity",
+  "version": "1.0.0",
+  "description": "Panneau Ms Devis au-dessus de Perplexity. Deux chats, deux historiques, jamais mélangés.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://www.perplexity.ai/*",
+    "https://perplexity.ai/*"
+  ],
+  "icons": {
+    "192": "icon-192.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.perplexity.ai/*", "https://perplexity.ai/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
