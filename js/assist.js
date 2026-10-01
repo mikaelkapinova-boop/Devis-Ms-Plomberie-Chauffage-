@@ -23,7 +23,7 @@ const DEM_GRP = [['Documents', ['devis', 'facture', 'mdevis', 'mfact', 'rapport'
 
 /* ---------- Moteurs ---------- */
 const ENG = {
-  api:  {l: 'Perplexity', s: "Dans l'appli · clé API · accès GitHub du projet si tu l'as connecté"},
+  api:  {l: 'Perplexity', s: "Clé API · recherche, pages, code et GitHub · le plus proche de Computer"},
   cmp:  {l: 'Computer', s: "Dans l'appli · via le pont serveur.py sur ton PC · crédits Computer"},
   pro:  {l: 'Perplexity Pro', s: "Sans clé · s'ouvre dans Safari, pas dans l'appli · session déjà connectée"},
   mail: {l: 'Computer e-mail', s: 'Envoi par e-mail · le résultat arrive dans « Reçus »'},
@@ -367,11 +367,17 @@ async function apiSend(t, txt, clear) {
   const userText = [txt || 'Analyse les documents joints.', ...prep.texts].join('\n\n');
   const content = [{type: 'input_text', text: userText}, ...prep.imgs.slice(0, 6).map(u => ({type: 'input_image', image_url: u}))];
   const forceWeb = !!window.PHOTOJOB;
+  const steps = t.r === 'profond' ? 15 : t.r === 'raison' ? 8 : 4;
   const tools = [];
-  if ((forceWeb || ['prix', 'devis', 'facture'].includes(t.k) || t.r === 'profond') && (forceWeb || eff.f !== 'glm')) tools.push({type: 'web_search'}, {type: 'fetch_url'});
+  if (forceWeb || eff.f !== 'glm') {
+    tools.push({type: 'web_search', max_results: t.r === 'rapide' ? 8 : 15});
+    tools.push({type: 'fetch_url'});
+    if (t.r !== 'rapide' || t.k === 'app' || t.k === 'projet') tools.push({type: 'sandbox'});
+  }
   if (S.cfg.ai.gh !== false) tools.push({type: 'connector', id: 'connector_github', server_label: 'github'});
-  const body = {model: eff.id, instructions: sysPrompt(t, eff) + (S.cfg.ai.gh !== false ? '\n\nTu as l\'accès GitHub du projet API (dépôt mikaelkapinova-boop/Devis-Ms-Plomberie-Chauffage-). Utilise-le si la demande concerne le code ou le dépôt. Ne demande pas le jeton.' : ''), input: [...hist, {role: 'user', content}], max_output_tokens: mode.tokens, reasoning: {effort: (t.k === 'app' || t.k === 'projet') && t.r === 'profond' ? 'xhigh' : mode.effort}};
-  if (tools.length) { body.tools = tools; if (S.cfg.ai.gh !== false) body.max_steps = 8; }
+  const fort = '\n\nFORCE. Tu as les mêmes gestes utiles qu\'un agent : chercher sur le web, ouvrir les pages, calculer ou vérifier dans le bac à sable, et lire le dépôt GitHub mikaelkapinova-boop/Devis-Ms-Plomberie-Chauffage- si la demande concerne le code. Vérifie avant d\'affirmer un prix ou une référence. Ne demande pas de jeton.';
+  const body = {model: eff.id, instructions: sysPrompt(t, eff) + fort, input: [...hist, {role: 'user', content}], max_output_tokens: Math.max(mode.tokens, t.r === 'profond' ? 8000 : 4000), max_steps: steps, reasoning: {effort: t.r === 'profond' ? 'high' : mode.effort}};
+  if (tools.length) body.tools = tools;
   ASBUSY = true; render();
   try {
     let j = await apiPost(body);
