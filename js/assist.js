@@ -477,7 +477,7 @@ function asReply(t, text, via) {
     if (!d) return chatPush({r: 'a', t: text, q: pa.q, via});
     const prev = JSON.stringify({cn: d.cn, ca: d.ca, cc: d.cc, ct: d.ct, o: d.o, F: d.F, M: d.M});
     const q = pa.q, cl = q.client || {};
-    if (cl.nom) Object.assign(d, {cn: cl.nom || d.cn, ca: cl.adresse || d.ca, cc: cl.cp_ville || d.cc, ct: cl.tel || d.ct});
+    if (cl.nom) Object.assign(d, {cn: cl.nom || d.cn, ca: cl.adresse || d.ca, cc: cl.cp_ville || d.cc, ct: cl.tel || d.ct, ce: cl.email || cl.mail || d.ce || ''}); if (d.cn) cliCommit(1, d);
     if (q.objet) d.o = q.objet;
     d.F = q.F.length ? q.F.map(l => ({d: l.d, q: l.q, p: l.p || ''})) : [{d: '', q: 1, p: ''}];
     d.M = q.M.length ? q.M.map(l => ({d: l.d, q: l.q, p: l.p || ''})) : [{d: '', q: 1, p: ''}];
@@ -489,7 +489,7 @@ function asReply(t, text, via) {
 function asUndo(id) { const d = S.docs.find(x => x.id === id); if (!d || !d._prev) return toast('Rien à annuler'); Object.assign(d, JSON.parse(d._prev)); delete d._prev; save('docs'); chatPush({r: 'a', t: `↩︎ Modification de ${d.num} annulée.`}); render(); }
 function qMake(q, t) {
   const y = new Date().getFullYear(), k = t + y, s = S.seq[k] = (S.seq[k] || 0) + 1;
-  const d = {id: nw(), t, num: (t === 'd' ? 'DEV-' : 'FAC-') + y + '-' + String(s).padStart(3, '0'), date: td(), val: S.cfg.val, cn: '', ca: '', cc: '', ct: '', sn: '', sa: '', sc: '', o: '', F: [], M: [], acc: S.cfg.acc, ap: false, paid: false, pd: '', cost: '', st: 'att', tva: S.cfg.tva ? n(S.cfg.tvr) : 0, rm: ''};
+  const d = {id: nw(), t, num: (t === 'd' ? 'DEV-' : 'FAC-') + y + '-' + String(s).padStart(3, '0'), date: td(), val: S.cfg.val, cn: '', ca: '', cc: '', ct: '', ce: '', cid: '', sn: '', sa: '', sc: '', o: '', F: [], M: [], acc: S.cfg.acc, ap: false, paid: false, pd: '', cost: '', st: 'att', tva: S.cfg.tva ? n(S.cfg.tvr) : 0, rm: ''};
   qApply(d, q); if (d.cn && !d.sn && !d.sa) Object.assign(d, {sn: d.cn, sa: d.ca, sc: d.cc});
   S.docs.unshift(d); save('docs'); save('seq'); return d;
 }
