@@ -39,7 +39,7 @@ return `<div class="c"><h3>Mon entreprise (en-tête des documents)</h3>${I('Rais
 <div class="c"><h3>Accès</h3><p class="mu" style="margin:0 0 8px;font-size:13px">L'appli est protégée par identifiant et mot de passe. Les données envoyées hors de l'appareil (GitHub, boîte de réception) sont chiffrées avec ce mot de passe.</p><button class="b gh sm" onclick="authLogout()">Se déconnecter</button></div>
 <div class="c"><h3>Zone sensible</h3><button class="b rd sm" data-t="Tout effacer sur cet appareil" onclick="arm2(this,wipe)">Tout effacer sur cet appareil</button></div>
 <p class="mu" style="text-align:center;font-size:12px">Version ${APPV}</p>`}
-const APPV='5.3';
+const APPV='5.4';
 function wipe(){for(const k in S)localStorage.removeItem('ms_'+k);localStorage.removeItem('ms_stamp');localStorage.removeItem('ms_key');sessionStorage.removeItem('ms_key');idbPut('pack',null);location.reload()}
 
 /* ---------- Sauvegarde / restauration ---------- */
@@ -57,9 +57,13 @@ async function ghPull(manual){if(!S.cfg.gh.tok)return manual&&toast('Ajoute un j
 function ghSched(){if(!S.cfg.gh.tok)return;clearTimeout(ghT);ghT=setTimeout(()=>ghPush(0),4000)}
 
 /* ---------- Partage & e-mail ---------- */
-async function mkpdf(d){const el=document.createElement('div');el.style.cssText='position:fixed;left:-9999px;top:0;width:794px';el.innerHTML=cd(d);document.body.appendChild(el);
-try{await Promise.all([...el.querySelectorAll('img')].map(i=>i.decode().catch(()=>0)));const c=await html2canvas(el.firstChild,{scale:2,backgroundColor:'#fff'}),P2=new jspdf.jsPDF('p','mm','a4'),h=c.height*210/c.width,im=c.toDataURL('image/jpeg',.92),nm=(d.num+(d.cn?'-'+d.cn:'')).replace(/[^\w-]+/g,'_')+'.pdf';
-for(let i=0;i*297<h-1;i++){if(i)P2.addPage();P2.addImage(im,'JPEG',0,-i*297,210,h)}return{blob:P2.output('blob'),nm,P2}}finally{el.remove()}}
+function pdfMeta(d){const C=S.cfg||{},lab=d.t==='f'?'FACTURE':d.t==='d'?'DEVIS':'RAPPORT';return{lab,num:d.num||'',date:fd(d.date),client:d.cn||'',co:C.co||'',nm:C.nm||'',siret:C.siret||'',tel:C.tel||'',logo:typeof LGT!=='undefined'?LGT:''}}
+async function mkpdf(d){const stack=await buildPdfPages(cd(d),pdfMeta(d)),host=document.createElement('div');host.style.cssText='position:fixed;left:-9999px;top:0;width:794px;background:#fff';host.appendChild(stack);document.body.appendChild(host);
+try{await Promise.all([...host.querySelectorAll('img')].map(i=>i.decode().catch(()=>0)));const pages=[...host.querySelectorAll('.pdf-page')],P2=new jspdf.jsPDF({orientation:'p',unit:'mm',format:'a4',compress:true}),nm=(d.num+(d.cn?'-'+d.cn:'')).replace(/[^\w-]+/g,'_')+'.pdf';
+for(let i=0;i<pages.length;i++){const c=await html2canvas(pages[i],{scale:2,backgroundColor:'#ffffff',width:794,height:1123,windowWidth:794,scrollX:0,scrollY:0});if(i)P2.addPage();P2.addImage(c.toDataURL('image/jpeg',.92),'JPEG',0,0,210,297)}return{blob:P2.output('blob'),nm,P2}}finally{host.remove()}}
+const _pvoRaw=pvo;
+pvo=async function(){const d=cur();if(!d)return;$('#pv').classList.add('o');document.body.classList.add('lk');$('#pvs').innerHTML='<p style="padding:28px;color:#666">Mise en page…</p>';pvf();
+try{const stack=await buildPdfPages(cd(d),pdfMeta(d));$('#pvs').replaceChildren(stack);pvf()}catch(e){_pvoRaw()}}
 async function pdf(){const d=cur();toast('Création du PDF…');try{const{P2,nm}=await mkpdf(d);P2.save(nm)}catch(e){toast('PDF impossible ici')}}
 async function shr(){const d=cur();toast('Préparation du PDF…');try{const{blob,nm}=await mkpdf(d),f=new File([blob],nm,{type:'application/pdf'}),lab=d.t==='f'?'Facture':d.t==='d'?'Devis':'Rapport';
 if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f],title:lab+' '+d.num,text:`${lab} ${d.num} — ${S.cfg.co}`});else{dlBlob(blob,nm);toast('Partage indisponible : PDF téléchargé')}}catch(e){if(e&&e.name!=='AbortError')toast('Partage impossible')}}
