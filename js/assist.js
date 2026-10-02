@@ -158,9 +158,8 @@ function modEff(t) { /* modèle réellement utilisé (résout « Auto ») */
   return modByApi(t.m) || modByApi(ORCH[o][t.r]);
 }
 function iaLabel(t) {
-  if (t.ai === 'loc' || t.ai === 'mail' || t.ai === 'apple') return ENG[t.ai].l;
   const m = modCur(t), e = modEff(t);
-  return ENG[t.ai].l + ' · ' + (m.id === 'auto' ? 'Auto' + (e ? ' → ' + e.n : '') : m.n) + ' · ' + MODES[t.r].l;
+  return (m.id === 'auto' ? (e ? e.n : 'Auto') : m.n) + ' · ' + MODES[t.r].l;
 }
 function pk() { return (S.cfg.pk || '').trim(); }
 
@@ -168,22 +167,15 @@ function pk() { return (S.cfg.pk || '').trim(); }
 chatV = function () {
   const t = TH(), d = DEM[t.k], msgs = t.msgs.slice(-80), off = t.msgs.length - msgs.length;
   const doc = d.mod ? S.docs.find(x => x.id === t.doc) : null;
-  const welcome = `<div class="bub a"><b>${d.ic} ${d.l}</b><br>${
-    t.k === 'devis' || t.k === 'facture' ? "Décris les travaux, colle une liste ou joins une photo / un PDF avec le +. Le document est créé automatiquement." :
-    d.mod ? (doc ? `Document choisi : <b>${esc(doc.num)}</b> ${esc(doc.cn || '')}. Dis-moi ce qu'il faut changer.` : 'Choisis le document à modifier dans le menu « Document ».') :
-    t.k === 'rapport' ? "Décris l'intervention (sinistre, constatations, cause, travaux). Le rapport est créé automatiquement." :
-    t.k === 'prix' ? 'Donne les articles à chercher : je renvoie un tableau fournisseur / prix HT, ajoutable à Mes tarifs.' :
-    t.k === 'app' || t.k === 'projet' ? 'Décris ce que tu veux : réponse en mode codage (code complet, étapes expliquées).' : 'Pose ta question.'
-  }</div>`;
-  const typing = ASBUSY ? `<div class="bub a"><span class="typing"><i></i><i></i><i></i></span> <small class="mu">${esc(iaLabel(t))}</small></div>` : '';
-  const ghBar = S.cfg.ai.gh !== false && !S.cfg.ai.ghOk ? `<div class="c" style="margin:8px 0"><b>Connexion GitHub</b><p class="mu" style="margin:4px 0 8px;font-size:13px">Une seule fois, dans le projet de ta clé API. Ensuite c'est gardé.</p><a class="b sm" href="https://console.perplexity.ai/project/connectors" target="_blank" rel="noopener">Ouvrir le lien de connexion</a> <button class="b gh sm" type="button" onclick="cs('ai.ghOk',true);render()"><span>C'est connecté</span></button></div>` : '';
-  return ghBar + `<div class="ash"><button class="icb" onclick="sheetOpen('fils')" aria-label="Conversations">☰</button><div class="ttl" onclick="thRename()">${esc(thTitle(t))}<small>${S.threads.length} conversation(s) · touche pour renommer</small></div><button class="icb" onclick="thNew();render()" aria-label="Nouvelle conversation">✎</button></div>
+  const welcome = `<div class="bub a">${esc(d.l)}. ${d.mod ? (doc ? esc(doc.num) + (doc.cn ? ' · ' + esc(doc.cn) : '') : 'Choisis le document.') : 'Écris, ou joins une photo.'}</div>`;
+  const typing = ASBUSY ? `<div class="bub a"><span class="typing"><i></i><i></i><i></i></span></div>` : '';
+  return `<div class="ash"><button class="icb" onclick="sheetOpen('fils')" aria-label="Conversations">☰</button><div class="ttl" onclick="thRename()">${esc(thTitle(t))}</div><button class="icb" onclick="thNew();render()" aria-label="Nouvelle conversation">✎</button></div>
 <div id="inbx"></div>
 <div id="cm" class="cm">${msgs.length ? msgs.map((m, i) => bub2(m, off + i)).join('') : welcome}${typing}</div>
 <div class="cmp2">
-<div class="pills"><button class="pill" onclick="sheetOpen('dem')">${d.ic} ${esc(d.l)} ▾</button>${d.mod ? `<button class="pill" onclick="sheetOpen('doc')">${doc ? esc(doc.num) : 'Document ?'} ▾</button>` : ''}<button class="pill" onclick="sheetOpen('ia')">${t.ai === 'cmp' ? `<span class="mcdot ${MCOK ? 'on' : ''}" id="mcdot"></span>` : ''}${esc(iaLabel(t))} ▾</button></div>
+<div class="pills"><button class="pill" onclick="sheetOpen('dem')">${esc(d.l)}</button>${d.mod ? `<button class="pill" onclick="sheetOpen('doc')">${doc ? esc(doc.num) : 'Document'}</button>` : ''}<button class="pill" onclick="sheetOpen('ia')">${esc(iaLabel(t))}</button></div>
 <div class="atts2">${ATT.map((a, i) => `<span class="chip">${a.k === 'pdf' ? '📄' : '🖼️'} ${esc(a.f.name.slice(0, 22))}<button onclick="ATT.splice(${i},1);render()" aria-label="Retirer">×</button></span>`).join('')}</div>
-<div class="crow2"><button class="plus" onclick="sheetOpen('plus')" aria-label="Ajouter">+</button><textarea id="cin" rows="1" placeholder="${t.ai === 'pro' ? 'Écris ta demande… ou colle ici la réponse de Perplexity' : t.ai === 'apple' ? 'Écris ou dicte, puis Outils d\'écriture…' : 'Écris ta demande…'}" oninput="cinGrow(this)" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))asSend()"></textarea><button class="send" id="sendb" onclick="asSend()" ${ASBUSY ? 'disabled' : ''} aria-label="Envoyer">↑</button></div>
+<div class="crow2"><button class="plus" onclick="sheetOpen('plus')" aria-label="Ajouter">+</button><textarea id="cin" rows="1" placeholder="Écris ta demande…" oninput="cinGrow(this)" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))asSend()"></textarea><button class="send" id="sendb" onclick="asSend()" ${ASBUSY ? 'disabled' : ''} aria-label="Envoyer">↑</button></div>
 <input type="file" id="fpick" accept="image/*,application/pdf" multiple hidden onchange="attAdd(this.files)"><input type="file" id="fcam" accept="image/*" capture="environment" hidden onchange="attAdd(this.files)">
 </div>`;
 };
@@ -231,19 +223,12 @@ function sheetRender() {
     const typ = DEM[t.k].mod, L = S.docs.filter(x => x.t === typ);
     h = `<h2>${typ === 'd' ? 'Devis' : 'Facture'} à modifier<button data-a="close">OK</button></h2><div class="grp">${L.length ? L.map(x => IT('doc', x.id, typ === 'd' ? '📄' : '🧾', esc(x.num) + ' · ' + esc(x.cn || 'Sans client'), fd(x.date) + ' · ' + E(tot(x).t) + (x.o ? ' · ' + esc(x.o.slice(0, 40)) : ''), t.doc === x.id)).join('') : `<p class="note" style="padding:12px">Aucun ${typ === 'd' ? 'devis' : 'facture'}.</p>`}</div>`;
   } else if (SHEET === 'ia') {
-    const cur = modCur(t), eff = modEff(t);
-    h = `<h2>Sélectionner l'IA<button data-a="close">OK</button></h2><div class="grp">${Object.entries(ENG).map(([k, e]) => IT('eng', k, k === 'api' ? '🔷' : k === 'cmp' ? '🖥️' : k === 'pro' ? '↗️' : k === 'mail' ? '✉️' : k === 'apple' ? 'IA' : '⚡', e.l, e.s, t.ai === k)).join('')}</div>`;
-    if (t.ai === 'api') h += `<p class="note">Accès GitHub : ${S.cfg.ai.gh === false ? 'désactivé' : 'activé'}. À connecter une fois dans le projet de la clé, page Connecteurs, service GitHub.</p>`;
-    if (t.ai === 'api' && !pk()) h += `<div class="gl">Clé API Perplexity</div><div class="grp" style="padding:10px"><input id="pkin" type="password" placeholder="pplx-…" autocomplete="off"><button class="b sm" style="width:100%;margin-top:8px" data-a="pk"><span>Enregistrer la clé</span></button></div><p class="note">Nécessaire pour utiliser Perplexity sans quitter l'appli (facturation à l'usage sur console.perplexity.ai, séparée de l'abonnement Pro). La clé reste sur cet appareil.</p>`;
-    if (t.ai === 'cmp') h += `<p class="note"><span class="mcdot ${MCOK ? 'on' : ''}"></span>${MCOK ? 'Computer connecté' : MCOK === false ? 'Pont non joignable ou non connecté' : 'Vérification…'} · adresse du pont : ${esc(mcBase() || location.origin)}</p><div class="grp">${IT('mcconn', '', '🔑', 'Se connecter à Computer', 'Compte Perplexity, une seule fois (pont serveur.py lancé sur le PC)')}</div>`;
-    if (t.ai === 'apple') h += `<p class="note">Apple Intelligence ne s'appelle pas comme Perplexity : Apple ne donne pas son modèle à un site. Sur l'iPhone 18 Pro, ce sont les Outils d'écriture, sur l'appareil. Écris ou dicte dans le champ, ouvre les Outils d'écriture, puis envoie. Une liste ou un JSON crée le document ici.</p><div class="grp">${IT('apple', '', 'IA', "Ouvrir les Outils d'écriture", "Sélectionne le texte pour le menu Apple, au-dessus du clavier")}</div>`;
-    else if (t.ai === 'mail' || t.ai === 'loc') h += `<p class="note">${t.ai === 'mail' ? 'Pas de choix de modèle : Computer traite l\'e-mail avec son réglage.' : 'Aucun modèle : lecture locale des listes « désignation ; quantité ; prix ».'}</p>`;
-    else {
-      h += `<div class="gl">Mode de raisonnement</div><div class="seg">${Object.entries(MODES).map(([k, m]) => `<button class="${t.r === k ? 'on' : ''}" data-a="mode" data-v="${k}">${m.l}</button>`).join('')}</div><p class="note">${MODES[t.r].s}.</p>`;
-      h += `<div class="gl">Modèle${t.ai === 'pro' ? ' (à sélectionner aussi dans Perplexity)' : ''}</div><div class="grp">${modList(t).map(m => IT('mod', m.id, m.id === 'auto' || m.id === 'defaut' ? '🎼' : '·', m.n, (t.ai === 'api' && m.id !== 'auto' ? m.id + ' · ' : '') + m.d, cur.id === m.id)).join('')}</div>`;
-      if (eff) h += `<div class="gl">Attitude imposée · ${esc(eff.n)} · ${esc(MODES[t.r].l)}</div><div class="fiche">${esc(modFiche(eff, t.r))}\n\n${esc(MODES[t.r].methode)}</div>`;
-      if (t.ai === 'cmp') h += `<p class="note">Computer exécute la tâche avec le modèle choisi (sous-agent). Le modèle principal de Computer se règle dans ton compte Perplexity.</p>`;
-    }
+    const cur = modCur(t);
+    h = `<h2>Modèle<button data-a="close">OK</button></h2>`;
+    if (!pk()) h += `<div class="grp" style="padding:10px"><input id="pkin" type="password" placeholder="Clé API pplx-…" autocomplete="off"><button class="b sm" style="width:100%;margin-top:8px" data-a="pk"><span>Enregistrer la clé</span></button></div>`;
+    h += `<div class="gl">Vitesse</div><div class="seg">${Object.entries(MODES).map(([k, m]) => `<button class="${t.r === k ? 'on' : ''}" data-a="mode" data-v="${k}">${m.l}</button>`).join('')}</div>`;
+    h += `<div class="gl">Modèle</div><div class="grp">${MOD_API.map(m => IT('mod', m.id, '', m.n, m.d, cur.id === m.id)).join('')}</div>`;
+    h += `<p class="note"><button class="b gh sm" type="button" onclick="sheetClose();go('k')"><span>Connecteurs</span></button></p>`;
   } else if (SHEET === 'fils') {
     const L = S.threads.slice().sort((a, b) => b.up - a.up).filter(x => !THQ || (thTitle(x) + ' ' + x.msgs.map(m => m.t).join(' ')).toLowerCase().includes(THQ));
     h = `<h2>Conversations<button data-a="new">Nouvelle</button></h2><input id="thq" type="search" placeholder="Rechercher" value="${esc(THQ)}" oninput="THQ=this.value.toLowerCase();sheetRender();setTimeout(()=>{const e=$('#thq');e.focus();e.setSelectionRange(e.value.length,e.value.length)},0)" style="margin-bottom:10px">
@@ -335,15 +320,9 @@ async function asSend() {
   if (!txt && !ATT.length) return toast('Écris un message ou joins un fichier');
   if (DEM[t.k].mod && !t.doc) return sheetOpen('doc');
   const clear = () => { if (ta) { ta.value = ''; cinGrow(ta); } draftClear('cin'); };
-  if (t.ai === 'apple') return appleSend(t, txt, clear);
-  if (t.ai === 'loc') { const p = chatSend(); clear(); return p; }
-  if (t.ai === 'mail') { if (ta && txt) ta.value = '[' + DEM[t.k].l + '] ' + txt; const p = pxSend(); clear(); return p; }
-  if (t.ai === 'pro') {
-    if (/```json|\{"(client|F|M|items|rapport)"/.test(txt)) { chatPush({r: 'u', t: '(réponse Perplexity collée)'}); clear(); asReply(t, txt, 'Perplexity Pro'); return render(); }
-    return proOpen(t, txt, clear);
-  }
-  if (t.ai === 'api') { if (!pk()) { toast('Ajoute ta clé API Perplexity'); return sheetOpen('ia'); } return apiSend(t, txt, clear); }
-  if (t.ai === 'cmp') return cmpSend(t, txt, clear);
+  t.ai = 'api';
+  if (!pk()) { toast('Ajoute ta clé API'); return sheetOpen('ia'); }
+  return apiSend(t, txt, clear);
 }
 
 /* ---- Perplexity Pro : onglet pré-rempli (seul accès possible à l'abonnement sans API) ---- */
