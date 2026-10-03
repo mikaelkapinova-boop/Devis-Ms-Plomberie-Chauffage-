@@ -224,10 +224,23 @@ function sheetRender() {
     h = `<h2>${typ === 'd' ? 'Devis' : 'Facture'} à modifier<button data-a="close">OK</button></h2><div class="grp">${L.length ? L.map(x => IT('doc', x.id, typ === 'd' ? '📄' : '🧾', esc(x.num) + ' · ' + esc(x.cn || 'Sans client'), fd(x.date) + ' · ' + E(tot(x).t) + (x.o ? ' · ' + esc(x.o.slice(0, 40)) : ''), t.doc === x.id)).join('') : `<p class="note" style="padding:12px">Aucun ${typ === 'd' ? 'devis' : 'facture'}.</p>`}</div>`;
   } else if (SHEET === 'ia') {
     const cur = modCur(t);
-    h = `<h2>Modèle<button data-a="close">OK</button></h2>`;
-    if (!pk()) h += `<div class="grp" style="padding:10px"><input id="pkin" type="password" placeholder="Clé API pplx-…" autocomplete="off"><button class="b sm" style="width:100%;margin-top:8px" data-a="pk"><span>Enregistrer la clé</span></button></div>`;
+    const ENGS = [
+      ['api','🧠','Perplexity dans l’appli','Clé API · recherche, documents et code'],
+      ['cmp','💻','Computer dans l’appli',`Pont local · ${MCOK ? 'connecté' : 'connecte-toi sur ton PC'}`],
+      ['pro','🌐','Perplexity Pro','Ouvre Perplexity avec la demande préparée'],
+      ['mail','✉️','Computer e-mail','Envoie la demande par e-mail et récupère le résultat'],
+      ['loc','⚡','Sans IA — Copilote local','Bilan, paiements, planning et création de documents à partir du texte']
+    ];
+    h = `<h2>Intelligence artificielle<button data-a="close">OK</button></h2>`;
+    h += `<div class="gl">Moteur</div><div class="grp">${ENGS.map(([id,ic,nm,sm]) => IT('eng', id, ic, nm, sm, t.ai === id)).join('')}</div>`;
+    if (t.ai === 'api' && !pk()) h += `<div class="grp" style="padding:10px"><input id="pkin" type="password" placeholder="Clé API pplx-…" autocomplete="off"><button class="b sm" style="width:100%;margin-top:8px" data-a="pk"><span>Enregistrer la clé</span></button></div>`;
     h += `<div class="gl">Vitesse</div><div class="seg">${Object.entries(MODES).map(([k, m]) => `<button class="${t.r === k ? 'on' : ''}" data-a="mode" data-v="${k}">${m.l}</button>`).join('')}</div>`;
-    h += `<div class="gl">Modèle</div><div class="grp">${MOD_API.map(m => IT('mod', m.id, '', m.n, m.d, cur.id === m.id)).join('')}</div>`;
+    if (t.ai === 'api' || t.ai === 'cmp') {
+      const models = modList(t);
+      h += `<div class="gl">Modèle</div><div class="grp">${models.map(m => IT('mod', m.id, '', m.n, m.d, cur.id === m.id)).join('')}</div>`;
+    } else {
+      h += `<p class="note">Ce moteur n’utilise pas de clé API. Tu peux changer de moteur à tout moment depuis ce menu.</p>`;
+    }
     h += `<p class="note"><button class="b gh sm" type="button" onclick="sheetClose();go('k')"><span>Connecteurs</span></button></p>`;
   } else if (SHEET === 'fils') {
     const L = S.threads.slice().sort((a, b) => b.up - a.up).filter(x => !THQ || (thTitle(x) + ' ' + x.msgs.map(m => m.t).join(' ')).toLowerCase().includes(THQ));
@@ -320,9 +333,17 @@ async function asSend() {
   if (!txt && !ATT.length) return toast('Écris un message ou joins un fichier');
   if (DEM[t.k].mod && !t.doc) return sheetOpen('doc');
   const clear = () => { if (ta) { ta.value = ''; cinGrow(ta); } draftClear('cin'); };
-  t.ai = 'api';
-  if (!pk()) { toast('Ajoute ta clé API'); return sheetOpen('ia'); }
-  return apiSend(t, txt, clear);
+  const eng = t.ai || S.cfg.as?.ai || 'loc';
+  t.ai = eng; S.cfg.as.ai = eng; thSave(); save('cfg');
+  if (eng === 'api') {
+    if (!pk()) { toast('Ajoute ta clé API'); return sheetOpen('ia'); }
+    return apiSend(t, txt, clear);
+  }
+  if (eng === 'cmp') return cmpSend(t, txt, clear);
+  if (eng === 'pro') return proOpen(t, txt, clear);
+  if (eng === 'mail') return pxSend();
+  if (eng === 'loc') return (typeof smartLocalSend === 'function' ? smartLocalSend : chatSend)();
+  return chatSend();
 }
 
 /* ---- Perplexity Pro : onglet pré-rempli (seul accès possible à l'abonnement sans API) ---- */
