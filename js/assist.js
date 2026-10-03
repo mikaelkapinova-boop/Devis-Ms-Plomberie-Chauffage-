@@ -411,11 +411,56 @@ async function apiSend(t, txt, clear) {
   } catch (e) { chatPush({r: 'a', t: 'Erreur Perplexity : ' + (e.message || e) + (/401|403|auth/i.test(String(e.message)) ? '\nVérifie ta clé API dans le menu IA.' : ''), via: eff.n}); }
   finally { ASBUSY = false; render(); }
 }
-async function apiPost(body) {
-  const r = await fetch('https://api.perplexity.ai/v1/agent', {method: 'POST', headers: {'Content-Type': 'application/json', Authorization: 'Bearer ' + pk()}, body: JSON.stringify(body)});
+let API_LANE = Promise.resolve();
+let API_COOLDOWN_UNTIL = 0;
+
+function apiWait(ms) { return new Promise(resolve => setTimeout(resolve, Math.max(0, ms))); }
+
+async function _apiPostOnce(body) {
+  const r = await fetch('https://api.perplexity.ai/v1/agent', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', Authorization: 'Bearer ' + pk()},
+    body: JSON.stringify(body)
+  });
   let j = {}; try { j = await r.json(); } catch (e) {}
-  if (!r.ok) return {_err: 1, _st: r.status, _msg: (j.error && (j.error.message || j.error.type)) || j.message || ('HTTP ' + r.status)};
+  if (!r.ok) {
+    const retryRaw = r.headers.get('Retry-After') || (j && (j.retry_after || j.retryAfter));
+    const retrySec = Number(retryRaw);
+    return {
+      _err: 1,
+      _st: r.status,
+      _retry_ms: Number.isFinite(retrySec) && retrySec > 0 ? Math.min(retrySec * 1000, 60000) : 0,
+      _msg: (j.error && (j.error.message || j.error.type)) || j.message || ('HTTP ' + r.status)
+    };
+  }
   return j;
+}
+
+async function apiPost(body) {
+  /* Filet unique : évite que plusieurs soldats/requêtes frappent
+     simultanément la limite de débit du fournisseur. */
+  const run = async () => {
+    const now = Date.now();
+    if (now < API_COOLDOWN_UNTIL) await apiWait(API_COOLDOWN_UNTIL - now);
+
+    let last = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      last = await _apiPostOnce(body);
+      if (!last._err || last._st !== 429) return last;
+
+      const backoff = last._retry_ms || Math.min(1500 * Math.pow(2, attempt), 12000);
+      API_COOLDOWN_UNTIL = Date.now() + backoff;
+      await apiWait(backoff);
+    }
+    /* Ne retente plus en boucle : le prochain appel attendra le cooldown. */
+    return Object.assign(last || {_err: 1, _st: 429}, {
+      _msg: 'Perplexity limite temporairement le débit. L’application a attendu et évité les répétitions inutiles.'
+    });
+  };
+
+  const next = API_LANE.then(run, run);
+  API_LANE = next.catch(() => {});
+  return next;
 }
 
 /* ---- Computer dans l'appli : pont local serveur.py (MCP, OAuth) ---- */
