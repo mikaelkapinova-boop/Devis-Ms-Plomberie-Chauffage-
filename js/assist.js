@@ -17,9 +17,10 @@ const DEM = {
   prix:    {l: 'Recherche de prix',          ic: '🏷️', o: 'prix'},
   app:     {l: "Améliorer l'appli",          ic: '🛠️', o: 'app'},
   projet:  {l: 'Créer un projet IA',         ic: '✨', o: 'app'},
+  dev:     {l: 'Chat développeur GitHub',    ic: '👨‍💻', o: 'dev'},
   autre:   {l: 'Autre question',             ic: '💬', o: 'autre'}
 };
-const DEM_GRP = [['Documents', ['devis', 'facture', 'mdevis', 'mfact', 'rapport', 'prix']], ['Application et projets', ['app', 'projet', 'autre']]];
+const DEM_GRP = [['Documents', ['devis', 'facture', 'mdevis', 'mfact', 'rapport', 'prix']], ['Application et projets', ['app', 'projet', 'dev', 'autre']]];
 
 /* ---------- Moteurs ---------- */
 const ENG = {
@@ -293,7 +294,7 @@ function demConsigne(t) {
   if (DEM[k].mod) { const d = S.docs.find(x => x.id === t.doc); return DOM_CHANTIER + `\n\nTÂCHE : modifier ${DEM[k].mod === 'd' ? 'le devis' : 'la facture'} ci-dessous selon la demande. Document actuel (JSON) :\n${d ? docJSON(d) : '(aucun document choisi)'}\nRends le document COMPLET après modification (toutes les lignes, pas seulement les changements), dans un bloc \`\`\`json de cette forme :\n${J_DOC}\nExplique en 1 à 3 lignes ce que tu as changé.`; }
   if (k === 'rapport') return DOM_CHANTIER + `\n\nTÂCHE : rédiger un rapport d'intervention professionnel (style constat pour l'assurance, factuel, précis). Termine TOUJOURS par un bloc \`\`\`json de cette forme :\n${J_RAP}`;
   if (k === 'prix') return DOM_CHANTIER + `\n\nTÂCHE : recherche de prix fournisseurs. Donne le tableau article | fournisseur | prix HT | lien, indique où ce fournisseur se fournit (fabricant, usine, importateur) et si l'achat direct est possible. Termine par un bloc \`\`\`json :\n${J_PRIX}\n(pa = prix d'achat HT, mg = marge en %).`;
-  if (k === 'app' || k === 'projet') return PROMPT_APP + (k === 'projet' ? "\nTÂCHE : concevoir un nouveau projet IA : objectif, architecture, fichiers complets, installation pas à pas sous Windows/PowerShell." : "\nTÂCHE : améliorer l'application. Donne les fichiers modifiés complets et explique où les placer.");
+  if (k === 'dev') return "MODE CHAT DÉVELOPPEUR GITHUB — tu travailles directement sur le dépôt mikaelkapinova-boop/Devis-Ms-Plomberie-Chauffage-.\n\nPour une demande de modification, inspecte d'abord l'état ACTUEL du dépôt avec le connecteur GitHub, identifie les fichiers concernés, modifie-les directement, vérifie le résultat, puis committe les changements si les droits le permettent. Si une pull request est nécessaire, crée-la. Ne te contente pas de proposer du code lorsque l'utilisateur demande une modification réelle.\n\nRÈGLES : lis avant d'écrire; fais des changements ciblés; préserve les fonctions existantes; vérifie syntaxe et références; ne mets jamais de clé API ou secret dans le dépôt; signale clairement les fichiers, commit/PR et éventuels points restants.";
   return 'TÂCHE : répondre à la question de façon claire et concise.';
 }
 function sysPrompt(t, eff) {
@@ -392,10 +393,10 @@ async function apiSend(t, txt, clear) {
   if (forceWeb || eff.f !== 'glm') {
     tools.push({type: 'web_search', max_results: t.r === 'rapide' ? 8 : 15});
     tools.push({type: 'fetch_url'});
-    if (t.r !== 'rapide' || t.k === 'app' || t.k === 'projet') tools.push({type: 'sandbox'});
+    if (t.r !== 'rapide' || t.k === 'app' || t.k === 'projet' || t.k === 'dev') tools.push({type: 'sandbox'});
   }
   if (S.cfg.ai.gh !== false) tools.push({type: 'connector', id: 'connector_github', server_label: 'github'});
-  const fort = '\n\nFORCE. Tu as les mêmes gestes utiles qu\'un agent : chercher sur le web, ouvrir les pages, calculer ou vérifier dans le bac à sable, et lire le dépôt GitHub mikaelkapinova-boop/Devis-Ms-Plomberie-Chauffage- si la demande concerne le code. Vérifie avant d\'affirmer un prix ou une référence. Ne demande pas de jeton.';
+  const fort = '\n\nFORCE. Tu as les mêmes gestes utiles qu\'un agent : chercher sur le web, ouvrir les pages, calculer ou vérifier dans le bac à sable, et lire ou modifier le dépôt GitHub mikaelkapinova-boop/Devis-Ms-Plomberie-Chauffage- si la demande concerne le code. Pour le Chat développeur GitHub, une modification demandée doit être exécutée réellement avec le connecteur GitHub + sandbox quand les droits le permettent, puis vérifiée et commitée ou proposée en pull request. Ne demande pas de jeton dans le chat.';
   const body = {model: eff.id, instructions: sysPrompt(t, eff) + fort, input: [...hist, {role: 'user', content}], max_output_tokens: Math.max(mode.tokens, t.r === 'profond' ? 8000 : 4000), max_steps: steps, reasoning: {effort: t.r === 'profond' ? 'high' : mode.effort}};
   if (tools.length) body.tools = tools;
   ASBUSY = true; render();
