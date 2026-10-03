@@ -28,7 +28,8 @@ const ENG = {
   pro:  {l: 'Perplexity Pro', s: "Sans clé · s'ouvre dans Safari, pas dans l'appli · session déjà connectée"},
   mail: {l: 'Computer e-mail', s: 'Envoi par e-mail · le résultat arrive dans « Reçus »'},
   loc:  {l: 'Sans IA', s: "Lit une liste de matériel directement sur l'appareil"},
-  apple: {l: 'Apple Intelligence', s: "iPhone 18 Pro · Outils d'écriture sur l'appareil · pas un appel, pas Siri"}
+  apple: {l: 'Apple Intelligence', s: "Outils d’écriture sur l’appareil · pas un appel, pas Siri"},
+  swarm: {l: 'Cerveau collectif', s: 'Soldats éphémères · mémoire partagée · recherche parallèle · outils permanents'}
 };
 const MOD_CMP2 = [{id: 'auto', n: "Auto (orchestrateur de l'appli)", f: null, d: 'Choisit le modèle selon la demande et le mode'}, ...MOD_CMP];
 
@@ -226,6 +227,7 @@ function sheetRender() {
     const cur = modCur(t);
     const ENGS = [
       ['api','🧠','Perplexity dans l’appli','Clé API · recherche, documents et code'],
+      ['swarm','⚔️','Cerveau collectif','Pyramide de soldats · mémoire partagée · recherche parallèle'],
       ['cmp','💻','Computer dans l’appli',`Pont local · ${MCOK ? 'connecté' : 'connecte-toi sur ton PC'}`],
       ['pro','🌐','Perplexity Pro','Ouvre Perplexity avec la demande préparée'],
       ['mail','✉️','Computer e-mail','Envoie la demande par e-mail et récupère le résultat'],
@@ -335,6 +337,7 @@ async function asSend() {
   const clear = () => { if (ta) { ta.value = ''; cinGrow(ta); } draftClear('cin'); };
   const eng = t.ai || S.cfg.as?.ai || 'loc';
   t.ai = eng; S.cfg.as.ai = eng; thSave(); save('cfg');
+  if (eng === 'swarm') return swarmSend(t, txt, clear);
   if (eng === 'api') {
     if (!pk()) { toast('Ajoute ta clé API'); return sheetOpen('ia'); }
     return apiSend(t, txt, clear);
@@ -359,6 +362,23 @@ async function proOpen(t, txt, clear) {
 }
 
 /* ---- Perplexity dans l'appli : Agent API ---- */
+async function swarmSend(t, txt, clear) {
+  if (!window.SwarmCore) return chatPush({r:'a',t:'Cerveau collectif indisponible.',via:'Swarm Core'});
+  const q = txt || 'Analyse les fichiers joints et détermine la mission à exécuter.';
+  let prep = {imgs:[],texts:[],names:[]};
+  try { prep = await prepAtt(); } catch(e) {}
+  chatPush({r:'u',t:q,att:prep.names}); ATT=[]; clear();
+  const question = [q, ...prep.texts].join('\n\n');
+  ASBUSY=true; render();
+  try {
+    const n = t.r === 'profond' ? 100 : t.r === 'raison' ? 20 : 6;
+    const mission = await SwarmCore.run(t, question, {soldiers:n, maxSoldiers:1000});
+    asReply(t, mission.final || '(mission terminée)', '🧠 Swarm Core · '+n+' soldats');
+  } catch(e) {
+    chatPush({r:'a',t:'Erreur du cerveau collectif : '+(e.message||e),via:'Swarm Core'});
+  } finally { ASBUSY=false; render(); }
+}
+
 async function apiSend(t, txt, clear) {
   const eff = modEff(t), mode = MODES[t.r];
   let prep; try { prep = await prepAtt(); } catch (e) { prep = {imgs: [], texts: [], names: []}; }
