@@ -405,7 +405,12 @@ async function apiSend(t, txt, clear) {
       delete body.reasoning; j = await apiPost(body);
       if (j._err && j._st === 400) { body.input = hist.map(h => (h.role === 'user' ? 'Artisan : ' : 'Assistant : ') + h.content).join('\n\n') + '\n\nArtisan : ' + userText; j = await apiPost(body); }
     }
-    if (j._err) throw new Error(j._msg);
+    if (j._err) {
+      const msg = j._st === 429
+        ? 'Perplexity est temporairement à sa limite de débit. J’ai attendu automatiquement avant de réessayer. Réessaie dans quelques instants si le fournisseur maintient encore la limite.'
+        : j._msg;
+      throw new Error(msg);
+    }
     const out = j.output_text || (j.output || []).flatMap(o => o.content || []).filter(c => c.type === 'output_text' || c.text).map(c => c.text).join('\n') || '';
     asReply(t, out || '(réponse vide)', eff.n + ' · ' + mode.l);
   } catch (e) { chatPush({r: 'a', t: 'Erreur Perplexity : ' + (e.message || e) + (/401|403|auth/i.test(String(e.message)) ? '\nVérifie ta clé API dans le menu IA.' : ''), via: eff.n}); }
