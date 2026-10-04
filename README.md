@@ -19,7 +19,7 @@ Une automatisation Perplexity lit l'e-mail, prépare le résultat et le dépose 
 ## Assistant v3.5
 
 - **Conversations séparées** (☰) : chaque sujet garde son historique, sa demande, son IA, son modèle et son mode.
-- **Menu Demande** : créer / modifier un devis ou une facture, faire un rapport, recherche de prix, améliorer l'appli, projet IA, autre. Les réponses JSON créent ou modifient automatiquement le document (modification annulable).
+- **Menu Demande** : créer / modifier un devis ou une facture, faire un rapport, recherche de prix, améliorer l'appli, projet IA, autre. Les réponses JSON préparent une proposition : un devis ou une facture n’est créé(e) ou modifié(e) qu’après validation dans le tchat. Tu peux refuser une proposition avant son application; une modification appliquée reste annulable.
 - **Menu IA** :
   - *Perplexity* (dans l'appli, PC et iPhone) : Agent API `https://api.perplexity.ai/v1/agent`, clé API Perplexity (facturée à l'usage, séparée de l'abonnement Pro). Tous les modèles de l'API avec leur identifiant exact.
   - *Computer* (dans l'appli) : pont `serveur.py` (MCP + OAuth, crédits Computer). Le modèle choisi est demandé à Computer comme sous-agent.
