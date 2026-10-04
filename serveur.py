@@ -765,7 +765,8 @@ class Gestionnaire(BaseHTTPRequestHandler):
         if rel.endswith("/"):
             rel += "index.html"
         cible = os.path.realpath(os.path.join(DOSSIER, rel))
-        if not cible.startswith(DOSSIER + os.sep) or os.path.basename(cible) in INTERDITS or "/.git" in cible.replace(os.sep, "/"):
+        if (not cible.startswith(DOSSIER + os.sep) or os.path.basename(cible) in INTERDITS or
+                os.path.basename(cible).startswith(".tokens-") or "/.git" in cible.replace(os.sep, "/")):
             return self._json(404, {"erreur": "inconnu"})
         if not os.path.isfile(cible):
             return self._json(404, {"erreur": "inconnu"})
