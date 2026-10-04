@@ -25,6 +25,7 @@ const DEM_GRP = [['Documents', ['devis', 'facture', 'mdevis', 'mfact', 'rapport'
 /* ---------- Moteurs ---------- */
 const ENG = {
   api:  {l: 'Perplexity', s: "Clé API · recherche, pages, code et GitHub · le plus proche de Computer"},
+  gpt:  {l: 'ChatGPT (compte)', s: 'Connexion au compte sur ton PC · limites du forfait ChatGPT'},
   cmp:  {l: 'Computer', s: "Dans l'appli · via le pont serveur.py sur ton PC · crédits Computer"},
   pro:  {l: 'Perplexity Pro', s: "Sans clé · s'ouvre dans Safari, pas dans l'appli · session déjà connectée"},
   mail: {l: 'Computer e-mail', s: 'Envoi par e-mail · le résultat arrive dans « Reçus »'},
@@ -37,6 +38,7 @@ const MOD_CMP2 = [{id: 'auto', n: "Auto (orchestrateur de l'appli)", f: null, d:
 /* ---------- État ---------- */
 S.threads = S.threads || [];
 let SHEET = null, ASBUSY = false, THQ = '';
+let GPTOK = false, GPTMODELS = [], GPTCHECKED = 0, GPTPROMISE = null, GPTPOLL = 0;
 const now = () => Date.now();
 
 const _cfgInit2 = cfgInit;
@@ -44,7 +46,8 @@ cfgInit = function () {
   _cfgInit2();
   if (!Array.isArray(S.threads)) S.threads = [];
   const c = S.cfg;
-  if (!c.as) c.as = {k: 'devis', ai: 'pro', m: 'auto', mc: 'auto', r: 'raison'};
+  if (!c.as) c.as = {k: 'devis', ai: 'pro', m: 'auto', mc: 'auto', gm: '', r: 'raison'};
+  if (!('gm' in c.as)) c.as.gm = '';
   if (!c.pk && c.ai && c.ai.pv === 'pplx' && c.ai.key) c.pk = c.ai.key;
   /* migration : ancienne conversation unique → fils */
   if (!S.threads.length && Array.isArray(S.chat) && S.chat.length) {
@@ -59,7 +62,7 @@ cfgInit = function () {
 };
 function thNew(o, silent) {
   const a = S.cfg.as || {};
-  const t = Object.assign({id: nw(), ti: '', k: a.k || 'devis', ai: a.ai || 'api', m: a.m || 'auto', mc: a.mc || 'auto', r: a.r || 'raison', tid: '', doc: '', msgs: [], up: now()}, o || {});
+  const t = Object.assign({id: nw(), ti: '', k: a.k || 'devis', ai: a.ai || 'api', m: a.m || 'auto', mc: a.mc || 'auto', gm: a.gm || '', r: a.r || 'raison', tid: '', doc: '', msgs: [], up: now()}, o || {});
   if (!silent) { S.threads.push(t); S.cfg.thc = t.id; S.chat = t.msgs; save('threads'); save('cfg'); }
   return t;
 }
@@ -151,16 +154,26 @@ function mdl(s) {
 }
 
 /* ---------- Libellés ---------- */
-function modList(t) { return t.ai === 'cmp' ? MOD_CMP2 : MOD_API; }
-function modCur(t) { return t.ai === 'cmp' ? (MOD_CMP2.find(m => m.id === t.mc) || MOD_CMP2[0]) : (MOD_API.find(m => m.id === t.m) || MOD_API[0]); }
+function modList(t) {
+  if (t.ai === 'cmp') return MOD_CMP2;
+  if (t.ai === 'gpt') return GPTMODELS;
+  return MOD_API;
+}
+function modCur(t) {
+  if (t.ai === 'cmp') return MOD_CMP2.find(m => m.id === t.mc) || MOD_CMP2[0];
+  if (t.ai === 'gpt') return GPTMODELS.find(m => m.id === (t.gm || S.cfg.as?.gm)) || GPTMODELS[0] || {id: '', n: 'ChatGPT', d: 'Connecte-toi pour charger les modèles'};
+  return MOD_API.find(m => m.id === t.m) || MOD_API[0];
+}
 function modEff(t) { /* modèle réellement utilisé (résout « Auto ») */
   const o = DEM[t.k].o;
+  if (t.ai === 'gpt') return modCur(t);
   if (t.ai === 'cmp') { if (t.mc === 'auto') { const n = ORCH_CMP[o][t.r]; return MOD_CMP.find(m => m.id === n); } return modByCmp(t.mc) || MOD_CMP[0]; }
   if (t.m === 'auto') return modByApi(ORCH[o][t.r]);
   return modByApi(t.m) || modByApi(ORCH[o][t.r]);
 }
 function iaLabel(t) {
   const m = modCur(t), e = modEff(t);
+  if (t.ai === 'gpt') return (m.n || 'ChatGPT') + ' · ' + MODES[t.r].l;
   return (m.id === 'auto' ? (e ? e.n : 'Auto') : m.n) + ' · ' + MODES[t.r].l;
 }
 function pk() { return (S.cfg.pk || '').trim(); }
@@ -184,7 +197,9 @@ chatV = function () {
 function cinGrow(e) { e.style.height = 'auto'; e.style.height = Math.min(e.scrollHeight, innerHeight * .45) + 'px'; try { localStorage.setItem(DR('cin'), e.value); } catch (x) {} }
 function asAfter() {
   const e = $('#cin'); if (e) { const v = localStorage.getItem(DR('cin')); if (v && !e.value) e.value = v; cinGrow(e); }
-  const t = TH(); if (t.ai === 'cmp' && !ASBUSY) setTimeout(mcStatus, 0);
+  const t = TH();
+  if (t.ai === 'cmp' && !ASBUSY) setTimeout(mcStatus, 0);
+  if (t.ai === 'gpt' && !ASBUSY) setTimeout(gptStatus, 0);
   if (SHEET) sheetRender();
 }
 function asPendingCard(q, i, approval) {
@@ -246,6 +261,7 @@ function sheetRender() {
     const ENGS = [
       ['api','🧠','Perplexity dans l’appli','Clé API · recherche, documents et code'],
       ['swarm','⚔️','Cerveau collectif','Pyramide de soldats · mémoire partagée · recherche parallèle'],
+      ['gpt','✨','ChatGPT (compte)','Connexion officielle · limites du forfait ChatGPT'],
       ['cmp','💻','Computer dans l’appli',`Pont local · ${MCOK ? 'connecté' : 'connecte-toi sur ton PC'}`],
       ['pro','🌐','Perplexity Pro','Ouvre Perplexity avec la demande préparée'],
       ['mail','✉️','Computer e-mail','Envoie la demande par e-mail et récupère le résultat'],
@@ -254,10 +270,12 @@ function sheetRender() {
     h = `<h2>Intelligence artificielle<button data-a="close">OK</button></h2>`;
     h += `<div class="gl">Moteur</div><div class="grp">${ENGS.map(([id,ic,nm,sm]) => IT('eng', id, ic, nm, sm, t.ai === id)).join('')}</div>`;
     if (t.ai === 'api' && !pk()) h += `<div class="grp" style="padding:10px"><input id="pkin" type="password" placeholder="Clé API pplx-…" autocomplete="off"><button class="b sm" style="width:100%;margin-top:8px" data-a="pk"><span>Enregistrer la clé</span></button></div>`;
+    if (t.ai === 'gpt') h += `<div class="grp">${IT('gptconn', '', '✨', 'Continue with ChatGPT', GPTOK ? 'Compte connecté sur ce PC' : 'À lancer sur le PC qui exécute lancer.bat', false)}</div>`;
     h += `<div class="gl">Vitesse</div><div class="seg">${Object.entries(MODES).map(([k, m]) => `<button class="${t.r === k ? 'on' : ''}" data-a="mode" data-v="${k}">${m.l}</button>`).join('')}</div>`;
-    if (t.ai === 'api' || t.ai === 'cmp') {
+    if (t.ai === 'api' || t.ai === 'cmp' || t.ai === 'gpt') {
       const models = modList(t);
-      h += `<div class="gl">Modèle</div><div class="grp">${models.map(m => IT('mod', m.id, '', m.n, m.d, cur.id === m.id)).join('')}</div>`;
+      if (models.length) h += `<div class="gl">Modèle</div><div class="grp">${models.map(m => IT('mod', m.id, '', m.n, m.d, cur.id === m.id)).join('')}</div>`;
+      else if (t.ai === 'gpt') h += `<p class="note">${GPTOK ? 'Impossible de charger les modèles ChatGPT pour le moment.' : 'Connecte-toi avec ChatGPT sur le PC où le serveur local est lancé.'}</p>`;
     } else {
       h += `<p class="note">Ce moteur n’utilise pas de clé API. Tu peux changer de moteur à tout moment depuis ce menu.</p>`;
     }
@@ -289,11 +307,12 @@ function sheetAct(a, v, b) {
     sheetClose(); return render();
   }
   if (a === 'doc') { t.doc = v; thSave(); sheetClose(); return render(); }
-  if (a === 'eng') { t.ai = v; S.cfg.as.ai = v; thSave(); save('cfg'); if (v === 'cmp') mcStatus(); render(); return sheetRender(); }
+  if (a === 'eng') { t.ai = v; S.cfg.as.ai = v; thSave(); save('cfg'); if (v === 'cmp') mcStatus(); if (v === 'gpt') gptStatus(true); render(); return sheetRender(); }
   if (a === 'mode') { t.r = v; S.cfg.as.r = v; thSave(); save('cfg'); render(); return sheetRender(); }
-  if (a === 'mod') { if (t.ai === 'cmp') { t.mc = v; S.cfg.as.mc = v; } else { t.m = v; S.cfg.as.m = v; } thSave(); save('cfg'); render(); return sheetRender(); }
+  if (a === 'mod') { if (t.ai === 'cmp') { t.mc = v; S.cfg.as.mc = v; } else if (t.ai === 'gpt') { t.gm = v; S.cfg.as.gm = v; } else { t.m = v; S.cfg.as.m = v; } thSave(); save('cfg'); render(); return sheetRender(); }
   if (a === 'pk') { const k = ($('#pkin')?.value || '').trim(); if (!k) return toast('Colle ta clé API'); S.cfg.pk = k; save('cfg'); toast('Clé enregistrée'); render(); return sheetRender(); }
   if (a === 'mcconn') return mcConnect();
+  if (a === 'gptconn') return gptConnect();
   if (a === 'apple') { sheetClose(); return appleTools(); }
 }
 
@@ -361,6 +380,7 @@ async function asSend() {
     return apiSend(t, txt, clear);
   }
   if (eng === 'cmp') return cmpSend(t, txt, clear);
+  if (eng === 'gpt') return gptSend(t, txt, clear);
   if (eng === 'pro') return proOpen(t, txt, clear);
   if (eng === 'mail') return pxSend();
   if (eng === 'loc') return (typeof smartLocalSend === 'function' ? smartLocalSend : chatSend)();
@@ -499,6 +519,127 @@ async function mcStatus() {
   const d = $('#mcdot'); if (d) d.className = 'mcdot' + (MCOK ? ' on' : '');
 }
 function mcConnect() { window.open(mcBase() + '/oauth/start', '_blank'); toast("Connecte-toi dans l'onglet ouvert puis reviens ici"); }
+/* ---- ChatGPT : compte connecté au serveur local ---- */
+function gptConnect() {
+  const w = window.open(mcBase() + '/auth/chatgpt/start', '_blank');
+  if (!w) { toast('Autorise l’ouverture de la fenêtre de connexion ChatGPT.'); return; }
+  toast('Termine la connexion ChatGPT sur le PC puis reviens dans l’application.');
+  if (GPTPOLL) clearInterval(GPTPOLL);
+  let tries = 0;
+  GPTPOLL = setInterval(async () => {
+    tries++;
+    await gptStatus(true);
+    if ((GPTOK && GPTMODELS.length) || tries >= 80) { clearInterval(GPTPOLL); GPTPOLL = 0; }
+  }, 3000);
+}
+async function gptStatus(force) {
+  if (GPTPROMISE) return GPTPROMISE;
+  if (!force && Date.now() - GPTCHECKED < 4000) return;
+  GPTPROMISE = (async () => {
+    GPTCHECKED = Date.now();
+    const was = GPTOK, oldCount = GPTMODELS.length;
+    try {
+      const status = await mcFetch('/api/chatgpt/status');
+      GPTOK = !!status.connecte;
+      if (GPTOK) {
+        const list = await mcFetch('/api/chatgpt/models');
+        GPTMODELS = (list.models || []).map(m => ({id: m.slug, n: m.display_name, d: 'Disponible avec ton compte ChatGPT'}));
+        if (GPTMODELS.length) {
+          const t = TH();
+          if (!GPTMODELS.some(m => m.id === (t.gm || S.cfg.as?.gm))) {
+            t.gm = GPTMODELS[0].id; S.cfg.as.gm = t.gm; thSave(); save('cfg');
+          }
+        }
+      } else GPTMODELS = [];
+    } catch (e) {
+      if (e.code === 401) { GPTOK = false; GPTMODELS = []; }
+    }
+    if (SHEET === 'ia' && TH().ai === 'gpt' && (was !== GPTOK || oldCount !== GPTMODELS.length)) sheetRender();
+    return GPTOK;
+  })();
+  try { return await GPTPROMISE; } finally { GPTPROMISE = null; }
+}
+function gptReadFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Lecture de la pièce jointe impossible.'));
+    reader.readAsDataURL(file);
+  });
+}
+async function gptImageData(file) {
+  const type = (file.type || '').toLowerCase();
+  if (['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(type)) return gptReadFile(file);
+  let image;
+  if (typeof createImageBitmap === 'function') image = await createImageBitmap(file);
+  else {
+    const url = URL.createObjectURL(file);
+    image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Cette photo ne peut pas être convertie.')); };
+      img.src = url;
+    });
+  }
+  const scale = Math.min(1, 3200 / Math.max(image.width, image.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(image.width * scale));
+  canvas.height = Math.max(1, Math.round(image.height * scale));
+  canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+  if (image.close) image.close();
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+  if (!blob) throw new Error('Cette photo ne peut pas être convertie.');
+  return gptReadFile(blob);
+}
+async function gptSend(t, txt, clear) {
+  if (!GPTOK || !GPTMODELS.length) {
+    await gptStatus(true);
+    if (!GPTOK || !GPTMODELS.length) { toast('ChatGPT n’est pas prêt. Connecte-toi sur le PC et vérifie le menu IA.'); sheetOpen('ia'); return; }
+  }
+  const total = ATT.reduce((sum, a) => sum + (a.f?.size || 0), 0);
+  if (total > 32 * 1024 * 1024) return toast('Les pièces jointes dépassent 32 Mo au total.');
+  let content = [];
+  const names = [];
+  try {
+    for (const a of ATT) {
+      names.push({n: a.f.name, k: a.k});
+      if (a.k === 'pdf' || a.f.type === 'application/pdf') {
+        const dataUrl = await gptReadFile(a.f);
+        content.push({type: 'input_file', filename: a.f.name, file_data: dataUrl, detail: 'auto'});
+      } else if (a.k === 'img' || (a.f.type || '').startsWith('image/')) {
+        const dataUrl = await gptImageData(a.f);
+        content.push({type: 'input_image', image_url: dataUrl, detail: 'auto'});
+      } else {
+        throw new Error('ChatGPT accepte ici les photos et les fichiers PDF.');
+      }
+    }
+  } catch (e) { toast(e.message || 'Lecture de la pièce jointe impossible.'); return; }
+  const eff = modEff(t), model = modCur(t);
+  const dem = '[' + DEM[t.k].l + '] ' + (txt || 'Analyse les fichiers joints.');
+  const history = t.msgs.slice(-16).filter(m => (m.r === 'u' || m.r === 'a') && m.t).map(m => ({
+    role: m.r === 'u' ? 'user' : 'assistant', content: String(m.t).slice(0, 12000)
+  }));
+  const input = [{role: 'system', content: sysPrompt(t, eff)}, ...history, {
+    role: 'user', content: [{type: 'input_text', text: dem}, ...content]
+  }];
+  chatPush({r: 'u', t: txt || '(fichier joint)', att: names});
+  ATT = []; clear();
+  return gptCall({model: model.id, input}, t, model);
+}
+async function gptCall(body, t, model) {
+  ASBUSY = true; render();
+  try {
+    const result = await mcFetch('/api/chatgpt/chat', body);
+    asReply(t, result.text || '(réponse vide)', 'ChatGPT · ' + (model.n || 'modèle connecté'));
+  } catch (e) {
+    if (e.code === 401 || e.kind === 'non_connecte') {
+      GPTOK = false;
+      chatPush({r: 'a', t: 'Connecte-toi avec ChatGPT dans le menu IA sur le PC où le serveur local est lancé, puis renvoie ton message.'});
+    } else if (e instanceof TypeError) {
+      chatPush({r: 'a', t: 'Serveur local introuvable. Lance lancer.bat sur le PC, puis choisis ChatGPT dans le menu IA.'});
+    } else chatPush({r: 'a', t: 'Erreur ChatGPT : ' + (e.message || e)});
+  } finally { ASBUSY = false; render(); }
+}
 async function cmpSend(t, txt, clear) {
   let urls = [], names = [];
   try { for (const a of ATT) { names.push({n: a.f.name, k: a.k}); const j = await mcFetch('/api/upload', null, {b: a.f, h: {'X-Filename': encodeURIComponent(a.f.name), 'X-Mime': a.f.type || 'application/octet-stream'}}); urls.push(j.attachment_url); } }
