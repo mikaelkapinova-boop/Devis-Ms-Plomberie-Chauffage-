@@ -38,3 +38,7 @@ Le site GitHub Pages peut aussi utiliser le pont s'il tourne sur le même PC. Le
 
 ## Corbeille
 Glisse un devis, une facture ou un rapport vers la gauche → « Supprimer ». « Sélectionner » permet de tout cocher et supprimer d'un coup. Tout part dans la **Corbeille** (restaurer, effacer, vider).
+
+
+## Ms Devis 6.0 — Bridge PC
+La V6 utilise une application locale optionnelle sur le PC. La page `bridge/` sert de point de téléchargement et d'instructions. Le PC exécute le bridge, tandis que l'iPhone reste uniquement l'interface utilisateur. Aucune clé API ou identifiant n'est stocké dans le dépôt.
