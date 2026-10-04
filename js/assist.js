@@ -187,6 +187,23 @@ function asAfter() {
   const t = TH(); if (t.ai === 'cmp' && !ASBUSY) setTimeout(mcStatus, 0);
   if (SHEET) sheetRender();
 }
+function asPendingCard(q, i, approval) {
+  const F = q.F || [], M = q.M || [], total = [...F, ...M].reduce((s, l) => s + n(l.q) * n(l.p), 0);
+  const rows = [...F.map(l => ['F', l]), ...M.map(l => ['M', l])].slice(0, 12).map(([k, l]) => '<div><span class="bd ' + (k === 'M' ? 'cu' : '') + '">' + k + '</span> ' + esc(l.d) + ' <span class="mu">× ' + esc(l.q) + '</span><b>' + (n(l.p) ? E(n(l.q) * n(l.p)) : '—') + '</b></div>').join('');
+  const more = F.length + M.length > 12 ? '<div class="mu">… et ' + (F.length + M.length - 12) + ' autres</div>' : '';
+  const header = '<div class="qc"><b>' + (F.length + M.length) + ' ligne(s) proposée(s)</b>' + (q.client && q.client.nom ? ' · ' + esc(q.client.nom) : '') + (q.objet ? '<br><small class="mu">' + esc(q.objet) + '</small>' : '');
+  const preview = '<div class="ql">' + rows + more + '</div><div class="tr"><span>Total estimé HT</span><b>' + E(total) + '</b></div>';
+  let controls = '';
+  if (!approval.status) {
+    const label = approval.kind === 'modify' ? 'Appliquer à ' + (approval.docNum || 'ce document') : 'Créer ' + (approval.docType === 'f' ? 'la facture' : 'le devis') + ' en brouillon';
+    controls = '<p class="mu" style="font-size:12px;margin:8px 0">Rien n’est enregistré. Vérifie les lignes et les prix, puis valide.</p><div class="g2"><button class="b sm" type="button" onclick="asPendingApply(' + i + ')"><span>' + esc(label) + '</span></button><button class="b gh sm" type="button" onclick="asPendingReject(' + i + ')"><span>Refuser</span></button></div>';
+  } else if (approval.status === 'applied') {
+    controls = '<p class="mu" style="font-size:12px;margin:8px 0">Proposition appliquée. Vérifie les prix et les détails du document.</p>';
+  } else if (approval.status === 'rejected') {
+    controls = '<p class="mu" style="font-size:12px;margin:8px 0">Proposition refusée. Aucun changement appliqué.</p>';
+  }
+  return header + preview + controls + '</div>';
+}
 function bub2(m, i) {
   const at = (m.att || []).map(a => `<span class="chip s">${a.k === 'pdf' ? '📄' : '🖼️'} ${esc(a.n)}</span>`).join('');
   let acts = '';
@@ -203,7 +220,7 @@ function bub2(m, i) {
       : x.type === 'auth_required' ? (x.url ? `<a class="b gh sm" href="${esc(x.url)}" target="_blank" rel="noopener"><span>Connecter le service</span></a>` : '') + B("C'est connecté → continuer", `mcAct('connected','${tid}')`)
       : B("Continuer / voir l'avancement", `mcAct('continue','${tid}')`);
   }
-  return `<div class="bub ${m.r}">${at ? `<div class="atts">${at}</div>` : ''}${m.r === 'u' ? esc(m.t).replace(/\n/g, '<br>') : mdl(m.t)}${m.q ? qCard(m.q, i) : ''}${acts ? `<div class="acts">${acts}</div>` : ''}<span class="meta">${m.via ? esc(m.via) + ' · ' : ''}${m.ts ? new Date(m.ts).toLocaleString('fr-FR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : ''}</span></div>`;
+  return `<div class="bub ${m.r}">${at ? `<div class="atts">${at}</div>` : ''}${m.r === 'u' ? esc(m.t).replace(/\n/g, '<br>') : mdl(m.t)}${m.q ? (m.approval ? asPendingCard(m.q, i, m.approval) : qCard(m.q, i)) : ''}${acts ? `<div class="acts">${acts}</div>` : ''}<span class="meta">${m.via ? esc(m.via) + ' · ' : ''}${m.ts ? new Date(m.ts).toLocaleString('fr-FR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : ''}</span></div>`;
 }
 function thRename() { const t = TH(), v = prompt('Nom de la conversation :', thTitle(t)); if (v === null) return; t.ti = v.trim().slice(0, 60); thSave(); render(); }
 
@@ -540,22 +557,50 @@ function asReply(t, text, via) {
   const pa = parseAI(text);
   if (!pa.q || k === 'app' || k === 'projet' || k === 'autre') return chatPush({r: 'a', t: pa.q ? text : text, via});
   if (k === 'devis' || k === 'facture') {
-    const d = qMake(pa.q, k === 'facture' ? 'f' : 'd');
-    return chatPush({r: 'a', t: (pa.text || '') + `\n\n✔ ${k === 'facture' ? 'Facture' : 'Devis'} ${d.num} créé(e) · ${E(tot(d).t)}. Vérifie les prix.`, q: pa.q, via, act: {open: d.id, v: 'e', num: d.num}});
+    const docType = k === 'facture' ? 'f' : 'd';
+    const label = docType === 'f' ? 'facture' : 'devis';
+    return chatPush({r: 'a', t: (pa.text || 'Proposition préparée.') + '\n\nProposition de ' + label + ' prête. Rien n’a été enregistré. Vérifie les lignes et les prix avant de valider.', q: pa.q, via, approval: {kind: 'create', docType}});
   }
   if (D.mod) {
     const d = S.docs.find(x => x.id === t.doc);
     if (!d) return chatPush({r: 'a', t: text, q: pa.q, via});
-    const prev = JSON.stringify({cn: d.cn, ca: d.ca, cc: d.cc, ct: d.ct, o: d.o, F: d.F, M: d.M});
-    const q = pa.q, cl = q.client || {};
-    if (cl.nom) Object.assign(d, {cn: cl.nom || d.cn, ca: cl.adresse || d.ca, cc: cl.cp_ville || d.cc, ct: cl.tel || d.ct, ce: cl.email || cl.mail || d.ce || ''}); if (d.cn) cliCommit(1, d);
+    return chatPush({r: 'a', t: (pa.text || 'Proposition de modification préparée.') + '\n\nProposition pour ' + d.num + ' prête. Rien n’a été modifié. Vérifie les lignes et les prix avant de valider.', q: pa.q, via, approval: {kind: 'modify', docId: d.id, docNum: d.num}});
+  }
+  chatPush({r: 'a', t: pa.text || text, q: pa.q, via}); /* prix : carte avec « Ajouter à mes tarifs » */
+}
+function asPendingApply(i) {
+  const t = TH(), m = t.msgs[i], a = m && m.approval, q = m && m.q;
+  if (!a || a.status || !q) return toast('Cette proposition a déjà été traitée.');
+  let d;
+  if (a.kind === 'create') {
+    const type = a.docType === 'f' ? 'f' : 'd';
+    d = qMake(q, type);
+    a.docId = d.id; a.docNum = d.num; a.status = 'applied';
+    m.act = {open: d.id, v: 'e', num: d.num};
+    m.t += '\n\n✔ ' + (type === 'f' ? 'Facture' : 'Devis') + ' ' + d.num + ' créé(e) · ' + E(tot(d).t) + '. Vérifie les prix.';
+  } else if (a.kind === 'modify') {
+    d = S.docs.find(x => x.id === a.docId);
+    if (!d) return toast('Document introuvable : rien n’a été modifié.');
+    const prev = JSON.stringify({cn: d.cn, ca: d.ca, cc: d.cc, ct: d.ct, ce: d.ce, o: d.o, F: d.F, M: d.M});
+    const cl = q.client || {};
+    if (cl.nom) Object.assign(d, {cn: cl.nom || d.cn, ca: cl.adresse || d.ca, cc: cl.cp_ville || d.cc, ct: cl.tel || d.ct, ce: cl.email || cl.mail || d.ce || ''});
+    if (d.cn && typeof cliCommit === 'function') cliCommit(1, d);
     if (q.objet) d.o = q.objet;
     d.F = q.F.length ? q.F.map(l => ({d: l.d, q: l.q, p: l.p || ''})) : [{d: '', q: 1, p: ''}];
     d.M = q.M.length ? q.M.map(l => ({d: l.d, q: l.q, p: l.p || ''})) : [{d: '', q: 1, p: ''}];
     d._prev = prev; save('docs');
-    return chatPush({r: 'a', t: (pa.text || '') + `\n\n✔ ${d.num} modifié · nouveau total ${E(tot(d).t)}.`, via, act: {open: d.id, v: 'e', num: d.num, undo: d.id}});
-  }
-  chatPush({r: 'a', t: pa.text || text, q: pa.q, via}); /* prix : carte avec « Ajouter à mes tarifs » */
+    a.docNum = d.num; a.status = 'applied';
+    m.act = {open: d.id, v: 'e', num: d.num, undo: d.id};
+    m.t += '\n\n✔ ' + d.num + ' modifié · nouveau total ' + E(tot(d).t) + '.';
+  } else return toast('Type de proposition inconnu.');
+  a.appliedAt = now(); thSave(); save('chat'); render();
+}
+function asPendingReject(i) {
+  const t = TH(), m = t.msgs[i], a = m && m.approval;
+  if (!a || a.status) return toast('Cette proposition a déjà été traitée.');
+  a.status = 'rejected'; a.rejectedAt = now();
+  m.t += '\n\nProposition refusée. Aucun devis ni facture n’a été créé ou modifié.';
+  thSave(); save('chat'); render();
 }
 function asUndo(id) { const d = S.docs.find(x => x.id === id); if (!d || !d._prev) return toast('Rien à annuler'); Object.assign(d, JSON.parse(d._prev)); delete d._prev; save('docs'); chatPush({r: 'a', t: `↩︎ Modification de ${d.num} annulée.`}); render(); }
 function qMake(q, t) {
