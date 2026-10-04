@@ -25,6 +25,7 @@ const DEM_GRP = [['Documents', ['devis', 'facture', 'mdevis', 'mfact', 'rapport'
 /* ---------- Moteurs ---------- */
 const ENG = {
   api:  {l: 'Perplexity', s: "Clé API · recherche, pages, code et GitHub · le plus proche de Computer"},
+  gpt:  {l: 'ChatGPT (compte)', s: 'Connexion au compte sur ton PC · limites du forfait ChatGPT'},
   cmp:  {l: 'Computer', s: "Dans l'appli · via le pont serveur.py sur ton PC · crédits Computer"},
   pro:  {l: 'Perplexity Pro', s: "Sans clé · s'ouvre dans Safari, pas dans l'appli · session déjà connectée"},
   mail: {l: 'Computer e-mail', s: 'Envoi par e-mail · le résultat arrive dans « Reçus »'},
@@ -37,6 +38,7 @@ const MOD_CMP2 = [{id: 'auto', n: "Auto (orchestrateur de l'appli)", f: null, d:
 /* ---------- État ---------- */
 S.threads = S.threads || [];
 let SHEET = null, ASBUSY = false, THQ = '';
+let GPTOK = false, GPTMODELS = [], GPTCHECKED = 0, GPTPROMISE = null, GPTPOLL = 0;
 const now = () => Date.now();
 
 const _cfgInit2 = cfgInit;
@@ -44,7 +46,8 @@ cfgInit = function () {
   _cfgInit2();
   if (!Array.isArray(S.threads)) S.threads = [];
   const c = S.cfg;
-  if (!c.as) c.as = {k: 'devis', ai: 'pro', m: 'auto', mc: 'auto', r: 'raison'};
+  if (!c.as) c.as = {k: 'devis', ai: 'pro', m: 'auto', mc: 'auto', gm: '', r: 'raison'};
+  if (!('gm' in c.as)) c.as.gm = '';
   if (!c.pk && c.ai && c.ai.pv === 'pplx' && c.ai.key) c.pk = c.ai.key;
   /* migration : ancienne conversation unique → fils */
   if (!S.threads.length && Array.isArray(S.chat) && S.chat.length) {
@@ -59,7 +62,7 @@ cfgInit = function () {
 };
 function thNew(o, silent) {
   const a = S.cfg.as || {};
-  const t = Object.assign({id: nw(), ti: '', k: a.k || 'devis', ai: a.ai || 'api', m: a.m || 'auto', mc: a.mc || 'auto', r: a.r || 'raison', tid: '', doc: '', msgs: [], up: now()}, o || {});
+  const t = Object.assign({id: nw(), ti: '', k: a.k || 'devis', ai: a.ai || 'api', m: a.m || 'auto', mc: a.mc || 'auto', gm: a.gm || '', r: a.r || 'raison', tid: '', doc: '', msgs: [], up: now()}, o || {});
   if (!silent) { S.threads.push(t); S.cfg.thc = t.id; S.chat = t.msgs; save('threads'); save('cfg'); }
   return t;
 }
@@ -151,16 +154,26 @@ function mdl(s) {
 }
 
 /* ---------- Libellés ---------- */
-function modList(t) { return t.ai === 'cmp' ? MOD_CMP2 : MOD_API; }
-function modCur(t) { return t.ai === 'cmp' ? (MOD_CMP2.find(m => m.id === t.mc) || MOD_CMP2[0]) : (MOD_API.find(m => m.id === t.m) || MOD_API[0]); }
+function modList(t) {
+  if (t.ai === 'cmp') return MOD_CMP2;
+  if (t.ai === 'gpt') return GPTMODELS;
+  return MOD_API;
+}
+function modCur(t) {
+  if (t.ai === 'cmp') return MOD_CMP2.find(m => m.id === t.mc) || MOD_CMP2[0];
+  if (t.ai === 'gpt') return GPTMODELS.find(m => m.id === (t.gm || S.cfg.as?.gm)) || GPTMODELS[0] || {id: '', n: 'ChatGPT', d: 'Connecte-toi pour charger les modèles'};
+  return MOD_API.find(m => m.id === t.m) || MOD_API[0];
+}
 function modEff(t) { /* modèle réellement utilisé (résout « Auto ») */
   const o = DEM[t.k].o;
+  if (t.ai === 'gpt') return modCur(t);
   if (t.ai === 'cmp') { if (t.mc === 'auto') { const n = ORCH_CMP[o][t.r]; return MOD_CMP.find(m => m.id === n); } return modByCmp(t.mc) || MOD_CMP[0]; }
   if (t.m === 'auto') return modByApi(ORCH[o][t.r]);
   return modByApi(t.m) || modByApi(ORCH[o][t.r]);
 }
 function iaLabel(t) {
   const m = modCur(t), e = modEff(t);
+  if (t.ai === 'gpt') return (m.n || 'ChatGPT') + ' · ' + MODES[t.r].l;
   return (m.id === 'auto' ? (e ? e.n : 'Auto') : m.n) + ' · ' + MODES[t.r].l;
 }
 function pk() { return (S.cfg.pk || '').trim(); }
@@ -184,8 +197,27 @@ chatV = function () {
 function cinGrow(e) { e.style.height = 'auto'; e.style.height = Math.min(e.scrollHeight, innerHeight * .45) + 'px'; try { localStorage.setItem(DR('cin'), e.value); } catch (x) {} }
 function asAfter() {
   const e = $('#cin'); if (e) { const v = localStorage.getItem(DR('cin')); if (v && !e.value) e.value = v; cinGrow(e); }
-  const t = TH(); if (t.ai === 'cmp' && !ASBUSY) setTimeout(mcStatus, 0);
+  const t = TH();
+  if (t.ai === 'cmp' && !ASBUSY) setTimeout(mcStatus, 0);
+  if (t.ai === 'gpt' && !ASBUSY) setTimeout(gptStatus, 0);
   if (SHEET) sheetRender();
+}
+function asPendingCard(q, i, approval) {
+  const F = q.F || [], M = q.M || [], total = [...F, ...M].reduce((s, l) => s + n(l.q) * n(l.p), 0);
+  const rows = [...F.map(l => ['F', l]), ...M.map(l => ['M', l])].slice(0, 12).map(([k, l]) => '<div><span class="bd ' + (k === 'M' ? 'cu' : '') + '">' + k + '</span> ' + esc(l.d) + ' <span class="mu">× ' + esc(l.q) + '</span><b>' + (n(l.p) ? E(n(l.q) * n(l.p)) : '—') + '</b></div>').join('');
+  const more = F.length + M.length > 12 ? '<div class="mu">… et ' + (F.length + M.length - 12) + ' autres</div>' : '';
+  const header = '<div class="qc"><b>' + (F.length + M.length) + ' ligne(s) proposée(s)</b>' + (q.client && q.client.nom ? ' · ' + esc(q.client.nom) : '') + (q.objet ? '<br><small class="mu">' + esc(q.objet) + '</small>' : '');
+  const preview = '<div class="ql">' + rows + more + '</div><div class="tr"><span>Total estimé HT</span><b>' + E(total) + '</b></div>';
+  let controls = '';
+  if (!approval.status) {
+    const label = approval.kind === 'modify' ? 'Appliquer à ' + (approval.docNum || 'ce document') : 'Créer ' + (approval.docType === 'f' ? 'la facture' : 'le devis') + ' en brouillon';
+    controls = '<p class="mu" style="font-size:12px;margin:8px 0">Rien n’est enregistré. Vérifie les lignes et les prix, puis valide.</p><div class="g2"><button class="b sm" type="button" onclick="asPendingApply(' + i + ')"><span>' + esc(label) + '</span></button><button class="b gh sm" type="button" onclick="asPendingReject(' + i + ')"><span>Refuser</span></button></div>';
+  } else if (approval.status === 'applied') {
+    controls = '<p class="mu" style="font-size:12px;margin:8px 0">Proposition appliquée. Vérifie les prix et les détails du document.</p>';
+  } else if (approval.status === 'rejected') {
+    controls = '<p class="mu" style="font-size:12px;margin:8px 0">Proposition refusée. Aucun changement appliqué.</p>';
+  }
+  return header + preview + controls + '</div>';
 }
 function bub2(m, i) {
   const at = (m.att || []).map(a => `<span class="chip s">${a.k === 'pdf' ? '📄' : '🖼️'} ${esc(a.n)}</span>`).join('');
@@ -203,7 +235,7 @@ function bub2(m, i) {
       : x.type === 'auth_required' ? (x.url ? `<a class="b gh sm" href="${esc(x.url)}" target="_blank" rel="noopener"><span>Connecter le service</span></a>` : '') + B("C'est connecté → continuer", `mcAct('connected','${tid}')`)
       : B("Continuer / voir l'avancement", `mcAct('continue','${tid}')`);
   }
-  return `<div class="bub ${m.r}">${at ? `<div class="atts">${at}</div>` : ''}${m.r === 'u' ? esc(m.t).replace(/\n/g, '<br>') : mdl(m.t)}${m.q ? qCard(m.q, i) : ''}${acts ? `<div class="acts">${acts}</div>` : ''}<span class="meta">${m.via ? esc(m.via) + ' · ' : ''}${m.ts ? new Date(m.ts).toLocaleString('fr-FR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : ''}</span></div>`;
+  return `<div class="bub ${m.r}">${at ? `<div class="atts">${at}</div>` : ''}${m.r === 'u' ? esc(m.t).replace(/\n/g, '<br>') : mdl(m.t)}${m.q ? (m.approval ? asPendingCard(m.q, i, m.approval) : qCard(m.q, i)) : ''}${acts ? `<div class="acts">${acts}</div>` : ''}<span class="meta">${m.via ? esc(m.via) + ' · ' : ''}${m.ts ? new Date(m.ts).toLocaleString('fr-FR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : ''}</span></div>`;
 }
 function thRename() { const t = TH(), v = prompt('Nom de la conversation :', thTitle(t)); if (v === null) return; t.ti = v.trim().slice(0, 60); thSave(); render(); }
 
@@ -229,6 +261,7 @@ function sheetRender() {
     const ENGS = [
       ['api','🧠','Perplexity dans l’appli','Clé API · recherche, documents et code'],
       ['swarm','⚔️','Cerveau collectif','Pyramide de soldats · mémoire partagée · recherche parallèle'],
+      ['gpt','✨','ChatGPT (compte)','Connexion officielle · limites du forfait ChatGPT'],
       ['cmp','💻','Computer dans l’appli',`Pont local · ${MCOK ? 'connecté' : 'connecte-toi sur ton PC'}`],
       ['pro','🌐','Perplexity Pro','Ouvre Perplexity avec la demande préparée'],
       ['mail','✉️','Computer e-mail','Envoie la demande par e-mail et récupère le résultat'],
@@ -237,10 +270,12 @@ function sheetRender() {
     h = `<h2>Intelligence artificielle<button data-a="close">OK</button></h2>`;
     h += `<div class="gl">Moteur</div><div class="grp">${ENGS.map(([id,ic,nm,sm]) => IT('eng', id, ic, nm, sm, t.ai === id)).join('')}</div>`;
     if (t.ai === 'api' && !pk()) h += `<div class="grp" style="padding:10px"><input id="pkin" type="password" placeholder="Clé API pplx-…" autocomplete="off"><button class="b sm" style="width:100%;margin-top:8px" data-a="pk"><span>Enregistrer la clé</span></button></div>`;
+    if (t.ai === 'gpt') h += `<div class="grp">${IT('gptconn', '', '✨', 'Continue with ChatGPT', GPTOK ? 'Compte connecté sur ce PC' : 'À lancer sur le PC qui exécute lancer.bat', false)}</div>`;
     h += `<div class="gl">Vitesse</div><div class="seg">${Object.entries(MODES).map(([k, m]) => `<button class="${t.r === k ? 'on' : ''}" data-a="mode" data-v="${k}">${m.l}</button>`).join('')}</div>`;
-    if (t.ai === 'api' || t.ai === 'cmp') {
+    if (t.ai === 'api' || t.ai === 'cmp' || t.ai === 'gpt') {
       const models = modList(t);
-      h += `<div class="gl">Modèle</div><div class="grp">${models.map(m => IT('mod', m.id, '', m.n, m.d, cur.id === m.id)).join('')}</div>`;
+      if (models.length) h += `<div class="gl">Modèle</div><div class="grp">${models.map(m => IT('mod', m.id, '', m.n, m.d, cur.id === m.id)).join('')}</div>`;
+      else if (t.ai === 'gpt') h += `<p class="note">${GPTOK ? 'Impossible de charger les modèles ChatGPT pour le moment.' : 'Connecte-toi avec ChatGPT sur le PC où le serveur local est lancé.'}</p>`;
     } else {
       h += `<p class="note">Ce moteur n’utilise pas de clé API. Tu peux changer de moteur à tout moment depuis ce menu.</p>`;
     }
@@ -272,11 +307,12 @@ function sheetAct(a, v, b) {
     sheetClose(); return render();
   }
   if (a === 'doc') { t.doc = v; thSave(); sheetClose(); return render(); }
-  if (a === 'eng') { t.ai = v; S.cfg.as.ai = v; thSave(); save('cfg'); if (v === 'cmp') mcStatus(); render(); return sheetRender(); }
+  if (a === 'eng') { t.ai = v; S.cfg.as.ai = v; thSave(); save('cfg'); if (v === 'cmp') mcStatus(); if (v === 'gpt') gptStatus(true); render(); return sheetRender(); }
   if (a === 'mode') { t.r = v; S.cfg.as.r = v; thSave(); save('cfg'); render(); return sheetRender(); }
-  if (a === 'mod') { if (t.ai === 'cmp') { t.mc = v; S.cfg.as.mc = v; } else { t.m = v; S.cfg.as.m = v; } thSave(); save('cfg'); render(); return sheetRender(); }
+  if (a === 'mod') { if (t.ai === 'cmp') { t.mc = v; S.cfg.as.mc = v; } else if (t.ai === 'gpt') { t.gm = v; S.cfg.as.gm = v; } else { t.m = v; S.cfg.as.m = v; } thSave(); save('cfg'); render(); return sheetRender(); }
   if (a === 'pk') { const k = ($('#pkin')?.value || '').trim(); if (!k) return toast('Colle ta clé API'); S.cfg.pk = k; save('cfg'); toast('Clé enregistrée'); render(); return sheetRender(); }
   if (a === 'mcconn') return mcConnect();
+  if (a === 'gptconn') return gptConnect();
   if (a === 'apple') { sheetClose(); return appleTools(); }
 }
 
@@ -344,6 +380,7 @@ async function asSend() {
     return apiSend(t, txt, clear);
   }
   if (eng === 'cmp') return cmpSend(t, txt, clear);
+  if (eng === 'gpt') return gptSend(t, txt, clear);
   if (eng === 'pro') return proOpen(t, txt, clear);
   if (eng === 'mail') return pxSend();
   if (eng === 'loc') return (typeof smartLocalSend === 'function' ? smartLocalSend : chatSend)();
@@ -482,6 +519,127 @@ async function mcStatus() {
   const d = $('#mcdot'); if (d) d.className = 'mcdot' + (MCOK ? ' on' : '');
 }
 function mcConnect() { window.open(mcBase() + '/oauth/start', '_blank'); toast("Connecte-toi dans l'onglet ouvert puis reviens ici"); }
+/* ---- ChatGPT : compte connecté au serveur local ---- */
+function gptConnect() {
+  const w = window.open(mcBase() + '/auth/chatgpt/start', '_blank');
+  if (!w) { toast('Autorise l’ouverture de la fenêtre de connexion ChatGPT.'); return; }
+  toast('Termine la connexion ChatGPT sur le PC puis reviens dans l’application.');
+  if (GPTPOLL) clearInterval(GPTPOLL);
+  let tries = 0;
+  GPTPOLL = setInterval(async () => {
+    tries++;
+    await gptStatus(true);
+    if ((GPTOK && GPTMODELS.length) || tries >= 80) { clearInterval(GPTPOLL); GPTPOLL = 0; }
+  }, 3000);
+}
+async function gptStatus(force) {
+  if (GPTPROMISE) return GPTPROMISE;
+  if (!force && Date.now() - GPTCHECKED < 4000) return;
+  GPTPROMISE = (async () => {
+    GPTCHECKED = Date.now();
+    const was = GPTOK, oldCount = GPTMODELS.length;
+    try {
+      const status = await mcFetch('/api/chatgpt/status');
+      GPTOK = !!status.connecte;
+      if (GPTOK) {
+        const list = await mcFetch('/api/chatgpt/models');
+        GPTMODELS = (list.models || []).map(m => ({id: m.slug, n: m.display_name, d: 'Disponible avec ton compte ChatGPT'}));
+        if (GPTMODELS.length) {
+          const t = TH();
+          if (!GPTMODELS.some(m => m.id === (t.gm || S.cfg.as?.gm))) {
+            t.gm = GPTMODELS[0].id; S.cfg.as.gm = t.gm; thSave(); save('cfg');
+          }
+        }
+      } else GPTMODELS = [];
+    } catch (e) {
+      if (e.code === 401) { GPTOK = false; GPTMODELS = []; }
+    }
+    if (SHEET === 'ia' && TH().ai === 'gpt' && (was !== GPTOK || oldCount !== GPTMODELS.length)) sheetRender();
+    return GPTOK;
+  })();
+  try { return await GPTPROMISE; } finally { GPTPROMISE = null; }
+}
+function gptReadFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Lecture de la pièce jointe impossible.'));
+    reader.readAsDataURL(file);
+  });
+}
+async function gptImageData(file) {
+  const type = (file.type || '').toLowerCase();
+  if (['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(type)) return gptReadFile(file);
+  let image;
+  if (typeof createImageBitmap === 'function') image = await createImageBitmap(file);
+  else {
+    const url = URL.createObjectURL(file);
+    image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Cette photo ne peut pas être convertie.')); };
+      img.src = url;
+    });
+  }
+  const scale = Math.min(1, 3200 / Math.max(image.width, image.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(image.width * scale));
+  canvas.height = Math.max(1, Math.round(image.height * scale));
+  canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+  if (image.close) image.close();
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+  if (!blob) throw new Error('Cette photo ne peut pas être convertie.');
+  return gptReadFile(blob);
+}
+async function gptSend(t, txt, clear) {
+  if (!GPTOK || !GPTMODELS.length) {
+    await gptStatus(true);
+    if (!GPTOK || !GPTMODELS.length) { toast('ChatGPT n’est pas prêt. Connecte-toi sur le PC et vérifie le menu IA.'); sheetOpen('ia'); return; }
+  }
+  const total = ATT.reduce((sum, a) => sum + (a.f?.size || 0), 0);
+  if (total > 32 * 1024 * 1024) return toast('Les pièces jointes dépassent 32 Mo au total.');
+  let content = [];
+  const names = [];
+  try {
+    for (const a of ATT) {
+      names.push({n: a.f.name, k: a.k});
+      if (a.k === 'pdf' || a.f.type === 'application/pdf') {
+        const dataUrl = await gptReadFile(a.f);
+        content.push({type: 'input_file', filename: a.f.name, file_data: dataUrl, detail: 'auto'});
+      } else if (a.k === 'img' || (a.f.type || '').startsWith('image/')) {
+        const dataUrl = await gptImageData(a.f);
+        content.push({type: 'input_image', image_url: dataUrl, detail: 'auto'});
+      } else {
+        throw new Error('ChatGPT accepte ici les photos et les fichiers PDF.');
+      }
+    }
+  } catch (e) { toast(e.message || 'Lecture de la pièce jointe impossible.'); return; }
+  const eff = modEff(t), model = modCur(t);
+  const dem = '[' + DEM[t.k].l + '] ' + (txt || 'Analyse les fichiers joints.');
+  const history = t.msgs.slice(-16).filter(m => (m.r === 'u' || m.r === 'a') && m.t).map(m => ({
+    role: m.r === 'u' ? 'user' : 'assistant', content: String(m.t).slice(0, 12000)
+  }));
+  const input = [{role: 'system', content: sysPrompt(t, eff)}, ...history, {
+    role: 'user', content: [{type: 'input_text', text: dem}, ...content]
+  }];
+  chatPush({r: 'u', t: txt || '(fichier joint)', att: names});
+  ATT = []; clear();
+  return gptCall({model: model.id, input}, t, model);
+}
+async function gptCall(body, t, model) {
+  ASBUSY = true; render();
+  try {
+    const result = await mcFetch('/api/chatgpt/chat', body);
+    asReply(t, result.text || '(réponse vide)', 'ChatGPT · ' + (model.n || 'modèle connecté'));
+  } catch (e) {
+    if (e.code === 401 || e.kind === 'non_connecte') {
+      GPTOK = false;
+      chatPush({r: 'a', t: 'Connecte-toi avec ChatGPT dans le menu IA sur le PC où le serveur local est lancé, puis renvoie ton message.'});
+    } else if (e instanceof TypeError) {
+      chatPush({r: 'a', t: 'Serveur local introuvable. Lance lancer.bat sur le PC, puis choisis ChatGPT dans le menu IA.'});
+    } else chatPush({r: 'a', t: 'Erreur ChatGPT : ' + (e.message || e)});
+  } finally { ASBUSY = false; render(); }
+}
 async function cmpSend(t, txt, clear) {
   let urls = [], names = [];
   try { for (const a of ATT) { names.push({n: a.f.name, k: a.k}); const j = await mcFetch('/api/upload', null, {b: a.f, h: {'X-Filename': encodeURIComponent(a.f.name), 'X-Mime': a.f.type || 'application/octet-stream'}}); urls.push(j.attachment_url); } }
@@ -540,22 +698,50 @@ function asReply(t, text, via) {
   const pa = parseAI(text);
   if (!pa.q || k === 'app' || k === 'projet' || k === 'autre') return chatPush({r: 'a', t: pa.q ? text : text, via});
   if (k === 'devis' || k === 'facture') {
-    const d = qMake(pa.q, k === 'facture' ? 'f' : 'd');
-    return chatPush({r: 'a', t: (pa.text || '') + `\n\n✔ ${k === 'facture' ? 'Facture' : 'Devis'} ${d.num} créé(e) · ${E(tot(d).t)}. Vérifie les prix.`, q: pa.q, via, act: {open: d.id, v: 'e', num: d.num}});
+    const docType = k === 'facture' ? 'f' : 'd';
+    const label = docType === 'f' ? 'facture' : 'devis';
+    return chatPush({r: 'a', t: (pa.text || 'Proposition préparée.') + '\n\nProposition de ' + label + ' prête. Rien n’a été enregistré. Vérifie les lignes et les prix avant de valider.', q: pa.q, via, approval: {kind: 'create', docType}});
   }
   if (D.mod) {
     const d = S.docs.find(x => x.id === t.doc);
     if (!d) return chatPush({r: 'a', t: text, q: pa.q, via});
-    const prev = JSON.stringify({cn: d.cn, ca: d.ca, cc: d.cc, ct: d.ct, o: d.o, F: d.F, M: d.M});
-    const q = pa.q, cl = q.client || {};
-    if (cl.nom) Object.assign(d, {cn: cl.nom || d.cn, ca: cl.adresse || d.ca, cc: cl.cp_ville || d.cc, ct: cl.tel || d.ct, ce: cl.email || cl.mail || d.ce || ''}); if (d.cn) cliCommit(1, d);
+    return chatPush({r: 'a', t: (pa.text || 'Proposition de modification préparée.') + '\n\nProposition pour ' + d.num + ' prête. Rien n’a été modifié. Vérifie les lignes et les prix avant de valider.', q: pa.q, via, approval: {kind: 'modify', docId: d.id, docNum: d.num}});
+  }
+  chatPush({r: 'a', t: pa.text || text, q: pa.q, via}); /* prix : carte avec « Ajouter à mes tarifs » */
+}
+function asPendingApply(i) {
+  const t = TH(), m = t.msgs[i], a = m && m.approval, q = m && m.q;
+  if (!a || a.status || !q) return toast('Cette proposition a déjà été traitée.');
+  let d;
+  if (a.kind === 'create') {
+    const type = a.docType === 'f' ? 'f' : 'd';
+    d = qMake(q, type);
+    a.docId = d.id; a.docNum = d.num; a.status = 'applied';
+    m.act = {open: d.id, v: 'e', num: d.num};
+    m.t += '\n\n✔ ' + (type === 'f' ? 'Facture' : 'Devis') + ' ' + d.num + ' créé(e) · ' + E(tot(d).t) + '. Vérifie les prix.';
+  } else if (a.kind === 'modify') {
+    d = S.docs.find(x => x.id === a.docId);
+    if (!d) return toast('Document introuvable : rien n’a été modifié.');
+    const prev = JSON.stringify({cn: d.cn, ca: d.ca, cc: d.cc, ct: d.ct, ce: d.ce, o: d.o, F: d.F, M: d.M});
+    const cl = q.client || {};
+    if (cl.nom) Object.assign(d, {cn: cl.nom || d.cn, ca: cl.adresse || d.ca, cc: cl.cp_ville || d.cc, ct: cl.tel || d.ct, ce: cl.email || cl.mail || d.ce || ''});
+    if (d.cn && typeof cliCommit === 'function') cliCommit(1, d);
     if (q.objet) d.o = q.objet;
     d.F = q.F.length ? q.F.map(l => ({d: l.d, q: l.q, p: l.p || ''})) : [{d: '', q: 1, p: ''}];
     d.M = q.M.length ? q.M.map(l => ({d: l.d, q: l.q, p: l.p || ''})) : [{d: '', q: 1, p: ''}];
     d._prev = prev; save('docs');
-    return chatPush({r: 'a', t: (pa.text || '') + `\n\n✔ ${d.num} modifié · nouveau total ${E(tot(d).t)}.`, via, act: {open: d.id, v: 'e', num: d.num, undo: d.id}});
-  }
-  chatPush({r: 'a', t: pa.text || text, q: pa.q, via}); /* prix : carte avec « Ajouter à mes tarifs » */
+    a.docNum = d.num; a.status = 'applied';
+    m.act = {open: d.id, v: 'e', num: d.num, undo: d.id};
+    m.t += '\n\n✔ ' + d.num + ' modifié · nouveau total ' + E(tot(d).t) + '.';
+  } else return toast('Type de proposition inconnu.');
+  a.appliedAt = now(); thSave(); save('chat'); render();
+}
+function asPendingReject(i) {
+  const t = TH(), m = t.msgs[i], a = m && m.approval;
+  if (!a || a.status) return toast('Cette proposition a déjà été traitée.');
+  a.status = 'rejected'; a.rejectedAt = now();
+  m.t += '\n\nProposition refusée. Aucun devis ni facture n’a été créé ou modifié.';
+  thSave(); save('chat'); render();
 }
 function asUndo(id) { const d = S.docs.find(x => x.id === id); if (!d || !d._prev) return toast('Rien à annuler'); Object.assign(d, JSON.parse(d._prev)); delete d._prev; save('docs'); chatPush({r: 'a', t: `↩︎ Modification de ${d.num} annulée.`}); render(); }
 function qMake(q, t) {
