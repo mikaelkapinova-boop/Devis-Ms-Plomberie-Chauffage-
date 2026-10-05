@@ -444,22 +444,19 @@ let API_COOLDOWN_UNTIL = 0;
 function apiWait(ms) { return new Promise(resolve => setTimeout(resolve, Math.max(0, ms))); }
 
 async function _apiPostOnce(body) {
-  /* La clé reste côté serveur. Migration transparente : si une ancienne clé
-     existe déjà dans localStorage, elle est envoyée une seule fois au bridge,
-     puis les requêtes suivantes n'exposent plus la clé au navigateur. */
-  try {
-    if (pk() && !sessionStorage.getItem('ms_key_migrated')) {
-      const rr = await fetch((typeof mcBase === 'function' ? mcBase() : '') + '/api/config', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({api_key: pk()})
-      });
-      if (rr.ok) sessionStorage.setItem('ms_key_migrated', '1');
-    }
-  } catch (e) {}
-  const r = await fetch((typeof mcBase === 'function' ? mcBase() : '') + '/api/jobs', {
+  /* Perplexity API directe via le proxy Vercel. Sur iPhone/GitHub Pages,
+     il ne faut jamais dépendre du serveur local Computer/localhost. */
+  const host = String(location.hostname || '');
+  const endpoint = /github\\.io$/i.test(host)
+    ? 'https://devis-ms-plomberie-chauffage.vercel.app/api/perplexity'
+    : (location.protocol === 'file:' ? 'https://devis-ms-plomberie-chauffage.vercel.app/api/perplexity' : '/api/perplexity');
+  const payload = Object.assign({}, body);
+  const key = pk();
+  if (key) payload.apiKey = key;
+  const r = await fetch(endpoint, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({body})
+    body: JSON.stringify(payload)
   });
   let j = {}; try { j = await r.json(); } catch (e) {}
   if (r.status === 202 && j.id) {
@@ -710,7 +707,8 @@ async function pxArmySend(t,txt,clear){
 var oldAsSend=asSend;asSend=function(){
  var c=pxCfg(),t=TH();t.ai="api";t.m="auto";t.army=!!c.army;t.ps=c.ps;thSave();save("cfg");
  if(c.army){var ta=$("#cin"),txt=(ta?ta.value:"").trim();if(!txt&&!ATT.length)return toast("Écris un message ou joins un fichier");if(DEM[t.k].mod&&!t.doc)return sheetOpen("doc");var clear=function(){if(ta){ta.value="";cinGrow(ta)}draftClear("cin")};return pxArmySend(t,txt,clear)}
- return oldAsSend.apply(this,arguments)
+ if(!pk()){toast("Ajoute ta clé API Perplexity");return sheetOpen("ia")}
+ return apiSend(t,txt,clear)
 };
 window.asSend=asSend;
 
@@ -720,7 +718,7 @@ var css=document.createElement("style");css.textContent=".px-card{background:var
 /* === VERSION 5.8.0 === */
 (function(){
 "use strict";
-var APP_VERSION="5.8.1",APP_RELEASE="Correctif du bouton Envoyer, Perplexity API uniquement, aide de l’armée activable, modèles Max supprimés.";
+var APP_VERSION="5.8.2",APP_RELEASE="Correctif définitif de l’envoi Perplexity API sur iPhone/GitHub Pages, aide de l’armée activable, modèles Max supprimés.";
 window.APP_VERSION=APP_VERSION;
 window.newsShow=function(){var d=document.createElement("div");d.className="news";d.innerHTML="<div><h2>Version "+APP_VERSION+"</h2><p>"+APP_RELEASE+"</p><button class='b' style='width:100%;margin-top:10px' onclick='this.closest(\".news\").remove()'><span>Compris</span></button></div>";d.addEventListener("click",function(e){if(e.target===d)d.remove()});document.body.appendChild(d)};
 var oldBoot=boot;boot=async function(){var r=await oldBoot.apply(this,arguments);try{if(S.cfg&&S.cfg.appVersionSeen!==APP_VERSION){S.cfg.appVersionSeen=APP_VERSION;save("cfg");setTimeout(newsShow,900)}}catch(e){}return r};
