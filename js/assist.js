@@ -1101,3 +1101,18 @@ st.textContent=
 document.head.appendChild(st);
 pxFinalCfg();
 })();
+
+/* === MS PLOMBERIE — VERSIONING 5.7.0 === */
+(function(){
+'use strict';
+const APP_VERSION='5.7.0';
+const APP_RELEASE='Assistant Perplexity : API unique, aide de l’armée activable, suppression des anciens moteurs et modèles Max.';
+window.APP_VERSION=APP_VERSION;
+window.newsShow=function(){
+ const d=document.createElement('div');d.className='news';
+ d.innerHTML='<div><h2>Version '+APP_VERSION+'</h2><p>'+APP_RELEASE+'</p><p><b>Cette version est maintenant clairement indiquée dans l’application.</b></p><button class="b" style="width:100%;margin-top:10px" onclick="this.closest(\\'.news\\').remove()"><span>Compris</span></button></div>';
+ d.addEventListener('click',e=>{if(e.target===d)d.remove()});document.body.appendChild(d);
+};
+const _bootVersion=boot;
+boot=async function(){const r=await _bootVersion.apply(this,arguments);try{if(S.cfg&&S.cfg.appVersionSeen!==APP_VERSION){S.cfg.appVersionSeen=APP_VERSION;save('cfg');setTimeout(newsShow,1100)}}catch(e){}return r};
+})();
