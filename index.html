@@ -194,13 +194,50 @@ let S={clients:[],cat:[],docs:[],cfg:{cot:21.5,imp:0,val:30,acc:40},seq:{},rep:[
 function idb(){return new Promise((ok,no)=>{const r=indexedDB.open('msplomberie',1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('kv'))r.result.createObjectStore('kv')};r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}
 function idbPut(key,val){return idb().then(db=>new Promise((ok,no)=>{const t=db.transaction('kv','readwrite');t.objectStore('kv').put(val,key);t.oncomplete=()=>ok();t.onerror=()=>no(t.error)})).catch(()=>{})}
 function idbGet(key){return idb().then(db=>new Promise((ok,no)=>{const q=db.transaction('kv','readonly').objectStore('kv').get(key);q.onsuccess=()=>ok(q.result);q.onerror=()=>no(q.error)})).catch(()=>null)}
-function save(k){try{localStorage.setItem('ms_'+k,JSON.stringify(S[k]));localStorage.setItem('ms_stamp',String(Date.now()))}catch(e){}
+function etatNonVide(v){
+if(v==null)return false;
+if(Array.isArray(v))return v.length>0;
+if(typeof v==='object')return Object.keys(v).length>0;
+return String(v).length>0}
+function sauvegardeEtatLocal(){
+try{
+const pack={_v:2,_t:Date.now()};
+for(const key in S)pack[key]=S[key];
+localStorage.setItem('ms_backup_v2',JSON.stringify(pack));
+localStorage.setItem('ms_stamp',String(pack._t));
+return pack
+}catch(e){return null}}
+function save(k){
+try{localStorage.setItem('ms_'+k,JSON.stringify(S[k]));localStorage.setItem('ms_stamp',String(Date.now()))}catch(e){}
 clearTimeout(tm[k]);tm[k]=setTimeout(()=>persistAll(),250);
 if(k!=='ph'&&k!=='chat')ghSched()}
-async function persistAll(){const pack={};for(const key in S)pack[key]=S[key];pack._t=Date.now();await idbPut('pack',pack)}
-async function boot(){for(const k in S)try{const t=localStorage.getItem('ms_'+k);if(t)S[k]=JSON.parse(t)}catch(e){}
-try{const pack=await idbGet('pack');if(pack){const stamp=Number(localStorage.getItem('ms_stamp')||0);const empty=!S.docs.length&&!S.clients.length&&!S.rep.length&&!S.cat.length;if(empty||(pack._t||0)>=stamp){for(const k of ['clients','cat','docs','cfg','seq','rep','ph','chat','plan'])if(pack[k]!=null)S[k]=pack[k]}}}catch(e){}
-cfgInit();cliBackfill();applyTheme();render();pwa();if(typeof impHash==='function')impHash();inbxLoad().then(()=>{inbxRender();homeInbx()});ghPull(0)}
+async function persistAll(){
+const pack=sauvegardeEtatLocal()||{_v:2,_t:Date.now()};
+try{await idbPut('pack',pack);await idbPut('backup_v2',pack)}catch(e){}
+}
+async function boot(){
+const keys=Object.keys(S);
+for(const k of keys)try{const t=localStorage.getItem('ms_'+k);if(t)S[k]=JSON.parse(t)}catch(e){}
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{})}catch(e){}
+try{
+let pack=await idbGet('pack');
+if(!pack)pack=await idbGet('backup_v2');
+if(!pack){try{const raw=localStorage.getItem('ms_backup_v2');if(raw)pack=JSON.parse(raw)}catch(e){}}
+if(pack){
+const stamp=Number(localStorage.getItem('ms_stamp')||0);
+const pt=Number(pack._t||0);
+const packHasData=keys.some(k=>etatNonVide(pack[k]));
+const localHasData=keys.some(k=>etatNonVide(S[k]));
+if(packHasData&&(!localHasData||pt>=stamp)){
+for(const k of keys)if(pack[k]!=null)S[k]=pack[k];
+}
+}
+}catch(e){}
+cfgInit();cliBackfill();applyTheme();render();pwa();if(typeof impHash==='function')impHash();inbxLoad().then(()=>{inbxRender();homeInbx()});ghPull(0)
+try{setTimeout(()=>persistAll(),400)}catch(e){}
+}
+window.addEventListener('pagehide',()=>{try{localStorage.setItem('ms_backup_v2',JSON.stringify(Object.assign({_v:2,_t:Date.now()},S)))}catch(e){}});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistAll()})
 function toast(m){const t=$('#ts');t.textContent=m;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,2400)}
 function arm2(b,fn){if(arm===b){arm=null;fn()}else{arm=b;b.textContent='Confirmer ?';setTimeout(()=>{if(arm===b){arm=null;b.textContent=b.dataset.t}},3000)}}
 function tg(o){const on=o===undefined?!$('#nv').classList.contains('o'):!!o;$('#nv').classList.toggle('o',on);$('#ov').classList.toggle('o',on);document.body.classList.toggle('lk',on)}
