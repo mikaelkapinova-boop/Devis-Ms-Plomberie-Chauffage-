@@ -460,7 +460,7 @@ def _perplexity_call(body):
                 content = parts or ""
             messages.append({"role": role, "content": content})
     elif raw_input:
-        messages.append({"role": "user", "content": str(raw_input))
+        messages.append({"role": "user", "content": str(raw_input)})
 
     payload = {
         "model": model,
