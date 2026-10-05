@@ -187,6 +187,27 @@ function asAfter() {
   const t = TH(); if (t.ai === 'cmp' && !ASBUSY) setTimeout(mcStatus, 0);
   if (SHEET) sheetRender();
 }
+function copyMsg(i, b) {
+  const t = TH(), m = t && t.msgs[i];
+  if (!m || !m.t) return;
+  const text = String(m.t);
+  const done = () => {
+    if (b) { const old = b.innerHTML; b.innerHTML = '<span>✓ Copié</span>'; setTimeout(() => { b.innerHTML = old; }, 1200); }
+    toast('Message copié');
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(done).catch(() => copyMsgFallback(text, b));
+  } else copyMsgFallback(text, b);
+}
+function copyMsgFallback(text, b) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; ta.setAttribute('readonly', '');
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  ta.remove();
+  if (b) { const old = b.innerHTML; b.innerHTML = '<span>✓ Copié</span>'; setTimeout(() => { b.innerHTML = old; }, 1200); }
+  toast('Message copié');
+}
 function bub2(m, i) {
   const at = (m.att || []).map(a => `<span class="chip s">${a.k === 'pdf' ? '📄' : '🖼️'} ${esc(a.n)}</span>`).join('');
   let acts = '';
@@ -203,6 +224,7 @@ function bub2(m, i) {
       : x.type === 'auth_required' ? (x.url ? `<a class="b gh sm" href="${esc(x.url)}" target="_blank" rel="noopener"><span>Connecter le service</span></a>` : '') + B("C'est connecté → continuer", `mcAct('connected','${tid}')`)
       : B("Continuer / voir l'avancement", `mcAct('continue','${tid}')`);
   }
+  acts += B('Copier', `copyMsg(${i},this)`, 'b gh sm');
   return `<div class="bub ${m.r}">${at ? `<div class="atts">${at}</div>` : ''}${m.r === 'u' ? esc(m.t).replace(/\n/g, '<br>') : mdl(m.t)}${m.q ? qCard(m.q, i) : ''}${acts ? `<div class="acts">${acts}</div>` : ''}<span class="meta">${m.via ? esc(m.via) + ' · ' : ''}${m.ts ? new Date(m.ts).toLocaleString('fr-FR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : ''}</span></div>`;
 }
 function thRename() { const t = TH(), v = prompt('Nom de la conversation :', thTitle(t)); if (v === null) return; t.ti = v.trim().slice(0, 60); thSave(); render(); }
