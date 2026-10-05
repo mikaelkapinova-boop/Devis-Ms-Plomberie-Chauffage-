@@ -456,6 +456,21 @@ class Gestionnaire(BaseHTTPRequestHandler):
         q = urllib.parse.parse_qs(u.query)
         if u.path == "/api/status":
             tk = lire_tokens()
+            jobs = lire_jobs()
+            return self._json(200, {"connecte": bool(jeton_valide()), "api_configuree": bool(api_key()),
+                                    "client_id": tk.get("client_id"), "mcp_url": MCP_URL,
+                                    "jobs": {"queued": sum(j.get("status") == "queued" for j in jobs),
+                                             "running": sum(j.get("status") == "running" for j in jobs)}})
+        if u.path.startswith("/api/jobs/"):
+            job = trouver_job(u.path.rsplit("/", 1)[-1])
+            if not job:
+                return self._json(404, {"erreur": "job_introuvable"})
+            safe = dict(job)
+            safe.pop("body", None)
+            if safe.get("status") == "completed":
+                safe["result"] = job.get("result")
+            return self._json(200, safe)
+            tk = lire_tokens()
             return self._json(200, {"connecte": bool(jeton_valide()), "client_id": tk.get("client_id"),
                                     "mcp_url": MCP_URL})
         if u.path == "/oauth/start":
@@ -489,6 +504,25 @@ class Gestionnaire(BaseHTTPRequestHandler):
         if not self._origine_ok():
             return self._json(403, {"erreur": "origine refusée"})
         try:
+            if u.path == "/api/config":
+                d = self._lire_json()
+                key = str(d.get("api_key") or "").strip()
+                if key:
+                    tk = lire_tokens()
+                    tk["perplexity_api_key"] = key
+                    ecrire_tokens(tk)
+                return self._json(200, {"ok": True, "api_configuree": bool(api_key())})
+            if u.path == "/api/jobs":
+                d = self._lire_json()
+                body = d.get("body")
+                if not isinstance(body, dict):
+                    return self._json(400, {"erreur": "body_invalide"})
+                if not api_key():
+                    return self._json(401, {"erreur": "api_key_absente"})
+                job = {"id": uuid.uuid4().hex, "status": "queued", "created_at": time.time(),
+                       "thread_id": d.get("thread_id") or "", "body": body}
+                mettre_job(job)
+                return self._json(202, {"id": job["id"], "status": "queued"})
             if u.path == "/api/chat":
                 d = self._lire_json()
                 args = {"message": d.get("message", "")}
@@ -536,7 +570,10 @@ class Gestionnaire(BaseHTTPRequestHandler):
 
 
 def main():
+    global _worker
     serveur = ThreadingHTTPServer((HOTE, PORT), Gestionnaire)
+    if not _worker.is_alive():
+        _worker.start()
     serveur.daemon_threads = True
     url = f"http://{HOTE}:{PORT}/"
     print("=" * 60)
