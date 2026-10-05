@@ -1,7 +1,7 @@
 {
   "name": "Ms Plomberie & Chauffage – Devis & Factures",
   "short_name": "Ms Devis",
-  "description": "Devis, factures, rapports, planning et assistant pour Ms Plomberie & Chauffage",
+  "description": "Devis, factures, rapports, planning et  pour Ms Plomberie & Chauffage",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
