@@ -423,12 +423,35 @@ let API_COOLDOWN_UNTIL = 0;
 function apiWait(ms) { return new Promise(resolve => setTimeout(resolve, Math.max(0, ms))); }
 
 async function _apiPostOnce(body) {
-  const r = await fetch('https://api.perplexity.ai/v1/agent', {
+  /* La clé reste côté serveur. Migration transparente : si une ancienne clé
+     existe déjà dans localStorage, elle est envoyée une seule fois au bridge,
+     puis les requêtes suivantes n'exposent plus la clé au navigateur. */
+  try {
+    if (pk() && !sessionStorage.getItem('ms_key_migrated')) {
+      const rr = await fetch((typeof mcBase === 'function' ? mcBase() : '') + '/api/config', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({api_key: pk()})
+      });
+      if (rr.ok) sessionStorage.setItem('ms_key_migrated', '1');
+    }
+  } catch (e) {}
+  const r = await fetch((typeof mcBase === 'function' ? mcBase() : '') + '/api/jobs', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json', Authorization: 'Bearer ' + pk()},
-    body: JSON.stringify(body)
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({body})
   });
   let j = {}; try { j = await r.json(); } catch (e) {}
+  if (r.status === 202 && j.id) {
+    for (let n = 0; n < 1200; n++) {
+      await apiWait(1000);
+      const sr = await fetch((typeof mcBase === 'function' ? mcBase() : '') + '/api/jobs/' + encodeURIComponent(j.id), {cache:'no-store'});
+      if (!sr.ok) break;
+      const sj = await sr.json();
+      if (sj.status === 'completed') return sj.result || {};
+      if (sj.status === 'failed') return {_err:1, _st:500, _msg:sj.error || 'La tâche Perplexity a échoué.'};
+    }
+    return {_err:1, _st:504, _msg:'La tâche continue côté serveur. Elle reprendra automatiquement.'};
+  }
   if (!r.ok) {
     const retryRaw = r.headers.get('Retry-After') || (j && (j.retry_after || j.retryAfter));
     const retrySec = Number(retryRaw);
