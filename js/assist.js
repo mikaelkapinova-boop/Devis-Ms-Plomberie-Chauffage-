@@ -976,3 +976,131 @@ pwa = function () {
     '.as-range-row{display:flex;align-items:center;gap:10px;margin-top:10px}.as-range-row input{flex:1}.as-range-row strong{min-width:72px;text-align:right}.as-pyramid{padding:10px 4px}.as-level{display:flex;justify-content:center;gap:6px;margin:5px 0;flex-wrap:wrap}.as-node{min-width:34px;height:27px;border-radius:8px;display:grid;place-items:center;font-size:11px;font-weight:700;background:var(--in);border:1px solid var(--ln)}.as-command{background:color-mix(in srgb,var(--ok) 20%,var(--cd));border-color:var(--ok)}.as-analyst{background:color-mix(in srgb,var(--ac) 14%,var(--cd));}.as-soldier{background:color-mix(in srgb,var(--ok) 10%,var(--cd))}.as-key-ok{padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--ok) 12%,var(--cd));color:var(--ok);font-size:13px}.as-key-box{background:var(--cd);padding:10px;border-radius:14px;box-shadow:0 0 0 1px var(--ln)}.as-key-box input{width:100%;background:var(--in);margin-bottom:8px}.as-key-box .b{width:100%}';
   document.head.appendChild(st);
 })();
+
+
+/* === MS PLOMBERIE — PERPLEXITY UI FINAL 2026-10-05 === */
+(function(){
+'use strict';
+
+function pxFinalCfg(){
+  if(!S.cfg.as||typeof S.cfg.as!=='object') S.cfg.as={k:'devis',ai:'api',m:'auto',r:'raison',ps:6,army:false};
+  const c=S.cfg.as;
+  c.ai='api';
+  c.m='auto';
+  c.r=['rapide','raison','profond'].includes(c.r)?c.r:'raison';
+  c.ps=Math.max(1,Math.min(16,Number(c.ps)||6));
+  c.army=!!c.army;
+  return c;
+}
+
+iaLabel=function(t){
+  const c=pxFinalCfg(),x=t||TH();
+  return 'Perplexity API'+(c.army||x.army?' · 🧠 Armée active':'');
+};
+
+window.pxSetArmy=function(on){
+  const c=pxFinalCfg(),t=TH();
+  c.army=!!on;
+  t.army=!!on;
+  t.ai='api';
+  t.m='auto';
+  c.ai='api';
+  c.m='auto';
+  thSave();save('cfg');render();
+  if(SHEET==='ia')pxFinalSheet();
+};
+
+window.pxSetReason=function(v){
+  if(!['rapide','raison','profond'].includes(v))return;
+  const c=pxFinalCfg(),t=TH();
+  c.r=v;t.r=v;thSave();save('cfg');render();
+  if(SHEET==='ia')pxFinalSheet();
+};
+
+window.pxSetArmyN=function(v){
+  const c=pxFinalCfg(),t=TH(),n=Math.max(1,Math.min(16,Number(v)||6));
+  c.ps=n;t.ps=n;thSave();save('cfg');
+  const e=$('#pxArmyN');if(e)e.textContent=n;
+};
+
+function pxFinalSheet(){
+  const s=$('#sheet');if(!s)return;
+  const c=pxFinalCfg(),t=TH(),key=pk(),army=!!(c.army||t.army);
+  let h='<h2>Perplexity<button data-a="close">Fermer</button></h2>';
+
+  h+='<div class="px-main-card">';
+  h+='<div class="px-title-line"><span class="px-brand-dot"></span><div><b>Perplexity API</b><small>Recherche et raisonnement dans l’application</small></div><strong>✓</strong></div>';
+  h+='<div class="px-army-toggle"><div><b>Aide de l’armée</b><small>Ajoute une pyramide d’agents Perplexity pour rechercher, vérifier et consolider.</small></div><button class="px-switch '+(army?'on':'')+'" onclick="pxSetArmy('+(army?'false':'true')+')"><i></i></button></div>';
+  h+='</div>';
+
+  h+='<div class="gl">Mode</div><div class="px-mode-list">';
+  [['rapide','Recherche','Réponse directe et ciblée'],['raison','Recherche + raisonnement','Analyse et vérification renforcées'],['profond','Recherche approfondie','Recherche large, recoupement et contrôle final']].forEach(function(o){
+    h+='<button class="px-mode '+(t.r===o[0]?'active':'')+'" onclick="pxSetReason(\\''+o[0]+'\\')"><span><b>'+o[1]+'</b><small>'+o[2]+'</small></span><span class="px-radio">'+(t.r===o[0]?'✓':'')+'</span></button>';
+  });
+  h+='</div>';
+
+  if(army){
+    const n=Math.max(1,Math.min(16,Number(t.ps||c.ps)||6));
+    h+='<div class="gl">Aide de l’armée</div><div class="px-army-card">';
+    h+='<div class="px-army-head"><div><b>Pyramide d’agents</b><small>Soldats → analystes → commandant</small></div><strong id="pxArmyN">'+n+'</strong></div>';
+    h+='<input type="range" min="1" max="16" step="1" value="'+n+'" oninput="pxSetArmyN(this.value)">';
+    h+='<div class="px-pyramid"><span>Commandant</span><span>Analystes</span><span>Soldats × '+n+'</span></div></div>';
+  }
+
+  h+='<div class="gl">Connexion</div>';
+  if(key)h+='<div class="px-key-ok">✓ Clé API Perplexity enregistrée</div>';
+  else h+='<div class="px-key"><input id="pkin" type="password" placeholder="pplx-…" autocomplete="off"><button class="b sm" data-a="pk"><span>Enregistrer la clé</span></button></div>';
+  h+='<p class="note">Aucun choix de modèle ni option « Max » dans l’application. Perplexity choisit automatiquement le modèle adapté.</p>';
+  s.innerHTML='<div class="bg"></div><div class="pn"><div class="grab"></div>'+h+'</div>';
+  s.classList.add('o');
+}
+
+const _pxFinalSheetRender=sheetRender;
+sheetRender=function(){
+  if(SHEET==='ia')return pxFinalSheet();
+  return _pxFinalSheetRender.apply(this,arguments);
+};
+
+const _pxFinalSheetAct=sheetAct;
+sheetAct=function(a,v,b){
+  if(a==='eng')return pxSetArmy(v==='swarm');
+  if(a==='reason')return pxSetReason(v);
+  if(a==='mod')return toast('Le choix du modèle est automatique.');
+  if(a==='pk'){
+    const k=(($('#pkin')&&$('#pkin').value)||'').trim();
+    if(!k)return toast('Colle ta clé API Perplexity');
+    S.cfg.pk=k;save('cfg');toast('API Perplexity connectée');render();return pxFinalSheet();
+  }
+  return _pxFinalSheetAct.apply(this,arguments);
+};
+
+const _pxFinalAsSend=asSend;
+asSend=function(){
+  const c=pxFinalCfg(),t=TH();
+  t.ai='api';t.m='auto';t.army=!!c.army;t.ps=c.ps;
+  thSave();save('cfg');
+  if(c.army){
+    const ta=$('#cin'),txt=(ta?ta.value:'').trim();
+    if(!txt&&!ATT.length)return toast('Écris un message ou joins un fichier');
+    if(DEM[t.k].mod&&!t.doc)return sheetOpen('doc');
+    const clear=function(){if(ta){ta.value='';cinGrow(ta)}draftClear('cin')};
+    return swarmSend(t,txt,clear);
+  }
+  return _pxFinalAsSend.apply(this,arguments);
+};
+
+const st=document.createElement('style');
+st.textContent=
+'.px-main-card{background:var(--cd);border-radius:18px;padding:14px;box-shadow:0 0 0 1px var(--ln)}'+
+'.px-title-line{display:flex;align-items:center;gap:11px;padding-bottom:12px;border-bottom:1px solid var(--ln)}'+
+'.px-title-line>div{flex:1}.px-title-line b{display:block;font-size:18px}.px-title-line small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.px-title-line strong{color:var(--ok);font-size:18px}'+
+'.px-brand-dot{width:36px;height:36px;border-radius:50%;background:var(--ac);display:block;box-shadow:0 0 0 4px color-mix(in srgb,var(--ac) 14%,transparent)}'+
+'.px-army-toggle{display:flex;align-items:center;gap:12px;padding-top:13px}.px-army-toggle>div{flex:1}.px-army-toggle b{display:block;font-size:16px}.px-army-toggle small{display:block;color:var(--mu);font-size:12px;line-height:1.3;margin-top:2px}'+
+'.px-switch{width:52px;height:30px;border:0;border-radius:16px;padding:3px;background:#777;flex:none}.px-switch i{display:block;width:24px;height:24px;border-radius:50%;background:#fff;transition:.18s}.px-switch.on{background:var(--ok)}.px-switch.on i{transform:translateX(22px)}'+
+'.px-mode-list{background:var(--cd);border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px var(--ln)}'+
+'.px-mode{display:flex;align-items:center;gap:12px;width:100%;padding:14px;border:0;border-bottom:1px solid var(--ln);background:var(--cd);color:var(--ink);text-align:left;font:inherit}.px-mode:last-child{border-bottom:0}.px-mode.active{background:color-mix(in srgb,var(--ac) 10%,var(--cd))}.px-mode>span:first-child{flex:1}.px-mode b{display:block;font-size:16px}.px-mode small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.px-radio{font-size:19px;color:var(--ac);font-weight:700}'+
+'.px-army-card{background:var(--cd);border-radius:16px;padding:14px;box-shadow:0 0 0 1px var(--ln)}.px-army-head{display:flex;align-items:center;gap:12px}.px-army-head>div{flex:1}.px-army-head b{display:block}.px-army-head small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.px-army-head strong{font-size:23px;color:var(--ac)}.px-army-card input{width:100%;margin-top:14px}.px-pyramid{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-top:10px}.px-pyramid span{font-size:11px;padding:6px 8px;background:var(--in);border:1px solid var(--ln);border-radius:9px;color:var(--mu)}'+
+'.px-key-ok{padding:11px 13px;border-radius:13px;background:color-mix(in srgb,var(--ok) 12%,var(--cd));color:var(--ok);font-size:13px}.px-key{padding:10px;background:var(--cd);border-radius:14px;box-shadow:0 0 0 1px var(--ln)}.px-key input{width:100%;margin-bottom:8px;background:var(--in)}.px-key .b{width:100%}';
+document.head.appendChild(st);
+pxFinalCfg();
+})();
