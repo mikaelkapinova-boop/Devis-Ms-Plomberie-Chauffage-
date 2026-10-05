@@ -44,7 +44,8 @@ cfgInit = function () {
   _cfgInit2();
   if (!Array.isArray(S.threads)) S.threads = [];
   const c = S.cfg;
-  if (!c.as) c.as = {k: 'devis', ai: 'pro', m: 'auto', mc: 'auto', r: 'raison'};
+  if (!c.as) c.as = {k: 'devis', ai: 'pro', m: 'auto', mc: 'auto', r: 'raison', ps: 6};
+  if (!Number.isFinite(Number(c.as.ps)) || Number(c.as.ps) < 1) c.as.ps = 6;
   if (!c.pk && c.ai && c.ai.pv === 'pplx' && c.ai.key) c.pk = c.ai.key;
   /* migration : ancienne conversation unique → fils */
   if (!S.threads.length && Array.isArray(S.chat) && S.chat.length) {
@@ -363,6 +364,7 @@ async function asSend() {
   if (eng === 'swarm') return swarmSend(t, txt, clear);
   if (eng === 'api') {
     if (!pk()) { toast('Ajoute ta clé API'); return sheetOpen('ia'); }
+    if (Number(t.ps) > 1) return swarmSend(t, txt, clear);
     return apiSend(t, txt, clear);
   }
   if (eng === 'cmp') return cmpSend(t, txt, clear);
@@ -394,7 +396,7 @@ async function swarmSend(t, txt, clear) {
   const question = [q, ...prep.texts].join('\n\n');
   ASBUSY=true; render();
   try {
-    const n = t.r === 'profond' ? 100 : t.r === 'raison' ? 20 : 6;
+    const n = Math.max(1, Math.min(Number(t.ps) || (t.r === 'profond' ? 100 : t.r === 'raison' ? 20 : 6), 1000));
     const mission = await SwarmCore.run(t, question, {soldiers:n, maxSoldiers:1000});
     asReply(t, mission.final || '(mission terminée)', '🧠 Swarm Core · '+n+' soldats');
   } catch(e) {
