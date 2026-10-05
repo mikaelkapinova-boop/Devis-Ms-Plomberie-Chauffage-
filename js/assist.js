@@ -707,6 +707,9 @@ async function pxArmySend(t,txt,clear){
 var oldAsSend=asSend;asSend=function(){
  var c=pxCfg(),t=TH();t.ai="api";t.m="auto";t.army=!!c.army;t.ps=c.ps;thSave();save("cfg");
  if(c.army){var ta=$("#cin"),txt=(ta?ta.value:"").trim();if(!txt&&!ATT.length)return toast("Écris un message ou joins un fichier");if(DEM[t.k].mod&&!t.doc)return sheetOpen("doc");var clear=function(){if(ta){ta.value="";cinGrow(ta)}draftClear("cin")};return pxArmySend(t,txt,clear)}
+ var ta=$("#cin"),txt=(ta?ta.value:"").trim();
+ var clear=function(){if(ta){ta.value="";cinGrow(ta)}draftClear("cin")};
+ if(!txt&&!ATT.length)return toast("Écris un message ou joins un fichier");
  if(!pk()){toast("Ajoute ta clé API Perplexity");return sheetOpen("ia")}
  return apiSend(t,txt,clear)
 };
@@ -718,7 +721,7 @@ var css=document.createElement("style");css.textContent=".px-card{background:var
 /* === VERSION 5.8.0 === */
 (function(){
 "use strict";
-var APP_VERSION="5.8.2",APP_RELEASE="Correctif définitif de l’envoi Perplexity API sur iPhone/GitHub Pages, aide de l’armée activable, modèles Max supprimés.";
+var APP_VERSION="5.8.3",APP_RELEASE="Correctif du bouton Envoyer : récupération du texte et de la fonction clear, puis appel Perplexity API.";
 window.APP_VERSION=APP_VERSION;
 window.newsShow=function(){var d=document.createElement("div");d.className="news";d.innerHTML="<div><h2>Version "+APP_VERSION+"</h2><p>"+APP_RELEASE+"</p><button class='b' style='width:100%;margin-top:10px' onclick='this.closest(\".news\").remove()'><span>Compris</span></button></div>";d.addEventListener("click",function(e){if(e.target===d)d.remove()});document.body.appendChild(d)};
 var oldBoot=boot;boot=async function(){var r=await oldBoot.apply(this,arguments);try{if(S.cfg&&S.cfg.appVersionSeen!==APP_VERSION){S.cfg.appVersionSeen=APP_VERSION;save("cfg");setTimeout(newsShow,900)}}catch(e){}return r};
