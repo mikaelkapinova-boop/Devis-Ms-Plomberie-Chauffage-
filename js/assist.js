@@ -44,7 +44,7 @@ cfgInit = function () {
   _cfgInit2();
   if (!Array.isArray(S.threads)) S.threads = [];
   const c = S.cfg;
-  if (!c.as) c.as = {k: 'devis', ai: 'pro', m: 'auto', mc: 'auto', r: 'raison', ps: 6};
+  if (!c.as) c.as = {k: 'devis', ai: 'api', m: 'auto', mc: 'auto', r: 'raison', ps: 6, army: false};
   if (!Number.isFinite(Number(c.as.ps)) || Number(c.as.ps) < 1) c.as.ps = 6;
   if (!c.pk && c.ai && c.ai.pv === 'pplx' && c.ai.key) c.pk = c.ai.key;
   /* migration : ancienne conversation unique → fils */
@@ -248,26 +248,24 @@ function sheetRender() {
     const typ = DEM[t.k].mod, L = S.docs.filter(x => x.t === typ);
     h = `<h2>${typ === 'd' ? 'Devis' : 'Facture'} à modifier<button data-a="close">OK</button></h2><div class="grp">${L.length ? L.map(x => IT('doc', x.id, typ === 'd' ? '📄' : '🧾', esc(x.num) + ' · ' + esc(x.cn || 'Sans client'), fd(x.date) + ' · ' + E(tot(x).t) + (x.o ? ' · ' + esc(x.o.slice(0, 40)) : ''), t.doc === x.id)).join('') : `<p class="note" style="padding:12px">Aucun ${typ === 'd' ? 'devis' : 'facture'}.</p>`}</div>`;
   } else if (SHEET === 'ia') {
-    const cur = modCur(t);
-    const ENGS = [
-      ['api','🧠','Perplexity dans l’appli','Clé API · recherche, documents et code'],
-      ['swarm','⚔️','Cerveau collectif','Pyramide de soldats · mémoire partagée · recherche parallèle'],
-      ['cmp','💻','Computer dans l’appli',`Pont local · ${MCOK ? 'connecté' : 'connecte-toi sur ton PC'}`],
-      ['pro','🌐','Perplexity Pro','Ouvre Perplexity avec la demande préparée'],
-      ['mail','✉️','Computer e-mail','Envoie la demande par e-mail et récupère le résultat'],
-      ['loc','⚡','Sans IA — Copilote local','Bilan, paiements, planning et création de documents à partir du texte']
-    ];
-    h = `<h2>Intelligence artificielle<button data-a="close">OK</button></h2>`;
-    h += `<div class="gl">Moteur</div><div class="grp">${ENGS.map(([id,ic,nm,sm]) => IT('eng', id, ic, nm, sm, t.ai === id)).join('')}</div>`;
-    if (t.ai === 'api' && !pk()) h += `<div class="grp" style="padding:10px"><input id="pkin" type="password" placeholder="Clé API pplx-…" autocomplete="off"><button class="b sm" style="width:100%;margin-top:8px" data-a="pk"><span>Enregistrer la clé</span></button></div>`;
-    h += `<div class="gl">Vitesse</div><div class="seg">${Object.entries(MODES).map(([k, m]) => `<button class="${t.r === k ? 'on' : ''}" data-a="mode" data-v="${k}">${m.l}</button>`).join('')}</div>`;
-    if (t.ai === 'api' || t.ai === 'cmp') {
-      const models = modList(t);
-      h += `<div class="gl">Modèle</div><div class="grp">${models.map(m => IT('mod', m.id, '', m.n, m.d, cur.id === m.id)).join('')}</div>`;
-    } else {
-      h += `<p class="note">Ce moteur n’utilise pas de clé API. Tu peux changer de moteur à tout moment depuis ce menu.</p>`;
-    }
-    h += `<p class="note"><button class="b gh sm" type="button" onclick="sheetClose();go('k')"><span>Connecteurs</span></button></p>`;
+    const c = S.cfg.as || (S.cfg.as = {ai:'api',m:'auto',r:'raison',ps:6,army:false});
+    const army = !!c.army;
+    const n = Math.max(1, Math.min(16, Number(c.ps) || 6));
+    h = `<h2>Perplexity<button data-a="close">OK</button></h2>`;
+    h += `<div class="gl">Moteur</div><div class="grp">
+      <button class="it" data-a="eng" data-v="api"><span class="ic">⚡</span><span class="tx"><b>Perplexity API</b><small>API directe dans l’application · modèle choisi automatiquement</small></span><span class="ck">✓</span></button>
+    </div>`;
+    h += `<div class="gl">Aide de l’armée</div><div class="grp">
+      <button class="it" data-a="army" data-v="${army ? 'off' : 'on'}"><span class="ic">🧠</span><span class="tx"><b>${army ? 'Armée activée' : 'Activer l’aide de l’armée'}</b><small>${army ? 'Soldats → analystes → commandant · travail parallèle' : 'Ajoute une pyramide d’agents Perplexity pour renforcer la recherche'}</small></span><span class="ck">${army ? '✓' : ''}</span></button>
+    </div>`;
+    h += `<div class="gl">Type de raisonnement</div><div class="seg">${Object.entries(MODES).map(([k,m]) => `<button class="${t.r === k ? 'on' : ''}" data-a="mode" data-v="${k}">${m.l}</button>`).join('')}</div>`;
+    if (army) h += `<div class="gl">Pyramide de soldats</div><div class="grp" style="padding:14px">
+      <b>${n} soldats</b><input type="range" min="1" max="16" step="1" value="${n}" oninput="S.cfg.as.ps=Number(this.value);S.cfg.as.army=true;save('cfg');this.previousElementSibling.textContent=this.value+' soldats'">
+      <small>Les soldats travaillent en parallèle, puis les analystes consolident et le commandant produit la réponse finale.</small>
+    </div>`;
+    if (!pk()) h += `<div class="grp" style="padding:10px"><input id="pkin" type="password" placeholder="Clé API pplx-…" autocomplete="off"><button class="b sm" style="width:100%;margin-top:8px" data-a="pk"><span>Enregistrer la clé</span></button></div>`;
+    else h += `<div class="note">✓ Clé API Perplexity enregistrée</div>`;
+    h += `<p class="note">Aucun sélecteur de modèle et aucune option Max. Perplexity choisit automatiquement le modèle.</p>`;
   } else if (SHEET === 'fils') {
     const L = S.threads.slice().sort((a, b) => b.up - a.up).filter(x => !THQ || (thTitle(x) + ' ' + x.msgs.map(m => m.t).join(' ')).toLowerCase().includes(THQ));
     h = `<h2>Conversations<button data-a="new">Nouvelle</button></h2><input id="thq" type="search" placeholder="Rechercher" value="${esc(THQ)}" oninput="THQ=this.value.toLowerCase();sheetRender();setTimeout(()=>{const e=$('#thq');e.focus();e.setSelectionRange(e.value.length,e.value.length)},0)" style="margin-bottom:10px">
@@ -295,9 +293,8 @@ function sheetAct(a, v, b) {
     sheetClose(); return render();
   }
   if (a === 'doc') { t.doc = v; thSave(); sheetClose(); return render(); }
-  if (a === 'eng') { t.ai = v; S.cfg.as.ai = v; thSave(); save('cfg'); if (v === 'cmp') mcStatus(); render(); return sheetRender(); }
-  if (a === 'mode') { t.r = v; S.cfg.as.r = v; thSave(); save('cfg'); render(); return sheetRender(); }
-  if (a === 'mod') { if (t.ai === 'cmp') { t.mc = v; S.cfg.as.mc = v; } else { t.m = v; S.cfg.as.m = v; } thSave(); save('cfg'); render(); return sheetRender(); }
+  if (a === 'eng') { t.ai = 'api'; t.m = 'auto'; if (!t.army) t.army = false; thSave(); save('cfg'); return render(); }
+  if (a === 'army') { t.ai = 'api'; t.m = 'auto'; t.army = (v === 'on'); S.cfg.as = S.cfg.as || {}; S.cfg.as.ai = 'api'; S.cfg.as.m = 'auto'; S.cfg.as.army = t.army; S.cfg.as.ps = Math.max(1, Math.min(16, Number(S.cfg.as.ps) || 6)); thSave(); save('cfg'); return sheetRender(); }
   if (a === 'pk') { const k = ($('#pkin')?.value || '').trim(); if (!k) return toast('Colle ta clé API'); S.cfg.pk = k; save('cfg'); toast('Clé enregistrée'); render(); return sheetRender(); }
   if (a === 'mcconn') return mcConnect();
   if (a === 'apple') { sheetClose(); return appleTools(); }
