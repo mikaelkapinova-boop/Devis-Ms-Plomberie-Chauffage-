@@ -378,6 +378,7 @@ def televerser_fichier(nom_fichier, mime, octets):
 # Perplexity API directe (clé locale + file d'attente persistante)
 # ----------------------------------------------------------------------------
 FICHIER_JOBS = os.path.join(DOSSIER, "perplexity_jobs.json")
+PYRAMID_MAX_WORKERS = max(1, min(int(os.environ.get("MS_PYRAMID_WORKERS", "24")), 64))
 JOB_LOCK = threading.Lock()
 
 def api_key():
@@ -491,21 +492,35 @@ def _perplexity_call(body):
     except Exception as e:
         return {"_err": 1, "_st": 502, "_msg": str(e)}
 
+_PYRAMID_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=PYRAMID_MAX_WORKERS, thread_name_prefix="pplx-soldier")
+
+def _job_execute(job):
+    maj_job(job["id"], status="running", started_at=time.time())
+    result = _perplexity_call(job.get("body") or {})
+    if result.get("_err"):
+        maj_job(job["id"], status="failed", finished_at=time.time(), error=result.get("_msg"), error_status=result.get("_st"))
+    else:
+        maj_job(job["id"], status="completed", finished_at=time.time(), result=result)
+
 def job_worker():
+    futures = set()
     while True:
         try:
-            jobs = lire_jobs()
-            job = next((j for j in jobs if j.get("status") == "queued"), None)
-            if job:
-                maj_job(job["id"], status="running", started_at=time.time())
-                result = _perplexity_call(job.get("body") or {})
-                if result.get("_err"):
-                    maj_job(job["id"], status="failed", finished_at=time.time(), error=result.get("_msg"), error_status=result.get("_st"))
-                else:
-                    maj_job(job["id"], status="completed", finished_at=time.time(), result=result)
-            else:
-                time.sleep(0.5)
-        except Exception as e:
+            for f in list(futures):
+                if f.done():
+                    futures.discard(f)
+                    try: f.result()
+                    except Exception: pass
+            capacity = max(0, PYRAMID_MAX_WORKERS - len(futures))
+            if capacity:
+                jobs = lire_jobs()
+                queued = [j for j in jobs if j.get("status") == "queued"][:capacity]
+                for job in queued:
+                    # Marquage immédiat pour éviter qu'un autre cycle ne double la tâche.
+                    maj_job(job["id"], status="dispatching", dispatched_at=time.time())
+                    futures.add(_PYRAMID_EXECUTOR.submit(_job_execute, job))
+            time.sleep(0.15 if futures else 0.5)
+        except Exception:
             time.sleep(1)
 
 # ----------------------------------------------------------------------------
