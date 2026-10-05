@@ -636,483 +636,91 @@ pwa = function () {
 };
 
 
-/* === MS PLOMBERIE — COLLECTIF UI/API PATCH 2026-10-05 === */
+
+
+/* === MS PLOMBERIE — PERPLEXITY API UI 5.8.0 === */
 (function(){
-  'use strict';
+"use strict";
+function pxCfg(){
+ if(!S.cfg.as||typeof S.cfg.as!=="object")S.cfg.as={k:"devis",ai:"api",m:"auto",r:"raison",ps:6,army:false};
+ S.cfg.as.ai="api";S.cfg.as.m="auto";
+ S.cfg.as.r=["rapide","raison","profond"].includes(S.cfg.as.r)?S.cfg.as.r:"raison";
+ S.cfg.as.ps=Math.max(1,Math.min(16,Number(S.cfg.as.ps)||6));S.cfg.as.army=!!S.cfg.as.army;return S.cfg.as;
+}
+function pxArmyOn(t){return !!(pxCfg().army||(t&&t.army))}
+iaLabel=function(t){return "Perplexity API"+(pxArmyOn(t)?" · 🧠 Armée active":"")};
+window.pxArmySet=function(on){var c=pxCfg(),t=TH();c.army=!!on;t.army=!!on;t.ai="api";t.m="auto";thSave();save("cfg");render();if(SHEET==="ia")pxSheet()};
+window.pxReasonSet=function(v){if(!["rapide","raison","profond"].includes(v))return;var c=pxCfg(),t=TH();c.r=v;t.r=v;thSave();save("cfg");render();if(SHEET==="ia")pxSheet()};
+window.pxArmyCount=function(v){var n=Math.max(1,Math.min(16,Number(v)||6)),c=pxCfg(),t=TH();c.ps=n;t.ps=n;thSave();save("cfg");var e=$("#pxArmyCount");if(e)e.textContent=n};
 
-  function asEnsure(){
-    if(!Array.isArray(S.threads)) S.threads=[];
-    if(!S.cfg) S.cfg={};
-    if(!S.cfg.as || typeof S.cfg.as!=='object') S.cfg.as={k:'devis',ai:'api',m:'auto',mc:'auto',r:'raison',ps:6,log:true};
-    if(!['api','swarm'].includes(S.cfg.as.ai)) S.cfg.as.ai='api';
-    S.cfg.as.r = ['rapide','raison','profond'].includes(S.cfg.as.r) ? S.cfg.as.r : 'raison';
-    S.cfg.as.ps = Math.max(1,Math.min(16,Number(S.cfg.as.ps)||6));
-    if(S.cfg.as.log===undefined) S.cfg.as.log=true;
-    if(!S.threads.length){
-      const a=S.cfg.as;
-      S.threads.push({id:nw(),ti:'',k:a.k||'devis',ai:a.ai||'api',m:'auto',mc:'auto',r:a.r||'raison',ps:a.ps||6,tid:'',doc:'',msgs:[],up:Date.now()});
-    }
-    if(!S.cfg.thc || !S.threads.find(x=>x.id===S.cfg.thc)) S.cfg.thc=S.threads[0].id;
-    S.chat=(TH && TH()) ? TH().msgs : [];
-    try{save('cfg');save('threads');}catch(e){}
-  }
+function pxSheet(){
+ var s=$("#sheet");if(!s)return;var c=pxCfg(),t=TH(),army=pxArmyOn(t),key=pk(),n=Math.max(1,Math.min(16,Number(t.ps||c.ps)||6));
+ var h="<h2>Perplexity API<button data-a='close'>Fermer</button></h2>";
+ h+="<div class='px-card'><div class='px-title'><b>Perplexity API</b><small>Recherche, raisonnement, fichiers et code dans l’application</small><span>✓</span></div>";
+ h+="<div class='px-row'><div><b>Aide de l’armée</b><small>Pyramide d’agents : travail parallèle, vérification et consolidation.</small></div><button class='px-switch "+(army?"on":"")+"' onclick='pxArmySet("+(army?"false":"true")+")'><i></i></button></div></div>";
+ h+="<div class='gl'>Mode</div><div class='px-list'>";
+ [["rapide","Rapide","Réponse directe et ciblée"],["raison","Raisonnement","Analyse et vérification renforcées"],["profond","Profond","Recherche large et contrôle final"]].forEach(function(o){h+="<button class='px-mode "+(t.r===o[0]?"on":"")+"' onclick=\"pxReasonSet('"+o[0]+"')\"><span><b>"+o[1]+"</b><small>"+o[2]+"</small></span><strong>"+(t.r===o[0]?"✓":"")+"</strong></button>"});
+ h+="</div>";
+ if(army)h+="<div class='gl'>Armée</div><div class='px-card'><div class='px-row'><div><b id='pxArmyCount'>"+n+" soldats</b><small>soldats → analystes → commandant</small></div></div><input type='range' min='1' max='16' value='"+n+"' oninput='pxArmyCount(this.value)'><div class='px-pyramid'><span>COMMANDANT</span><span>ANALYSTES</span><span>SOLDATS × "+n+"</span></div></div>";
+ h+="<div class='gl'>Connexion</div>";
+ h+=key?"<div class='px-ok'>✓ Clé API Perplexity enregistrée</div>":"<div class='px-key'><input id='pkin' type='password' placeholder='pplx-…' autocomplete='off'><button class='b sm' data-a='pk'><span>Enregistrer la clé</span></button></div>";
+ h+="<p class='note'>Aucun sélecteur de modèle et aucune option « Max ». Perplexity gère automatiquement le modèle.</p>";
+ s.innerHTML="<div class='bg'></div><div class='pn'><div class='grab'></div>"+h+"</div>";s.classList.add("o");
+}
+var oldSheetRender=sheetRender;sheetRender=function(){if(SHEET==="ia")return pxSheet();return oldSheetRender.apply(this,arguments)};
+var oldSheetAct=sheetAct;sheetAct=function(a,v,b){
+ if(a==="eng"||a==="army"){pxArmySet(v==="on"||v==="swarm");return}
+ if(a==="mode"||a==="reason"){pxReasonSet(v);return}
+ if(a==="mod")return toast("Le choix du modèle est automatique.");
+ if(a==="pk"){var k=(($("#pkin")&&$("#pkin").value)||"").trim();if(!k)return toast("Colle ta clé API Perplexity");S.cfg.pk=k;save("cfg");toast("Clé API Perplexity enregistrée");render();pxSheet();return}
+ return oldSheetAct.apply(this,arguments)
+};
 
-  const _cfgInitCollectif = cfgInit;
-  cfgInit = function(){
-    _cfgInitCollectif.apply(this,arguments);
-    asEnsure();
-  };
+chatV=function(){
+ var t=TH(),d=DEM[t.k]||DEM.devis,msgs=t.msgs.slice(-80),off=t.msgs.length-msgs.length,doc=d.mod?S.docs.find(function(x){return x.id===t.doc}):null;
+ var welcome="<div class='bub a'>"+esc(d.l)+". "+(d.mod?(doc?esc(doc.num)+" · "+esc(doc.cn||""):"Choisis le document."):"Écris ta demande, ou joins une photo/PDF.")+"</div>";
+ var typing=ASBUSY?"<div class='bub a'><span class='typing'><i></i><i></i><i></i></span></div>":"";
+ var pills="<button class='pill' onclick=\"sheetOpen('dem')\">"+esc(d.l)+"</button><button class='pill' onclick=\"sheetOpen('ia')\">"+esc(iaLabel(t))+"</button>";
+ return "<div class='ash'><button class='icb' onclick=\"sheetOpen('fils')\">☰</button><div class='ttl'>"+esc(thTitle(t))+"</div><button class='icb' onclick='thNew();render()'>✎</button></div><div id='cm' class='cm'>"+(msgs.length?msgs.map(function(m,i){return bub2(m,off+i)}).join(""):welcome)+typing+"</div><div class='cmp2'><div class='pills'>"+pills+"</div><div class='atts2'>"+ATT.map(function(a,i){return "<span class='chip'>"+(a.k==="pdf"?"📄":"🖼️")+" "+esc(a.f.name.slice(0,22))+"<button onclick='ATT.splice("+i+",1);render()'>×</button></span>"}).join("")+"</div><div class='crow2'><button class='plus' onclick=\"sheetOpen('plus')\">+</button><textarea id='cin' rows='1' placeholder='Écris ta demande…' oninput='cinGrow(this)' onkeydown=\"if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))asSend()\"></textarea><button class='send' id='sendb' onclick='asSend()' "+(ASBUSY?"disabled":"")+">↑</button></div><input type='file' id='fpick' accept='image/*,application/pdf' multiple hidden onchange='attAdd(this.files)'><input type='file' id='fcam' accept='image/*' capture='environment' hidden onchange='attAdd(this.files)'></div>"
+};
 
-  function reasonLabel(r){
-    return r==='rapide'?'Direct':r==='profond'?'Profond':'Fort';
-  }
+async function pxArmyAgent(t,q,role,effort){
+ var eff=modEff(t),mode=MODES[t.r]||MODES.raison,tools=[{type:"web_search",max_results:t.r==="rapide"?8:12},{type:"fetch_url"}];
+ if(t.r!=="rapide"||t.k==="app"||t.k==="projet"||t.k==="dev")tools.push({type:"sandbox"});
+ if(S.cfg.ai&&S.cfg.ai.gh!==false)tools.push({type:"connector",id:"connector_github",server_label:"github"});
+ var body={model:eff&&eff.id?eff.id:"anthropic/claude-sonnet-4-5",instructions:(sysPrompt(t,eff)||"")+"\\n\\nROLE : "+role+"\\nRetourne uniquement faits, vérifications et résultat utile.",input:[{role:"user",content:q}],max_output_tokens:Math.max(mode.tokens||6000,effort==="high"?9000:5000),max_steps:effort==="high"?12:8,reasoning:{effort:effort||mode.effort||"medium"},tools:tools};
+ var j=await apiPost(body);if(j&&j._err)throw new Error(j._msg||("HTTP "+j._st));
+ var out=j&&j.output_text;if(!out&&j&&Array.isArray(j.output))out=j.output.flatMap(function(x){return Array.isArray(x.content)?x.content.map(function(c){return c.text||""}):[]}).join("\\n");
+ return String(out||"").trim()
+}
+async function pxArmySend(t,txt,clear){
+ var q=txt||"Analyse les fichiers joints et détermine la mission à exécuter.",prep={imgs:[],texts:[],names:[]};try{prep=await prepAtt()}catch(e){}
+ chatPush({r:"u",t:q,att:prep.names});ATT=[];clear();ASBUSY=true;render();
+ var n=Math.max(1,Math.min(16,Number(t.ps)||6)),question=[q].concat(prep.texts||[]).join("\\n\\n"),roles=["Chercheur","Analyste technique","Contradicteur","Expert métier","Spécialiste code","Vérificateur","Synthétiseur","Contrôleur final"],started=Date.now();
+ try{
+  var workers=await Promise.all(Array.from({length:n},function(_,i){var role=roles[i%roles.length];return pxArmyAgent(t,question+"\\n\\nMISSION SOLDAT "+(i+1)+" — "+role,role,"medium").then(function(text){return{i:i+1,text:text,ok:true}}).catch(function(e){return{i:i+1,text:"Échec soldat "+(i+1)+" : "+e.message,ok:false}})}));
+  var good=workers.filter(function(x){return x.ok}),analysts=Math.max(1,Math.min(4,Math.ceil(n/4))),packets=[];for(var a=0;a<analysts;a++)packets.push(good.filter(function(_,i){return i%analysts===a}));
+  var consolidated=await Promise.all(packets.map(function(packet,i){var joined=packet.map(function(x){return "SOLDAT "+x.i+":\\n"+x.text}).join("\\n\\n---\\n\\n").slice(0,30000);return pxArmyAgent(t,question+"\\n\\nRAPPORTS DES SOLDATS:\\n"+joined,"Analyste senior "+(i+1),"high").catch(function(e){return "Analyse indisponible : "+e.message})}));
+  var final=await pxArmyAgent(t,question+"\\n\\nANALYSES:\\n"+consolidated.join("\\n\\n---\\n\\n")+"\\n\\nProduis la réponse finale exploitable, vérifie les contradictions et cite les sources utiles.","Commandant","high");
+  var log="\\n\\n— Journal d’exécution —\\nPyramide : "+n+" soldats → "+analysts+" analystes → 1 commandant\\nSoldats réussis : "+good.length+"/"+n+"\\nTemps : "+Math.round((Date.now()-started)/1000)+" s";
+  asReply(t,final+(t.log===false?"":log),"🧠 Armée Perplexity · "+n+" soldats")
+ }catch(e){chatPush({r:"a",t:"Erreur de l’armée Perplexity : "+(e.message||e),via:"Armée Perplexity"})}
+ finally{ASBUSY=false;render()}
+}
+var oldAsSend=asSend;asSend=function(){
+ var c=pxCfg(),t=TH();t.ai="api";t.m="auto";t.army=!!c.army;t.ps=c.ps;thSave();save("cfg");
+ if(c.army){var ta=$("#cin"),txt=(ta?ta.value:"").trim();if(!txt&&!ATT.length)return toast("Écris un message ou joins un fichier");if(DEM[t.k].mod&&!t.doc)return sheetOpen("doc");var clear=function(){if(ta){ta.value="";cinGrow(ta)}draftClear("cin")};return pxArmySend(t,txt,clear)}
+ return oldAsSend.apply(this,arguments)
+};
 
-  function engineLabel(t){
-    return t && t.ai==='swarm' ? '🧠 Cerveau collectif' : '⚡ Perplexity API';
-  }
-
-  iaLabel = function(t){
-    asEnsure();
-    const x=t||TH();
-    return engineLabel(x)+' · '+reasonLabel(x.r)+(x.ai==='swarm'?' · '+x.ps+' soldats':'');
-  };
-
-  function asPyramid(ps){
-    ps=Math.max(1,Math.min(16,Number(ps)||6));
-    const analysts=Math.max(1,Math.min(4,Math.ceil(ps/4)));
-    let h='<div class="as-pyramid"><div class="as-level"><span class="as-node as-command">C</span></div>';
-    h+='<div class="as-level">';
-    for(let i=0;i<analysts;i++) h+='<span class="as-node as-analyst">A'+(i+1)+'</span>';
-    h+='</div><div class="as-level as-soldiers">';
-    for(let i=0;i<ps;i++) h+='<span class="as-node as-soldier">S'+(i+1)+'</span>';
-    h+='</div></div>';
-    return h;
-  }
-
-  function renderCollectiveSheet(){
-    asEnsure();
-    const t=TH(), c=($('#sheet')||{}), s=$('#sheet');
-    if(!s) return;
-    const key=pk();
-    const reasonOpts=[
-      ['rapide','Direct','Une passe ciblée'],
-      ['raison','Fort','Vérifie et recoupe'],
-      ['profond','Profond','Planifie, critique, synthétise']
-    ];
-    let h='<h2>Assistant IA<button data-a="close">Fermer</button></h2>';
-    h+='<div class="gl">Moteur</div><div class="as-engine-list">';
-    h+='<button class="as-engine '+(t.ai==='api'?'on':'')+'" data-a="eng" data-v="api"><span><b>Perplexity API</b><small>Agent API · recherche web, documents et code</small></span><i class="as-switch '+(t.ai==='api'?'on':'')+'"><em></em></i></button>';
-    h+='<button class="as-engine '+(t.ai==='swarm'?'on':'')+'" data-a="eng" data-v="swarm"><span><b>Cerveau collectif</b><small>Pyramide Perplexity · soldats → analystes → commandant</small></span><i class="as-switch '+(t.ai==='swarm'?'on':'')+'"><em></em></i></button>';
-    h+='</div>';
-
-    h+='<div class="gl">Type de raisonnement</div><div class="as-reason-list">';
-    reasonOpts.forEach(function(o){
-      h+='<button class="as-reason '+(t.r===o[0]?'on':'')+'" data-a="reason" data-v="'+o[0]+'"><span><b>'+o[1]+'</b><small>'+o[2]+'</small></span><i class="as-switch '+(t.r===o[0]?'on':'')+'"><em></em></i></button>';
-    });
-    h+='</div>';
-
-    h+='<div class="gl">Pyramide de soldats</div>';
-    h+='<div class="as-toggle-row"><span><b>Utiliser la pyramide Perplexity</b><small>Les soldats travaillent en parallèle, puis les analystes consolident.</small></span><button class="as-switch-btn '+(t.ai==='swarm'?'on':'')+'" onclick="asSetCollective(this.classList.contains(\\'on\\')?false:true)"><i></i></button></div>';
-
-    h+='<div class="as-range-row"><input id="asSoldierRange" type="range" min="1" max="16" step="1" value="'+t.ps+'" oninput="asSetSoldiers(this.value,true)"><strong id="asSoldierValue">'+t.ps+' soldats</strong></div>';
-    h+='<div id="asPyramidPreview">'+asPyramid(t.ps)+'</div>';
-
-    h+='<div class="as-toggle-row"><span><b>Journal d’exécution</b><small>Affiche les étapes et l’état des agents, sans exposer de raisonnement privé.</small></span><button class="as-switch-btn '+(t.log!==false?'on':'')+'" onclick="asSetLog(this.classList.contains(\\'on\\')?false:true)"><i></i></button></div>';
-
-    h+='<div class="gl">Connexion Perplexity</div>';
-    if(key) h+='<div class="as-key-ok">✓ Clé Perplexity enregistrée sur cet appareil</div>';
-    else h+='<div class="as-key-box"><input id="pkin" type="password" placeholder="pplx-…" autocomplete="off"><button class="b sm" data-a="pk"><span>Enregistrer la clé</span></button></div>';
-
-    h+='<p class="note">Le choix du modèle reste automatique. Ici tu règles le moteur et la méthode de raisonnement directement dans la discussion.</p>';
-    s.innerHTML='<div class="bg"></div><div class="pn"><div class="grab"></div>'+h+'</div>';
-    s.classList.add('o');
-  }
-
-  const _sheetRenderCollectif = sheetRender;
-  sheetRender = function(){
-    if(SHEET==='ia') return renderCollectiveSheet();
-    return _sheetRenderCollectif.apply(this,arguments);
-  };
-
-  const _sheetActCollectif = sheetAct;
-  sheetAct = function(a,v,b){
-    asEnsure();
-    const t=TH();
-    if(a==='eng'){
-      t.ai=v;
-      S.cfg.as.ai=v;
-      if(v==='swarm') t.ps=Math.max(1,Math.min(16,Number(t.ps)||6));
-      thSave();save('cfg');
-      renderCollectiveSheet();return;
-    }
-    if(a==='reason'){
-      t.r=v;S.cfg.as.r=v;thSave();save('cfg');
-      render();
-      renderCollectiveSheet();return;
-    }
-    if(a==='pk'){
-      const k=($('#pkin')&&$('#pkin').value||'').trim();
-      if(!k) return toast('Colle ta clé API Perplexity');
-      S.cfg.pk=k;save('cfg');toast('Clé Perplexity enregistrée');
-      render();renderCollectiveSheet();return;
-    }
-    return _sheetActCollectif.apply(this,arguments);
-  };
-
-  window.asSetCollective=function(on){
-    asEnsure();
-    const t=TH();
-    t.ai=on?'swarm':'api';
-    S.cfg.as.ai=t.ai;
-    thSave();save('cfg');
-    render();
-    if(SHEET==='ia') renderCollectiveSheet();
-  };
-
-  window.asSetSoldiers=function(v,stay){
-    asEnsure();
-    const t=TH(),n=Math.max(1,Math.min(16,Number(v)||6));
-    t.ps=n;S.cfg.as.ps=n;thSave();save('cfg');
-    if(stay && S('#asSoldierValue')){}
-    const val=$('#asSoldierValue');if(val)val.textContent=n+' soldats';
-    const prev=$('#asPyramidPreview');if(prev)prev.innerHTML=asPyramid(n);
-  };
-
-  window.asSetLog=function(on){
-    asEnsure();
-    const t=TH();t.log=!!on;S.cfg.as.log=t.log;thSave();save('cfg');
-    if(SHEET==='ia') renderCollectiveSheet();
-  };
-
-  chatV = function(){
-    asEnsure();
-    const t=TH(),d=DEM[t.k]||DEM.devis,msgs=t.msgs.slice(-80),off=t.msgs.length-msgs.length;
-    const doc=d.mod ? S.docs.find(x=>x.id===t.doc) : null;
-    const welcome='<div class="bub a">'+esc(d.l)+'. '+(d.mod ? (doc?esc(doc.num)+(doc.cn?' · '+esc(doc.cn):''):'Choisis le document.') : 'Écris, ou joins une photo.')+'</div>';
-    const typing=ASBUSY?'<div class="bub a"><span class="typing"><i></i><i></i><i></i></span></div>':'';
-    let pills='<button class="pill" onclick="sheetOpen(\\'dem\\')">'+esc(d.l)+'</button>';
-    if(d.mod) pills+='<button class="pill" onclick="sheetOpen(\\'doc\\')">'+(doc?esc(doc.num):'Document')+'</button>';
-    pills+='<button class="pill" onclick="sheetOpen(\\'ia\\')">'+esc(engineLabel(t))+'</button>';
-    pills+='<button class="pill" onclick="sheetOpen(\\'ia\\')">🧠 Raisonnement · '+esc(reasonLabel(t.r))+'</button>';
-    if(t.ai==='swarm') pills+='<button class="pill" onclick="sheetOpen(\\'ia\\')">⚔️ '+t.ps+' soldats</button>';
-
-    return '<div class="ash"><button class="icb" onclick="sheetOpen(\\'fils\\')" aria-label="Conversations">☰</button><div class="ttl" onclick="thRename()">'+esc(thTitle(t))+'</div><button class="icb" onclick="thNew();render()" aria-label="Nouvelle conversation">✎</button></div>'+
-      '<div id="inbx"></div><div id="cm" class="cm">'+(msgs.length?msgs.map((m,i)=>bub2(m,off+i)).join(''):welcome)+typing+'</div>'+
-      '<div class="cmp2"><div class="pills">'+pills+'</div>'+
-      '<div class="atts2">'+ATT.map((a,i)=>'<span class="chip">'+(a.k==='pdf'?'📄':'🖼️')+' '+esc(a.f.name.slice(0,22))+'<button onclick="ATT.splice('+i+',1);render()" aria-label="Retirer">×</button></span>').join('')+'</div>'+
-      '<div class="crow2"><button class="plus" onclick="sheetOpen(\\'plus\\')" aria-label="Ajouter">+</button><textarea id="cin" rows="1" placeholder="Écris ta demande…" oninput="cinGrow(this)" onkeydown="if(event.key===\\'Enter\\'&&(event.ctrlKey||event.metaKey))asSend()"></textarea><button class="send" id="sendb" onclick="asSend()" '+(ASBUSY?'disabled':'')+' aria-label="Envoyer">↑</button></div>'+
-      '<input type="file" id="fpick" accept="image/*,application/pdf" multiple hidden onchange="attAdd(this.files)"><input type="file" id="fcam" accept="image/*" capture="environment" hidden onchange="attAdd(this.files)"></div>';
-  };
-
-  const legacyEndpoint = typeof mcBase==='function' ? mcBase() : '';
-  function pplxEndpoint(){
-    if(location.hostname && /\\.github\\.io$/i.test(location.hostname)) return 'https://devis-ms-plomberie-chauffage.vercel.app/api/perplexity';
-    if(location.protocol==='file:') return 'https://devis-ms-plomberie-chauffage.vercel.app/api/perplexity';
-    return '/api/perplexity';
-  }
-
-  function readPplx(j){
-    const out=j && (j.output_text || j.output);
-    let text='';
-    if(typeof out==='string') text=out;
-    else if(Array.isArray(out)){
-      text=out.flatMap(function(x){ return Array.isArray(x.content)?x.content.map(function(c){return c.text||''}):(x.text?[x.text]:[]); }).join('\\n').trim();
-    }
-    const sources=[];
-    (Array.isArray(j&&j.output)?j.output:[]).forEach(function(x){
-      if(x && x.type==='search_results') (x.results||[]).forEach(function(z){if(z&&z.url)sources.push(z.url);});
-    });
-    return {text:text.trim(),sources:[...new Set(sources)].slice(0,12)};
-  }
-
-  async function pplxPost(body){
-    const payload=JSON.parse(JSON.stringify(body||{}));
-    const key=pk();
-    if(key) payload.apiKey=key;
-    const ctl=new AbortController();
-    const timer=setTimeout(function(){ctl.abort()},180000);
-    try{
-      const r=await fetch(pplxEndpoint(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:ctl.signal});
-      const raw=await r.text();
-      let j={};try{j=JSON.parse(raw)}catch(e){j={error:{message:raw||('HTTP '+r.status)}}}
-      if(!r.ok){
-        const msg=(j.error&&(j.error.message||j.error.type))||j.message||('HTTP '+r.status);
-        const er=new Error(msg);er.status=r.status;throw er;
-      }
-      if(j.status && j.status!=='completed' && j.status!=='in_progress'){
-        const er=new Error((j.error&&j.error.message)||('Exécution '+j.status));er.status=502;throw er;
-      }
-      return j;
-    } finally { clearTimeout(timer); }
-  }
-
-  /* Correctif : Perplexity ne passe plus par localhost:8765.
-     Sur GitHub Pages, la requête passe par le proxy Vercel. */
-  apiPost = async function(body){
-    let last=null;
-    for(let i=0;i<3;i++){
-      try{
-        return await pplxPost(body);
-      }catch(e){
-        last=e;
-        if(e.status!==429 && i<2) break;
-        if(i<2) await new Promise(function(r){setTimeout(r,1200*(i+1));});
-      }
-    }
-    return {_err:1,_st:last&&last.status||500,_msg:last&&last.message||'Perplexity indisponible'};
-  };
-
-  const SW_ROLES=[
-    'Chercheur : trouve les faits et sources utiles, identifie les informations manquantes.',
-    'Analyste technique : décompose le problème et vérifie les contraintes.',
-    'Contradicteur : cherche les erreurs, hypothèses fragiles et contre-exemples.',
-    'Expert métier : apporte une lecture pratique et vérifie la faisabilité.',
-    'Spécialiste code : vérifie architecture, API, sécurité et cas limites.',
-    'Vérificateur : recoupe les points importants et repère les incohérences.',
-    'Synthétiseur : compare les pistes et garde les éléments les plus solides.',
-    'Contrôleur final : cherche ce qui pourrait faire échouer la réponse.'
-  ];
-
-  function swarmBody(t,input,role,effort){
-    const eff=modEff(t) || (MOD_API&&MOD_API[1]);
-    const mode=MODES[t.r]||MODES.raison;
-    const tools=[
-      {type:'web_search',max_results:t.r==='rapide'?8:12},
-      {type:'fetch_url'}
-    ];
-    if(t.k==='app'||t.k==='projet'||t.k==='dev'||t.r!=='rapide') tools.push({type:'sandbox'});
-    if(S.cfg.ai && S.cfg.ai.gh!==false) tools.push({type:'connector',id:'connector_github',server_label:'github'});
-    const hist=t.msgs.slice(-8).filter(function(m){return m.t&&m.r}).map(function(m){return {role:m.r==='u'?'user':'assistant',content:String(m.t).slice(0,3500)};});
-    return {
-      model:eff&&eff.id?eff.id:'anthropic/claude-sonnet-4-5',
-      instructions:(sysPrompt(t,eff)||'')+'\n\nTu es un agent d’une pyramide multi-agent. '+(role||'Travaille de façon autonome et vérifiable.')+' Ne révèle jamais de raisonnement privé détaillé. Retourne seulement les faits, vérifications, conclusions et recommandations utiles.',
-      input:hist.concat([{role:'user',content:input}]),
-      max_output_tokens:Math.max(mode.tokens||12000,effort==='high'?9000:6000),
-      max_steps:effort==='high'?12:8,
-      reasoning:{effort:effort||mode.effort||'medium'},
-      tools:tools
-    };
-  }
-
-  async function swarmAgent(t,input,role,effort){
-    const j=await pplxPost(swarmBody(t,input,role,effort));
-    const o=readPplx(j);
-    if(!o.text) throw new Error('Réponse Perplexity vide');
-    return o;
-  }
-
-  swarmSend = async function(t,txt,clear){
-    asEnsure();
-    const q=txt || 'Analyse les fichiers joints et détermine la mission à exécuter.';
-    let prep={imgs:[],texts:[],names:[]};
-    try{prep=await prepAtt()}catch(e){}
-    chatPush({r:'u',t:q,att:prep.names});
-    ATT=[];clear();ASBUSY=true;render();
-
-    const n=Math.max(1,Math.min(16,Number(t.ps)||6));
-    const question=[q].concat(prep.texts||[]).join('\n\n');
-    const started=Date.now();
-
-    const workers=await Promise.allSettled(Array.from({length:n},function(_,i){
-      const role=SW_ROLES[i%SW_ROLES.length];
-      return swarmAgent(t,question+'\\n\\nMISSION DU SOLDAT '+(i+1)+' : '+role,role,(MODES[t.r]||MODES.raison).effort||'medium')
-        .then(function(r){return {i:i+1,ok:true,text:r.text,sources:r.sources||[]};})
-        .catch(function(e){return {i:i+1,ok:false,text:'Échec du soldat '+(i+1)+' : '+e.message,sources:[]};});
-    })).then(function(x){return x.map(function(v){return v.status==='fulfilled'?v.value:{i:0,ok:false,text:String(v.reason||'échec'),sources:[]};}););
-
-    const usable=workers.filter(function(x){return x.ok});
-    const analystCount=Math.max(1,Math.min(4,Math.ceil(n/4)));
-    const packets=Array.from({length:analystCount},function(_,idx){return usable.filter(function(_,i){return i%analystCount===idx;});});
-    const analyses=await Promise.all(packets.map(function(packet,idx){
-      const joined=packet.map(function(x){return 'SOLDAT '+x.i+':\n'+x.text;}).join('\n\n---\n\n').slice(0,42000);
-      return swarmAgent(t,'NIVEAU 2 — CONSOLIDATION\\nQuestion :\\n'+question+'\\n\\nRapports des soldats :\\n'+joined,
-        'Analyste senior '+(idx+1)+' : compare les rapports, élimine les incohérences, recoupe les points importants et prépare une synthèse exploitable.','high')
-        .then(function(r){return {ok:true,text:r.text,sources:r.sources||[]};})
-        .catch(function(e){return {ok:false,text:'Analyse '+(idx+1)+' indisponible : '+e.message,sources:[]};});
-    }));
-
-    const middle=analyses.map(function(x,i){return 'ANALYSE '+(i+1)+':\n'+x.text;}).join('\n\n---\n\n').slice(0,50000);
-    const final=await swarmAgent(t,
-      'NIVEAU 3 — COMMANDANT\\nQuestion utilisateur :\\n'+question+'\\n\\nAnalyses consolidées :\\n'+middle+
-      '\\n\\nDécide la réponse finale. Vérifie les contradictions, cite les sources utiles si elles existent et livre une réponse claire et opérationnelle.',
-      'Commandant : arbitre les analyses, vérifie la cohérence et produit le livrable final. Ne révèle pas de raisonnement privé détaillé.','high');
-
-    const sourceUrls=[].concat.apply([],workers.concat(analyses).map(function(x){return x.sources||[];}).concat([final]).map(function(x){return x.sources||[];}));
-    const summary=[
-      '',
-      '— Journal d’exécution —',
-      'Pyramide : '+n+' soldats → '+analystCount+' analystes → 1 commandant',
-      'Soldats réussis : '+usable.length+'/'+n,
-      'Analystes réussis : '+analyses.filter(function(x){return x.ok}).length+'/'+analyses.length,
-      'Temps total : '+Math.round((Date.now()-started)/1000)+' s'
-    ].join('\n');
-
-    const finalText=final.text+(t.log===false?'':summary);
-    asReply(t,finalText,'🧠 Cerveau collectif · '+n+' soldats');
-    if(sourceUrls.length){
-      const last=TH().msgs[TH().msgs.length-1];
-      if(last) last.src=[...new Set(sourceUrls)].slice(0,12);
-      thSave();
-    }
-  };
-
-  /* Migration silencieuse des anciens réglages : les moteurs historiques restent
-     accessibles uniquement par compatibilité interne, mais l'interface n'affiche
-     plus que Perplexity API et Cerveau collectif. */
-  asEnsure();
-
-  const st=document.createElement('style');
-  st.textContent=
-    '.as-engine,.as-reason{display:flex;align-items:center;gap:12px;width:100%;padding:13px 14px;border:0;border-bottom:1px solid var(--ln);background:var(--cd);color:var(--ink);text-align:left;font:inherit}'+
-    '.as-engine:first-child,.as-reason:first-child{border-radius:14px 14px 0 0}.as-engine:last-child,.as-reason:last-child{border-radius:0 0 14px 14px;border-bottom:0}'+
-    '.as-engine.on,.as-reason.on{background:color-mix(in srgb,var(--ok) 14%,var(--cd));}'+
-    '.as-engine>span,.as-reason>span{flex:1;min-width:0}.as-engine b,.as-reason b{display:block;font-size:15px}.as-engine small,.as-reason small{display:block;margin-top:2px;color:var(--mu);font-size:12px;line-height:1.25}'+
-    '.as-switch{display:inline-flex;align-items:center;flex:none;width:48px;height:28px;border-radius:16px;padding:3px;background:#777;transition:.18s}.as-switch em{display:block;width:22px;height:22px;border-radius:50%;background:#fff;transition:.18s}.as-switch.on{background:var(--ok)}.as-switch.on em{transform:translateX(20px)}'+
-    '.as-engine-list,.as-reason-list{background:var(--cd);border-radius:14px;overflow:hidden;box-shadow:0 0 0 1px var(--ln)}'+
-    '.as-toggle-row{display:flex;align-items:center;gap:12px;padding:12px 14px;margin-top:8px;background:var(--cd);border-radius:14px;box-shadow:0 0 0 1px var(--ln)}.as-toggle-row>span{flex:1}.as-toggle-row b{display:block}.as-toggle-row small{display:block;color:var(--mu);font-size:12px;line-height:1.3;margin-top:2px}.as-switch-btn{flex:none;width:52px;height:30px;border:0;border-radius:16px;padding:3px;background:#777}.as-switch-btn i{display:block;width:24px;height:24px;background:#fff;border-radius:50%;transition:.18s}.as-switch-btn.on{background:var(--ok)}.as-switch-btn.on i{transform:translateX(22px)}'+
-    '.as-range-row{display:flex;align-items:center;gap:10px;margin-top:10px}.as-range-row input{flex:1}.as-range-row strong{min-width:72px;text-align:right}.as-pyramid{padding:10px 4px}.as-level{display:flex;justify-content:center;gap:6px;margin:5px 0;flex-wrap:wrap}.as-node{min-width:34px;height:27px;border-radius:8px;display:grid;place-items:center;font-size:11px;font-weight:700;background:var(--in);border:1px solid var(--ln)}.as-command{background:color-mix(in srgb,var(--ok) 20%,var(--cd));border-color:var(--ok)}.as-analyst{background:color-mix(in srgb,var(--ac) 14%,var(--cd));}.as-soldier{background:color-mix(in srgb,var(--ok) 10%,var(--cd))}.as-key-ok{padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--ok) 12%,var(--cd));color:var(--ok);font-size:13px}.as-key-box{background:var(--cd);padding:10px;border-radius:14px;box-shadow:0 0 0 1px var(--ln)}.as-key-box input{width:100%;background:var(--in);margin-bottom:8px}.as-key-box .b{width:100%}';
-  document.head.appendChild(st);
+var css=document.createElement("style");css.textContent=".px-card{background:var(--cd);border-radius:18px;padding:14px;box-shadow:0 0 0 1px var(--ln);margin-bottom:10px}.px-title{display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--ln)}.px-title b{display:block;font-size:18px}.px-title small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.px-title span{margin-left:auto;color:var(--ok);font-weight:700}.px-row{display:flex;align-items:center;gap:12px;padding-top:13px}.px-row>div{flex:1}.px-row b{display:block}.px-row small{display:block;color:var(--mu);font-size:12px;line-height:1.3;margin-top:2px}.px-switch{width:52px;height:30px;border:0;border-radius:16px;padding:3px;background:#777}.px-switch i{display:block;width:24px;height:24px;border-radius:50%;background:#fff;transition:.18s}.px-switch.on{background:var(--ok)}.px-switch.on i{transform:translateX(22px)}.px-list{background:var(--cd);border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px var(--ln)}.px-mode{display:flex;align-items:center;gap:12px;width:100%;padding:14px;border:0;border-bottom:1px solid var(--ln);background:var(--cd);color:var(--ink);text-align:left;font:inherit}.px-mode:last-child{border-bottom:0}.px-mode.on{background:color-mix(in srgb,var(--ac) 10%,var(--cd))}.px-mode span{flex:1}.px-mode b{display:block}.px-mode small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.px-mode strong{color:var(--ac)}.px-key{background:var(--cd);padding:10px;border-radius:14px;box-shadow:0 0 0 1px var(--ln)}.px-key input{width:100%;margin-bottom:8px}.px-key .b{width:100%}.px-ok{padding:11px 13px;border-radius:13px;background:color-mix(in srgb,var(--ok) 12%,var(--cd));color:var(--ok);font-size:13px}.px-pyramid{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.px-pyramid span{font-size:11px;padding:6px 8px;background:var(--in);border:1px solid var(--ln);border-radius:9px;color:var(--mu)}";document.head.appendChild(css);pxCfg();
 })();
 
-
-/* === MS PLOMBERIE — PERPLEXITY UI FINAL 2026-10-05 === */
+/* === VERSION 5.8.0 === */
 (function(){
-'use strict';
-
-function pxFinalCfg(){
-  if(!S.cfg.as||typeof S.cfg.as!=='object') S.cfg.as={k:'devis',ai:'api',m:'auto',r:'raison',ps:6,army:false};
-  const c=S.cfg.as;
-  c.ai='api';
-  c.m='auto';
-  c.r=['rapide','raison','profond'].includes(c.r)?c.r:'raison';
-  c.ps=Math.max(1,Math.min(16,Number(c.ps)||6));
-  c.army=!!c.army;
-  return c;
-}
-
-iaLabel=function(t){
-  const c=pxFinalCfg(),x=t||TH();
-  return 'Perplexity API'+(c.army||x.army?' · 🧠 Armée active':'');
-};
-
-window.pxSetArmy=function(on){
-  const c=pxFinalCfg(),t=TH();
-  c.army=!!on;
-  t.army=!!on;
-  t.ai='api';
-  t.m='auto';
-  c.ai='api';
-  c.m='auto';
-  thSave();save('cfg');render();
-  if(SHEET==='ia')pxFinalSheet();
-};
-
-window.pxSetReason=function(v){
-  if(!['rapide','raison','profond'].includes(v))return;
-  const c=pxFinalCfg(),t=TH();
-  c.r=v;t.r=v;thSave();save('cfg');render();
-  if(SHEET==='ia')pxFinalSheet();
-};
-
-window.pxSetArmyN=function(v){
-  const c=pxFinalCfg(),t=TH(),n=Math.max(1,Math.min(16,Number(v)||6));
-  c.ps=n;t.ps=n;thSave();save('cfg');
-  const e=$('#pxArmyN');if(e)e.textContent=n;
-};
-
-function pxFinalSheet(){
-  const s=$('#sheet');if(!s)return;
-  const c=pxFinalCfg(),t=TH(),key=pk(),army=!!(c.army||t.army);
-  let h='<h2>Perplexity<button data-a="close">Fermer</button></h2>';
-
-  h+='<div class="px-main-card">';
-  h+='<div class="px-title-line"><span class="px-brand-dot"></span><div><b>Perplexity API</b><small>Recherche et raisonnement dans l’application</small></div><strong>✓</strong></div>';
-  h+='<div class="px-army-toggle"><div><b>Aide de l’armée</b><small>Ajoute une pyramide d’agents Perplexity pour rechercher, vérifier et consolider.</small></div><button class="px-switch '+(army?'on':'')+'" onclick="pxSetArmy('+(army?'false':'true')+')"><i></i></button></div>';
-  h+='</div>';
-
-  h+='<div class="gl">Mode</div><div class="px-mode-list">';
-  [['rapide','Recherche','Réponse directe et ciblée'],['raison','Recherche + raisonnement','Analyse et vérification renforcées'],['profond','Recherche approfondie','Recherche large, recoupement et contrôle final']].forEach(function(o){
-    h+='<button class="px-mode '+(t.r===o[0]?'active':'')+'" onclick="pxSetReason(\\''+o[0]+'\\')"><span><b>'+o[1]+'</b><small>'+o[2]+'</small></span><span class="px-radio">'+(t.r===o[0]?'✓':'')+'</span></button>';
-  });
-  h+='</div>';
-
-  if(army){
-    const n=Math.max(1,Math.min(16,Number(t.ps||c.ps)||6));
-    h+='<div class="gl">Aide de l’armée</div><div class="px-army-card">';
-    h+='<div class="px-army-head"><div><b>Pyramide d’agents</b><small>Soldats → analystes → commandant</small></div><strong id="pxArmyN">'+n+'</strong></div>';
-    h+='<input type="range" min="1" max="16" step="1" value="'+n+'" oninput="pxSetArmyN(this.value)">';
-    h+='<div class="px-pyramid"><span>Commandant</span><span>Analystes</span><span>Soldats × '+n+'</span></div></div>';
-  }
-
-  h+='<div class="gl">Connexion</div>';
-  if(key)h+='<div class="px-key-ok">✓ Clé API Perplexity enregistrée</div>';
-  else h+='<div class="px-key"><input id="pkin" type="password" placeholder="pplx-…" autocomplete="off"><button class="b sm" data-a="pk"><span>Enregistrer la clé</span></button></div>';
-  h+='<p class="note">Aucun choix de modèle ni option « Max » dans l’application. Perplexity choisit automatiquement le modèle adapté.</p>';
-  s.innerHTML='<div class="bg"></div><div class="pn"><div class="grab"></div>'+h+'</div>';
-  s.classList.add('o');
-}
-
-const _pxFinalSheetRender=sheetRender;
-sheetRender=function(){
-  if(SHEET==='ia')return pxFinalSheet();
-  return _pxFinalSheetRender.apply(this,arguments);
-};
-
-const _pxFinalSheetAct=sheetAct;
-sheetAct=function(a,v,b){
-  if(a==='eng')return pxSetArmy(v==='swarm');
-  if(a==='reason')return pxSetReason(v);
-  if(a==='mod')return toast('Le choix du modèle est automatique.');
-  if(a==='pk'){
-    const k=(($('#pkin')&&$('#pkin').value)||'').trim();
-    if(!k)return toast('Colle ta clé API Perplexity');
-    S.cfg.pk=k;save('cfg');toast('API Perplexity connectée');render();return pxFinalSheet();
-  }
-  return _pxFinalSheetAct.apply(this,arguments);
-};
-
-const _pxFinalAsSend=asSend;
-asSend=function(){
-  const c=pxFinalCfg(),t=TH();
-  t.ai='api';t.m='auto';t.army=!!c.army;t.ps=c.ps;
-  thSave();save('cfg');
-  if(c.army){
-    const ta=$('#cin'),txt=(ta?ta.value:'').trim();
-    if(!txt&&!ATT.length)return toast('Écris un message ou joins un fichier');
-    if(DEM[t.k].mod&&!t.doc)return sheetOpen('doc');
-    const clear=function(){if(ta){ta.value='';cinGrow(ta)}draftClear('cin')};
-    return swarmSend(t,txt,clear);
-  }
-  return _pxFinalAsSend.apply(this,arguments);
-};
-
-const st=document.createElement('style');
-st.textContent=
-'.px-main-card{background:var(--cd);border-radius:18px;padding:14px;box-shadow:0 0 0 1px var(--ln)}'+
-'.px-title-line{display:flex;align-items:center;gap:11px;padding-bottom:12px;border-bottom:1px solid var(--ln)}'+
-'.px-title-line>div{flex:1}.px-title-line b{display:block;font-size:18px}.px-title-line small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.px-title-line strong{color:var(--ok);font-size:18px}'+
-'.px-brand-dot{width:36px;height:36px;border-radius:50%;background:var(--ac);display:block;box-shadow:0 0 0 4px color-mix(in srgb,var(--ac) 14%,transparent)}'+
-'.px-army-toggle{display:flex;align-items:center;gap:12px;padding-top:13px}.px-army-toggle>div{flex:1}.px-army-toggle b{display:block;font-size:16px}.px-army-toggle small{display:block;color:var(--mu);font-size:12px;line-height:1.3;margin-top:2px}'+
-'.px-switch{width:52px;height:30px;border:0;border-radius:16px;padding:3px;background:#777;flex:none}.px-switch i{display:block;width:24px;height:24px;border-radius:50%;background:#fff;transition:.18s}.px-switch.on{background:var(--ok)}.px-switch.on i{transform:translateX(22px)}'+
-'.px-mode-list{background:var(--cd);border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px var(--ln)}'+
-'.px-mode{display:flex;align-items:center;gap:12px;width:100%;padding:14px;border:0;border-bottom:1px solid var(--ln);background:var(--cd);color:var(--ink);text-align:left;font:inherit}.px-mode:last-child{border-bottom:0}.px-mode.active{background:color-mix(in srgb,var(--ac) 10%,var(--cd))}.px-mode>span:first-child{flex:1}.px-mode b{display:block;font-size:16px}.px-mode small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.px-radio{font-size:19px;color:var(--ac);font-weight:700}'+
-'.px-army-card{background:var(--cd);border-radius:16px;padding:14px;box-shadow:0 0 0 1px var(--ln)}.px-army-head{display:flex;align-items:center;gap:12px}.px-army-head>div{flex:1}.px-army-head b{display:block}.px-army-head small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.px-army-head strong{font-size:23px;color:var(--ac)}.px-army-card input{width:100%;margin-top:14px}.px-pyramid{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-top:10px}.px-pyramid span{font-size:11px;padding:6px 8px;background:var(--in);border:1px solid var(--ln);border-radius:9px;color:var(--mu)}'+
-'.px-key-ok{padding:11px 13px;border-radius:13px;background:color-mix(in srgb,var(--ok) 12%,var(--cd));color:var(--ok);font-size:13px}.px-key{padding:10px;background:var(--cd);border-radius:14px;box-shadow:0 0 0 1px var(--ln)}.px-key input{width:100%;margin-bottom:8px;background:var(--in)}.px-key .b{width:100%}';
-document.head.appendChild(st);
-pxFinalCfg();
-})();
-
-/* === MS PLOMBERIE — VERSIONING 5.7.0 === */
-(function(){
-'use strict';
-const APP_VERSION='5.7.0';
-const APP_RELEASE='Assistant Perplexity : API unique, aide de l’armée activable, suppression des anciens moteurs et modèles Max.';
+"use strict";
+var APP_VERSION="5.8.0",APP_RELEASE="Perplexity API uniquement dans l’interface, aide de l’armée activable, modèles Max supprimés, clé et historique conservés.";
 window.APP_VERSION=APP_VERSION;
-window.newsShow=function(){
- const d=document.createElement('div');d.className='news';
- d.innerHTML='<div><h2>Version '+APP_VERSION+'</h2><p>'+APP_RELEASE+'</p><p><b>Cette version est maintenant clairement indiquée dans l’application.</b></p><button class="b" style="width:100%;margin-top:10px" onclick="this.closest(\\'.news\\').remove()"><span>Compris</span></button></div>';
- d.addEventListener('click',e=>{if(e.target===d)d.remove()});document.body.appendChild(d);
-};
-const _bootVersion=boot;
-boot=async function(){const r=await _bootVersion.apply(this,arguments);try{if(S.cfg&&S.cfg.appVersionSeen!==APP_VERSION){S.cfg.appVersionSeen=APP_VERSION;save('cfg');setTimeout(newsShow,1100)}}catch(e){}return r};
+window.newsShow=function(){var d=document.createElement("div");d.className="news";d.innerHTML="<div><h2>Version "+APP_VERSION+"</h2><p>"+APP_RELEASE+"</p><button class='b' style='width:100%;margin-top:10px' onclick='this.closest(\".news\").remove()'><span>Compris</span></button></div>";d.addEventListener("click",function(e){if(e.target===d)d.remove()});document.body.appendChild(d)};
+var oldBoot=boot;boot=async function(){var r=await oldBoot.apply(this,arguments);try{if(S.cfg&&S.cfg.appVersionSeen!==APP_VERSION){S.cfg.appVersionSeen=APP_VERSION;save("cfg");setTimeout(newsShow,900)}}catch(e){}return r};
 })();
