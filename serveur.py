@@ -569,6 +569,8 @@ class Gestionnaire(BaseHTTPRequestHandler):
             return self._json(500, {"erreur": "interne", "message": f"{type(e).__name__}: {e}"})
 
 
+_worker = threading.Thread(target=job_worker, name="perplexity-worker", daemon=True)
+
 def main():
     global _worker
     serveur = ThreadingHTTPServer((HOTE, PORT), Gestionnaire)
