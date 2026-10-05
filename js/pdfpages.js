@@ -35,18 +35,34 @@ function pdfBox(el) {
 
 function pdfBadEnd(p) {
   if (!p) return false;
-  if (p.kind === 'h4' || p.kind === 'ph' || p.kind === 'hr') return true;
+  if (p.kind === 'h4' || p.kind === 'ph' || p.kind === 'hr' || p.kind === 'bx') return true;
+  if (p.kind === 'tt' || p.kind === 'cn') return true;
   return !!(p.cls && p.cls.indexOf('hb') >= 0);
 }
 
 function pdfGoodBreak(p) {
-  return !p || p.kind === 'row' || p.kind === 'h4' || p.kind === 'tt';
+  return !p || p.kind === 'row' || p.kind === 'h4' || p.kind === 'tt' || p.kind === 'sub';
+}
+
+function pdfGroupHeight(pieces, i) {
+  const p = pieces[i];
+  if (!p) return 0;
+  let h = p.h;
+  if (p.kind === 'row') {
+    let j = i + 1;
+    while (j < pieces.length && pieces[j].kind === 'row' && pieces[j].section === p.section) {
+      h += pieces[j].h;
+      j++;
+      if (j - i >= 3) break;
+    }
+  }
+  return h;
 }
 
 function pdfKeep(pieces, i, lim) {
   const p = pieces[i];
   if (!p) return 1;
-  if (p.kind === 'h4') {
+  if (p.kind === 'h4' || p.kind === 'bx' || p.kind === 'ph') {
     let n = 1, rows = 0, h = p.h;
     for (let j = i + 1; j < pieces.length && rows < 2 && n < 8; j++) {
       const q = pieces[j];
@@ -180,6 +196,25 @@ function pdfScore(pages) {
   return overflow * 30 + orphan + spread + sparse + pages.length * 0.35;
 }
 
+function pdfMoveWholeTableHeader(pages) {
+  const out = pages.map(p => p.slice());
+  for (let i = 0; i < out.length - 1; i++) {
+    const cur = out[i], next = out[i + 1];
+    if (!cur.length || !next.length) continue;
+    const last = cur[cur.length - 1];
+    if (last.kind !== 'row') continue;
+    const firstNext = next[0];
+    if (firstNext.kind !== 'row' || firstNext.section !== last.section) continue;
+    if (firstNext.head !== last.head) continue;
+    // Never leave a single row of a table stranded at the bottom.
+    if (cur.filter(x => x.kind === 'row' && x.section === last.section).length <= 1) {
+      cur.pop();
+      next.unshift(last);
+    }
+  }
+  return out;
+}
+
 function pdfBalance(pages) {
   const out = pages.map(p => p.slice());
   for (let p = out.length - 1; p > 0; p--) {
@@ -196,7 +231,7 @@ function pdfBalance(pages) {
       out[p].unshift(prev.pop());
     }
   }
-  return pdfFixOrphans(out);
+  return pdfMoveWholeTableHeader(pdfFixOrphans(out));
 }
 
 function pdfAvoidShortSection(pages) {
