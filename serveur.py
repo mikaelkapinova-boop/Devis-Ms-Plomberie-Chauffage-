@@ -41,7 +41,7 @@ ORIGINES = {"https://mikaelkapinova-boop.github.io", f"http://{HOTE}:{PORT}", f"
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
          ".json": "application/json; charset=utf-8", ".webmanifest": "application/manifest+json", ".png": "image/png",
          ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".ico": "image/x-icon", ".txt": "text/plain; charset=utf-8"}
-INTERDITS = {"tokens.json", "serveur.py", "lancer.bat"}
+INTERDITS = {"tokens.json", "perplexity_jobs.json", "perplexity_jobs.json.tmp", "serveur.py", "lancer.bat"}
 
 MCP_URL = "https://www.perplexity.ai/rest/computer/mcp"
 REDIRECT_URI = f"http://{HOTE}:{PORT}/oauth/callback"
@@ -373,6 +373,140 @@ def televerser_fichier(nom_fichier, mime, octets):
         raise ErreurMCP(f"Envoi S3 refusé ({e.code}) : {e.read()[:200]!r}")
     return env["attachment_url"]
 
+
+# ----------------------------------------------------------------------------
+# Perplexity API directe (clé locale + file d'attente persistante)
+# ----------------------------------------------------------------------------
+FICHIER_JOBS = os.path.join(DOSSIER, "perplexity_jobs.json")
+JOB_LOCK = threading.Lock()
+
+def api_key():
+    """Retourne la clé API Perplexity conservée localement, jamais dans Git."""
+    return str(lire_tokens().get("perplexity_api_key") or "").strip()
+
+def lire_jobs():
+    try:
+        with open(FICHIER_JOBS, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+def ecrire_jobs(data):
+    tmp = FICHIER_JOBS + ".tmp"
+    with JOB_LOCK:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, FICHIER_JOBS)
+
+def mettre_job(job):
+    jobs = lire_jobs()
+    jobs.append(job)
+    ecrire_jobs(jobs[-100:])
+
+def trouver_job(job_id):
+    return next((j for j in lire_jobs() if j.get("id") == job_id), None)
+
+def maj_job(job_id, **changes):
+    jobs = lire_jobs()
+    for j in jobs:
+        if j.get("id") == job_id:
+            j.update(changes)
+            break
+    ecrire_jobs(jobs)
+
+def _perplexity_model(requested, reasoning=None):
+    # Les identifiants provider/model historiques de l'application ne sont
+    # pas tous des identifiants API Perplexity. Sonar sert de repli sûr.
+    valid = {"sonar", "sonar-pro", "sonar-reasoning", "sonar-reasoning-pro", "sonar-deep-research"}
+    req = str(requested or "")
+    if req in valid:
+        return req
+    if reasoning == "high":
+        return "sonar-deep-research"
+    if reasoning == "medium":
+        return "sonar-reasoning-pro"
+    return "sonar-pro"
+
+def _perplexity_call(body):
+    key = api_key()
+    if not key:
+        return {"_err": 1, "_st": 401, "_msg": "Clé API Perplexity absente. Enregistre-la dans Assistant → IA → Perplexity."}
+
+    requested = body.get("model")
+    model = _perplexity_model(requested, (body.get("reasoning") or {}).get("effort"))
+    instructions = body.get("instructions") or ""
+    raw_input = body.get("input") or ""
+    messages = []
+    if instructions:
+        messages.append({"role": "system", "content": instructions})
+
+    if isinstance(raw_input, list):
+        for item in raw_input:
+            if not isinstance(item, dict):
+                continue
+            role = item.get("role", "user")
+            content = item.get("content", "")
+            if isinstance(content, list):
+                # Convertit le format Responses de l'application vers Chat Completions.
+                parts = []
+                for p in content:
+                    if not isinstance(p, dict):
+                        continue
+                    if p.get("type") in ("input_text", "text"):
+                        parts.append({"type": "text", "text": str(p.get("text", ""))})
+                    elif p.get("type") == "input_image" and p.get("image_url"):
+                        parts.append({"type": "image_url", "image_url": {"url": p["image_url"]}})
+                content = parts or ""
+            messages.append({"role": role, "content": content})
+    elif raw_input:
+        messages.append({"role": "user", "content": str(raw_input))
+
+    payload = {
+        "model": model,
+        "messages": messages or [{"role": "user", "content": "Réponds à la demande."}],
+        "max_tokens": int(body.get("max_output_tokens") or 4000),
+    }
+    # Sonar est le moteur de recherche de Perplexity : active la recherche
+    # quand le corps original demandait des outils web.
+    if any(isinstance(x, dict) and x.get("type") == "web_search" for x in (body.get("tools") or [])):
+        payload["web_search_options"] = {"search_context_size": "high"}
+
+    try:
+        status, headers, raw = http_json(
+            "https://api.perplexity.ai/chat/completions",
+            payload,
+            {"Authorization": "Bearer " + key, "Content-Type": "application/json"},
+            timeout=300,
+        )
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except Exception:
+            data = {"error": {"message": raw.decode("utf-8", "replace")[:1000]}}
+        if status < 200 or status >= 300:
+            err = data.get("error") if isinstance(data, dict) else {}
+            return {"_err": 1, "_st": status, "_msg": (err.get("message") if isinstance(err, dict) else None) or "Erreur API Perplexity"}
+        text = (((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
+        return {"output_text": text, "model": model, "usage": data.get("usage"), "citations": data.get("citations", [])}
+    except Exception as e:
+        return {"_err": 1, "_st": 502, "_msg": str(e)}
+
+def job_worker():
+    while True:
+        try:
+            jobs = lire_jobs()
+            job = next((j for j in jobs if j.get("status") == "queued"), None)
+            if job:
+                maj_job(job["id"], status="running", started_at=time.time())
+                result = _perplexity_call(job.get("body") or {})
+                if result.get("_err"):
+                    maj_job(job["id"], status="failed", finished_at=time.time(), error=result.get("_msg"), error_status=result.get("_st"))
+                else:
+                    maj_job(job["id"], status="completed", finished_at=time.time(), result=result)
+            else:
+                time.sleep(0.5)
+        except Exception as e:
+            time.sleep(1)
 
 # ----------------------------------------------------------------------------
 # Serveur HTTP local
