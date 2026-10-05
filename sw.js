@@ -1,6 +1,6 @@
 /* Service worker — Ms Plomberie & Chauffage. v3.5 : réseau d'abord pour les fichiers de l'appli
    (les mises à jour apparaissent tout de suite), cache en secours hors connexion. */
-const V='ms-v5.8.2';
+const V='ms-v5.8.3';
 const SHELL=['./','index.html','js/logo.js','js/pdfpages.js','js/ext.js','js/chat2.js','js/models.js','js/assist.js','js/call.js','js/cam.js','js/pro.js','js/panneau.js','js/outils.js','js/connect.js','js/auth.js','manifest.webmanifest','img/icon-192.png','img/icon-512.png','img/drop-hd.png','apple-touch-icon.png',
 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
