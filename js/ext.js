@@ -235,3 +235,120 @@ function gcalUrl(e){const s=dtc(e.date,e.hs||'08:00'),f=dtc(e.date,e.he||(e.hs?S
 function icsExp(){const u=(d,h)=>dtc(d,h);const ev=S.plan.filter(e=>e.st!=='c').map(e=>`BEGIN:VEVENT\r\nUID:${e.id}@msplomberie\r\nDTSTAMP:${new Date().toISOString().replace(/[-:]/g,'').slice(0,15)}Z\r\nDTSTART;TZID=Europe/Paris:${u(e.date,e.hs||'08:00')}\r\nDTEND;TZID=Europe/Paris:${u(e.date,e.he||(e.hs?String(Math.min(23,Number(e.hs.slice(0,2))+2)).padStart(2,'0')+e.hs.slice(2):'10:00'))}\r\nSUMMARY:${(e.cn?e.cn+' — ':'')+(e.o||'Intervention')}\r\nLOCATION:${(e.sa||'').replace(/,/g,'\\,')}\r\nDESCRIPTION:${(e.nt||'').replace(/\n/g,'\\n')}\r\nEND:VEVENT`).join('\r\n');
 dlBlob(new Blob([`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Ms Plomberie//Planning//FR\r\n${ev}\r\nEND:VCALENDAR\r\n`],{type:'text/calendar'}),'planning-'+td()+'.ics');toast('Agenda exporté : ouvre le fichier pour l\'ajouter à ton calendrier')}
 function homePlan(){const today=td(),L=S.plan.filter(e=>e.st==='p'&&e.date>=today).sort((a,b)=>(a.date+a.hs).localeCompare(b.date+b.hs)).slice(0,3);return L.length?`<h3 class="sec">Prochaines interventions</h3>${L.map(e=>`<button class="r" onclick="go('g');plEdit('${e.id}')"><div><b>${esc(e.cn||'Sans client')}</b><br><small class="mu">${fd(e.date)}${e.hs?' '+esc(e.hs):''} · ${esc(e.o||'Intervention')}</small></div><span class="mu">›</span></button>`).join('')}`:''}
+
+
+/* ---------- Importation de documents ---------- */
+function importPage() {
+  return `<div class="import-container">
+    <div class="c">
+      <h3>Importer des documents</h3>
+      <p style="color: var(--mu); font-size: 14px; margin-bottom: 12px;">
+        Glissez-déposez vos fichiers PDF, images ou documents ici, ou cliquez pour sélectionner.
+      </p>
+      
+      <div class="file-upload-area" id="uploadArea">
+        <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" multiple>
+        <div class="file-upload-icon">📄</div>
+        <div class="file-upload-label">Sélectionner des fichiers</div>
+        <div style="font-size: 12px; color: var(--mu);">PDF, Images, Word</div>
+      </div>
+      
+      <div class="progress-bar" id="uploadProgress" style="display: none;">
+        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <div class="c" id="fileListContainer" style="display: none;">
+      <h3>Fichiers importés</h3>
+      <div class="file-list" id="fileList"></div>
+    </div>
+
+    <div class="c" id="extractedDataContainer" style="display: none;">
+      <h3>Données extraites</h3>
+      <div class="extracted-data" id="extractedData"></div>
+    </div>
+
+    <div class="c" id="clientSection" style="display: none;">
+      <h3>Informations client</h3>
+      <div id="clientInfo"></div>
+    </div>
+
+    <div class="c" id="itemsSection" style="display: none;">
+      <h3>Prestations et fournitures</h3>
+      
+      <div class="search-container">
+        <div class="search-icon">🔍</div>
+        <input type="text" id="itemSearch" class="search-input" placeholder="Rechercher dans vos tarifs...">
+        <div class="results-dropdown" id="searchResults"></div>
+      </div>
+      
+      <div class="items-grid" id="itemsGrid"></div>
+    </div>
+
+    <div class="c" id="transferSection" style="display: none;">
+      <h3>Transférer vers la nouvelle mise en page</h3>
+      <p style="color: var(--mu); font-size: 14px; margin-bottom: 12px;">
+        Sélectionnez ce que vous souhaitez transférer :
+      </p>
+      
+      <div class="transfer-options" id="transferOptions">
+        <div class="transfer-section">
+          <h4>Informations client</h4>
+          <div class="transfer-grid">
+            <label class="transfer-option">
+              <input type="checkbox" id="transferClient" checked>
+              <span>Transférer les informations client</span>
+            </label>
+            <label class="transfer-option">
+              <input type="checkbox" id="transferClientAddress" checked>
+              <span>Transférer l'adresse de facturation</span>
+            </label>
+          </div>
+        </div>
+        
+        <div class="transfer-section">
+          <h4>Prestations et fournitures</h4>
+          <div class="transfer-grid">
+            <label class="transfer-option">
+              <input type="checkbox" id="transferAllItems" checked>
+              <span>Tout transférer</span>
+            </label>
+            <label class="transfer-option">
+              <input type="checkbox" id="transferServices" checked>
+              <span>Uniquement les prestations</span>
+            </label>
+            <label class="transfer-option">
+              <input type="checkbox" id="transferSupplies" checked>
+              <span>Uniquement les fournitures</span>
+            </label>
+            <label class="transfer-option">
+              <input type="checkbox" id="transferWithPrices" checked>
+              <span>Enregistrer avec les prix dans la base</span>
+            </label>
+          </div>
+        </div>
+        
+        <div class="transfer-section">
+          <h4>Numéros de documents</h4>
+          <div class="transfer-grid">
+            <label class="transfer-option">
+              <input type="checkbox" id="transferDocNumbers" checked>
+              <span>Relever les numéros de devis/facture</span>
+            </label>
+          </div>
+        </div>
+      </div>
+      
+      <button class="validation-button" id="validateTransfer" onclick="validateTransfer()">
+        <div class="validation-icon">✓</div>
+        <span>Valider le transfert</span>
+      </button>
+    </div>
+
+    <div class="c" id="previewContainer" style="display: none;">
+      <h3>Aperçu du document</h3>
+      <div class="preview-container" id="previewContent"></div>
+    </div>
+  </div>`;
+}
+

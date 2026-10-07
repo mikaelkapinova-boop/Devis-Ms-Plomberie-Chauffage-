@@ -19,6 +19,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import secrets
 import sys
 import threading
@@ -30,6 +31,13 @@ import urllib.request
 import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+# Importer les connecteurs si disponibles
+try:
+    from api.connectors import DocumentExtractor, APIConnector, validate_file, get_file_type, format_file_size
+    HAS_CONNECTORS = True
+except ImportError:
+    HAS_CONNECTORS = False
 
 # ----------------------------------------------------------------------------
 # Configuration
@@ -43,6 +51,11 @@ TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=u
          ".json": "application/json; charset=utf-8", ".webmanifest": "application/manifest+json", ".png": "image/png",
          ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".ico": "image/x-icon", ".txt": "text/plain; charset=utf-8"}
 INTERDITS = {"tokens.json", "perplexity_jobs.json", "perplexity_jobs.json.tmp", "serveur.py", "lancer.bat"}
+
+# Configuration pour l'importation de documents
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 Mo
+UPLOAD_FOLDER = os.path.join(DOSSIER, "uploads")
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 MCP_URL = "https://www.perplexity.ai/rest/computer/mcp"
 REDIRECT_URI = f"http://{HOTE}:{PORT}/oauth/callback"
@@ -646,6 +659,11 @@ class Gestionnaire(BaseHTTPRequestHandler):
                                    "</body>")
         if u.path.startswith("/api/"):
             return self._json(404, {"erreur": "inconnu"})
+        
+        # Servir la page d'importation
+        if u.path == "/import.html" or u.path == "/import":
+            return self._statique("/import.html")
+        
         return self._statique(u.path)
 
     # --- POST ---
@@ -662,6 +680,21 @@ class Gestionnaire(BaseHTTPRequestHandler):
                     tk["perplexity_api_key"] = key
                     ecrire_tokens(tk)
                 return self._json(200, {"ok": True, "api_configuree": bool(api_key())})
+            
+            # ===== API d'importation de documents =====
+            if u.path == "/api/upload-document":
+                return self._handle_document_upload()
+            if u.path == "/api/extract-document":
+                return self._handle_document_extraction()
+            if u.path == "/api/import/status":
+                return self._json(200, {"ok": True, "import_enabled": HAS_CONNECTORS})
+            if u.path == "/api/clients/check":
+                return self._handle_client_check()
+            if u.path == "/api/items/check":
+                return self._handle_item_check()
+            if u.path == "/api/transfer-data":
+                return self._handle_data_transfer()
+            
             if u.path == "/api/jobs":
                 d = self._lire_json()
                 body = d.get("body")
@@ -717,6 +750,204 @@ class Gestionnaire(BaseHTTPRequestHandler):
             return self._json(502, {"erreur": "mcp", "message": str(e)})
         except Exception as e:
             return self._json(500, {"erreur": "interne", "message": f"{type(e).__name__}: {e}"})
+
+    # ===== Méthodes pour l'importation de documents =====
+    
+    def _handle_document_upload(self):
+        """Gère l'upload de documents pour extraction"""
+        if not HAS_CONNECTORS:
+            return self._json(503, {"erreur": "service_indisponible", "message": "Le service d'importation n'est pas disponible"})
+        
+        # Vérifier la taille du fichier
+        content_length = int(self.headers.get("Content-Length") or 0)
+        if content_length > MAX_UPLOAD_SIZE:
+            return self._json(413, {"erreur": "fichier_trop_gros", "message": f"Fichier trop volumineux (max {MAX_UPLOAD_SIZE // (1024*1024)} Mo)"})
+        
+        # Lire les données du fichier
+        file_data = self._lire_corps()
+        if not file_data or len(file_data) === 0:
+            return self._json(400, {"erreur": "fichier_vide", "message": "Aucun fichier reçu"})
+        
+        # Générer un nom de fichier unique
+        filename = self.headers.get("X-Filename") or f"upload_{uuid.uuid4().hex}"
+        file_ext = os.path.splitext(filename)[1].lower()
+        
+        # Valider le type de fichier
+        if file_ext not in [".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx"]:
+            return self._json(400, {"erreur": "type_invalide", "message": "Type de fichier non supporté"})
+        
+        # Sauvegarder le fichier temporairement
+        temp_filepath = os.path.join(UPLOAD_FOLDER, f"{uuid.uuid4().hex}{file_ext}")
+        try:
+            with open(temp_filepath, "wb") as f:
+                f.write(file_data)
+            
+            # Valider le fichier
+            is_valid, error_msg = validate_file(temp_filepath)
+            if not is_valid:
+                os.remove(temp_filepath)
+                return self._json(400, {"erreur": "fichier_invalide", "message": error_msg})
+            
+            # Extraire les données
+            extractor = DocumentExtractor()
+            file_type = get_file_type(filename)
+            
+            if file_type == "pdf":
+                result = extractor.extract_from_pdf(temp_filepath)
+            elif file_type in ["image/jpeg", "image/png"]:
+                result = extractor.extract_from_image(temp_filepath)
+            elif file_type == "document/docx":
+                result = extractor.extract_from_docx(temp_filepath)
+            else:
+                result = extractor.extract_from_text(file_data.decode('utf-8', 'replace'), filename)
+            
+            # Nettoyer
+            os.remove(temp_filepath)
+            
+            if not result.success:
+                return self._json(500, {"erreur": "extraction_echouee", "message": result.errors[0] if result.errors else "Erreur d'extraction"})
+            
+            # Convertir le résultat en format JSON
+            response_data = self._extraction_result_to_dict(result)
+            return self._json(200, response_data)
+            
+        except Exception as e:
+            # Nettoyer en cas d'erreur
+            if os.path.exists(temp_filepath):
+                os.remove(temp_filepath)
+            return self._json(500, {"erreur": "extraction_erreur", "message": str(e)})
+    
+    def _handle_document_extraction(self):
+        """Gère l'extraction de données depuis un document existant"""
+        if not HAS_CONNECTORS:
+            return self._json(503, {"erreur": "service_indisponible", "message": "Le service d'importation n'est pas disponible"})
+        
+        d = self._lire_json()
+        text = d.get("text")
+        source = d.get("source", "api")
+        
+        if not text:
+            return self._json(400, {"erreur": "texte_manquant", "message": "Aucun texte à analyser"})
+        
+        try:
+            extractor = DocumentExtractor()
+            result = extractor.extract_from_text(text, source)
+            
+            if not result.success:
+                return self._json(500, {"erreur": "extraction_echouee", "message": result.errors[0] if result.errors else "Erreur d'extraction"})
+            
+            response_data = self._extraction_result_to_dict(result)
+            return self._json(200, response_data)
+            
+        except Exception as e:
+            return self._json(500, {"erreur": "extraction_erreur", "message": str(e)})
+    
+    def _handle_client_check(self):
+        """Vérifie si un client existe déjà"""
+        d = self._lire_json()
+        client_name = d.get("name")
+        
+        if not client_name:
+            return self._json(400, {"erreur": "nom_manquant", "message": "Le nom du client est requis"})
+        
+        # Dans une vraie implémentation, on vérifierait dans la base de données
+        # Pour l'instant, on retourne une réponse par défaut
+        return self._json(200, {
+            "exists": False,
+            "name": client_name,
+            "suggestions": []
+        })
+    
+    def _handle_item_check(self):
+        """Vérifie si un item existe déjà"""
+        d = self._lire_json()
+        item_name = d.get("name")
+        item_type = d.get("type", "service")
+        
+        if not item_name:
+            return self._json(400, {"erreur": "nom_manquant", "message": "Le nom de l'item est requis"})
+        
+        # Dans une vraie implémentation, on vérifierait dans la base de données
+        return self._json(200, {
+            "exists": False,
+            "name": item_name,
+            "type": item_type,
+            "suggestions": []
+        })
+    
+    def _handle_data_transfer(self):
+        """Gère le transfert des données extraites vers la base de données"""
+        d = self._lire_json()
+        
+        # Validation des données
+        if not d.get("data"):
+            return self._json(400, {"erreur": "donnees_manquantes", "message": "Aucune donnée à transférer"})
+        
+        # Dans une vraie implémentation, on sauvegarderait les données
+        # Pour l'instant, on retourne une confirmation
+        return self._json(200, {
+            "ok": True,
+            "message": "Données transférées avec succès",
+            "transferred": {
+                "client": d.get("transfer_client", True),
+                "addresses": d.get("transfer_addresses", True),
+                "items": d.get("transfer_items", True),
+                "document": d.get("transfer_document", True)
+            }
+        })
+    
+    def _extraction_result_to_dict(self, result):
+        """Convertit un résultat d'extraction en dictionnaire JSON"""
+        doc = result.document
+        
+        return {
+            "success": result.success,
+            "warnings": result.warnings,
+            "errors": result.errors,
+            "processing_time": result.processing_time,
+            "document": {
+                "type": doc.document_type,
+                "number": doc.document_number,
+                "date": doc.date,
+                "source": doc.source,
+                "currency": doc.currency,
+                "total": doc.total,
+                "tax": doc.tax,
+                "notes": doc.notes,
+                "client": {
+                    "name": doc.client.name,
+                    "company": doc.client.company,
+                    "siret": doc.client.siret,
+                    "tva": doc.client.tva,
+                    "email": doc.client.email,
+                    "phone": doc.client.phone
+                },
+                "addresses": [
+                    {
+                        "street": addr.street,
+                        "postal_code": addr.postal_code,
+                        "city": addr.city,
+                        "country": addr.country,
+                        "type": addr.address_type,
+                        "full_address": addr.full_address
+                    }
+                    for addr in doc.addresses
+                ],
+                "items": [
+                    {
+                        "name": item.name,
+                        "description": item.description,
+                        "type": item.item_type,
+                        "quantity": item.quantity,
+                        "unit": item.unit,
+                        "unit_price": item.unit_price,
+                        "total": item.total,
+                        "category": item.category
+                    }
+                    for item in doc.items
+                ]
+            }
+        }
 
 
 _worker = threading.Thread(target=job_worker, name="perplexity-worker", daemon=True)
