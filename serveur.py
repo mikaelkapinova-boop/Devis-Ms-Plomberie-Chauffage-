@@ -561,6 +561,19 @@ class Gestionnaire(BaseHTTPRequestHandler):
         if not cible.startswith(DOSSIER + os.sep) or os.path.basename(cible) in INTERDITS or "/.git" in cible.replace(os.sep, "/"):
             return self._json(404, {"erreur": "inconnu"})
         if not os.path.isfile(cible):
+            # Essayer avec import.html
+            if rel == "import.html" or rel.endswith("/import.html"):
+                cible = os.path.join(DOSSIER, "import.html")
+                if os.path.isfile(cible):
+                    with open(cible, "rb") as f:
+                        corps = f.read()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(corps)))
+                    self.send_header("Cache-Control", "no-cache")
+                    self.end_headers()
+                    self.wfile.write(corps)
+                    return
             return self._json(404, {"erreur": "inconnu"})
         with open(cible, "rb") as f:
             corps = f.read()
@@ -704,6 +717,16 @@ class Gestionnaire(BaseHTTPRequestHandler):
                 if len(octets) > 200 * 1024 * 1024:
                     return self._json(413, {"erreur": "Fichier > 200 Mo"})
                 return self._json(200, {"attachment_url": televerser_fichier(nom, mime, octets), "nom": nom})
+            if u.path == "/api/upload-document":
+                return self._handle_document_upload()
+            if u.path == "/api/extract-document":
+                return self._handle_document_extraction()
+            if u.path == "/api/check-client":
+                return self._handle_client_check()
+            if u.path == "/api/check-item":
+                return self._handle_item_check()
+            if u.path == "/api/transfer-data":
+                return self._handle_data_transfer()
             if u.path == "/api/logout":
                 tk = lire_tokens()
                 for k in ("access_token", "refresh_token", "expires_at", "mcp_session"):
@@ -743,3 +766,148 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ----------------------------------------------------------------------------
+# Endpoints pour l'importation de documents
+# ----------------------------------------------------------------------------
+
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 Mo
+UPLOAD_FOLDER = os.path.join(DOSSIER, "uploaded_docs")
+
+# Créer le dossier de téléversement s'il n'existe pas
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+
+def _handle_document_upload(self):
+    """Gère le téléversement d'un document pour extraction"""
+    try:
+        # Lire le contenu du fichier
+        content_type = self.headers.get("Content-Type", "")
+        
+        # Vérifier si c'est un multipart form
+        if content_type.startswith("multipart/form-data"):
+            # Parser le multipart form
+            boundary = content_type.split("boundary=")[1].encode()
+            body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            
+            # Trouver le fichier dans le multipart
+            parts = body.split(boundary)
+            file_content = None
+            file_name = ""
+            
+            for part in parts:
+                if b'filename="' in part:
+                    # Extraire le nom du fichier
+                    name_start = part.find(b'filename="') + 10
+                    name_end = part.find(b'"', name_start)
+                    file_name = part[name_start:name_end].decode('utf-8')
+                    
+                    # Extraire le contenu
+                    content_start = part.find(b'\r\n\r\n') + 4
+                    content_end = part.find(b'\r\n--')
+                    file_content = part[content_start:content_end]
+                    break
+            
+            if not file_content or not file_name:
+                return self._json(400, {"erreur": "Aucun fichier trouvé dans la requête"})
+        else:
+            # Lire le fichier directement
+            file_content = self._lire_corps()
+            file_name = self.headers.get("X-Filename", "document")
+        
+        # Valider la taille
+        if len(file_content) > MAX_UPLOAD_SIZE:
+            return self._json(413, {"erreur": f"Fichier trop volumineux (max {MAX_UPLOAD_SIZE / 1024 / 1024} Mo)"})
+        
+        # Générer un nom de fichier unique
+        file_id = str(uuid.uuid4())
+        file_path = os.path.join(UPLOAD_FOLDER, f"{file_id}_{file_name}")
+        
+        # Sauvegarder le fichier
+        with open(file_path, 'wb') as f:
+            f.write(file_content)
+        
+        return self._json(200, {
+            "ok": True,
+            "file_id": file_id,
+            "file_name": file_name,
+            "file_path": file_path
+        })
+    except Exception as e:
+        return self._json(500, {"erreur": f"Erreur lors du téléversement: {str(e)}"})
+
+
+def _handle_document_extraction(self):
+    """Gère l'extraction des données d'un document"""
+    try:
+        from api.connectors import DocumentExtractor, extraction_result_to_dict, validate_file
+        
+        data = self._lire_json()
+        file_id = data.get("file_id")
+        file_path = data.get("file_path")
+        
+        if not file_id and not file_path:
+            return self._json(400, {"erreur": "file_id ou file_path requis"})
+        
+        # Construire le chemin du fichier
+        if file_id:
+            # Trouver le fichier dans le dossier upload
+            upload_files = [f for f in os.listdir(UPLOAD_FOLDER) if f.startswith(file_id)]
+            if not upload_files:
+                return self._json(404, {"erreur": "Fichier introuvable"})
+            file_path = os.path.join(UPLOAD_FOLDER, upload_files[0])
+        
+        # Valider le fichier
+        valid, file_type = validate_file(file_path, MAX_UPLOAD_SIZE)
+        if not valid:
+            return self._json(400, {"erreur": file_type})
+        
+        # Extraire les données
+        extractor = DocumentExtractor()
+        result = extractor.extract(file_path)
+        
+        # Convertir en dictionnaire pour la réponse JSON
+        result_dict = extraction_result_to_dict(result)
+        
+        return self._json(200, result_dict)
+    except ImportError as e:
+        return self._json(500, {"erreur": f"Module requis manquant: {str(e)}"})
+    except Exception as e:
+        return self._json(500, {"erreur": f"Erreur lors de l'extraction: {str(e)}"})
+
+
+def _handle_client_check(self):
+    """Vérifie si un client existe déjà dans la base"""
+    try:
+        # Cette fonctionnalité nécessite l'accès à la base de données locale
+        # qui est gérée côté client. Le serveur ne peut pas y accéder directement.
+        # Donc on retourne une réponse vide, le traitement se fera côté client.
+        return self._json(200, {"exists": False})
+    except Exception as e:
+        return self._json(500, {"erreur": str(e)})
+
+
+def _handle_item_check(self):
+    """Vérifie si un item (prestation/fourniture) existe déjà"""
+    try:
+        # Même logique que pour les clients
+        return self._json(200, {"exists": False})
+    except Exception as e:
+        return self._json(500, {"erreur": str(e)})
+
+
+def _handle_data_transfer(self):
+    """Gère le transfert des données extraites vers la base"""
+    try:
+        data = self._lire_json()
+        # Le transfert se fait côté client, le serveur ne fait que confirmer la réception
+        return self._json(200, {"ok": True, "message": "Données reçues pour transfert"})
+    except Exception as e:
+        return self._json(500, {"erreur": str(e)})
+
+
+def _extraction_result_to_dict(result):
+    """Convertit un résultat d'extraction en dictionnaire JSON-sérialisable"""
+    from api.connectors import extraction_result_to_dict
+    return extraction_result_to_dict(result)

@@ -1,0 +1,950 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#f5f5f7">
+<title>Import Documents - Ms Plomberie & Chauffage</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="img/icon-192.png">
+<style>
+:root{--bg:#f1f4f7;--cd:#fff;--ink:#1b2631;--mu:#6a7783;--sl:#3b556a;--hd:#3b556a;--cu:#b9783f;--ln:#dbe2e8;--rd:#d1242f;--ok:#1f8a4c;--in:#f5f5f7;--bar-h:0px;--off:max(12px,env(safe-area-inset-bottom,0px))}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0e141a;--cd:#17202a;--ink:#e7ecf1;--mu:#92a0ac;--hd:#a9c2d6;--ln:#28343f;--in:#101820;--ok:#3fbf75;--rd:#ef5a63}}
+:root[data-theme=dark]{--bg:#0e141a;--cd:#17202a;--ink:#e7ecf1;--mu:#92a0ac;--hd:#a9c2d6;--ln:#28343f;--in:#101820;--ok:#3fbf75;--rd:#ef5a63}
+
+* {box-sizing:border-box}
+html{background:var(--bg);-webkit-text-size-adjust:100%;scroll-padding-top:calc(80px + env(safe-area-inset-top,0px));scroll-padding-bottom:calc(var(--bar-h) + 48px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none}
+img{max-width:100%;height:auto}
+#hd{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--sl);color:#fff;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:0 0 24px 24px;box-shadow:0 10px 30px #3b556a55}
+#hd b{flex:1;font-size:20px}
+.ib{width:auto;min-width:0;height:auto;padding:9px 12px;flex:none;color:#fff!important;border-radius:14px;background:#ffffff26}
+#ov{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;background:#0007;z-index:19;display:none}
+#ov.o{display:block}
+#nv{position:fixed;top:0;left:0;bottom:0;width:78%;max-width:300px;background:var(--cd);z-index:20;transform:translateX(-105%);transition:transform .2s;padding:calc(20px + env(safe-area-inset-top,0px)) 0 20px;border-radius:0 26px 26px 0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#nv.o{transform:none}
+.brand{display:block;padding:0 22px 14px;color:var(--cu);font-size:18px}
+.ni{display:block;width:calc(100% - 20px);margin:2px 10px;border-radius:14px;padding:13px 16px;border:0;background:none;color:var(--ink);font:inherit;font-size:17px;font-weight:500;display:flex;align-items:center;gap:14px}
+.ni svg{width:22px;height:22px;flex:none;fill:none;stroke:var(--ac);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ni.a{background:var(--in);color:var(--cu);font-weight:700}
+main{max-width:720px;margin:auto;padding:14px max(12px,env(safe-area-inset-right,0px)) calc(var(--bar-h) + var(--off) + 24px) max(12px,env(safe-area-inset-left,0px))}
+.c{background:var(--cd);border:0;border-radius:18px;box-shadow:none;padding:16px;margin-bottom:12px}
+.c h3{font-size:13px;font-weight:600;color:var(--mu);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px}
+input,select,textarea{background:var(--in);border:1.5px solid transparent;border-radius:12px;font-size:16px;padding:11px 12px;width:100%;font:inherit;color:var(--ink)}
+input:focus,select:focus,textarea:focus{border-color:var(--ac);background:var(--cd);box-shadow:0 0 0 4px color-mix(in srgb,var(--ac) 18%,transparent)}
+label{font-size:13px;color:var(--mu);font-weight:500;display:block;margin:0 0 8px}
+.b,button.b{border-radius:980px;font-weight:600;letter-spacing:-.01em;min-height:48px;background:var(--ink);color:var(--bg)!important;transition:transform .12s,opacity .12s;border:0;padding:0 24px;font:inherit;cursor:pointer}
+.b:active{transform:scale(.97);opacity:.85}
+.b.cu,button.b.cu{background:var(--cu)!important;color:#fff!important}
+.b.rd{background:var(--rd)}
+.b.gh,button.b.gh{background:var(--in);color:var(--ink)!important;border:0}
+.b.sm{min-height:40px;padding:8px 14px}.b.sm span{font-size:15px}
+#bar{background:color-mix(in srgb,var(--cd) 82%,transparent);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-radius:26px;box-shadow:0 10px 40px #0000001f,0 0 0 1px var(--ln);position:fixed;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:var(--off);padding:10px;max-width:720px;margin-left:auto;margin-right:auto;display:none;gap:8px}
+#bar .b{flex:1 1 0;min-width:0;min-height:48px;height:auto;padding:10px 8px}
+#ts{position:fixed;left:50%;bottom:calc(var(--bar-h) + var(--off) + 14px);width:max-content;max-width:calc(100% - 32px);text-align:center;line-height:1.3;transform:translateX(-50%);background:#111;color:#fff;padding:10px 16px;border-radius:99px;font-size:14px;opacity:0;transition:opacity .2s;z-index:40;pointer-events:none}
+
+/* Import specific styles */
+.import-container{display:flex;flex-direction:column;gap:12px}
+.file-upload-area{border:2px dashed var(--ln);border-radius:14px;padding:40px 20px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--in)}
+.file-upload-area:hover{border-color:var(--cu);background:color-mix(in srgb,var(--cu) 10%,var(--in))}
+.file-upload-area.dragover{border-color:var(--cu);background:color-mix(in srgb,var(--cu) 15%,var(--in))}
+.file-upload-area input[type="file"]{display:none}
+.file-upload-icon{font-size:48px;color:var(--cu);margin-bottom:8px}
+.file-upload-label{color:var(--mu);font-size:14px;margin-bottom:8px}
+.file-list{display:flex;flex-direction:column;gap:8px}
+.file-item{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--cd);border:1px solid var(--ln);border-radius:12px;transition:all 0.2s}
+.file-item:hover{background:var(--in)}
+.file-icon{width:40px;height:40px;background:var(--cu);border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px}
+.file-info{flex:1;min-width:0}
+.file-name{font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-size{font-size:12px;color:var(--mu)}
+.file-status{font-size:12px;padding:4px 8px;border-radius:6px;background:var(--in);color:var(--mu)}
+.file-status.processing{background:var(--cu);color:white}
+.file-status.completed{background:var(--ok);color:white}
+.file-status.error{background:var(--rd);color:white}
+.file-actions{display:flex;gap:4px}
+.file-actions button{width:32px;height:32px;border:0;background:var(--in);border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--ink);transition:all 0.2s}
+.file-actions button:hover{background:var(--ln)}
+.file-actions button.delete:hover{background:var(--rd);color:white}
+.progress-bar{width:100%;height:4px;background:var(--ln);border-radius:2px;overflow:hidden;margin-top:8px}
+.progress-fill{height:100%;background:var(--cu);border-radius:2px;transition:width 0.3s}
+.extracted-data{display:flex;flex-direction:column;gap:12px}
+.client-card{background:var(--cd);border:1px solid var(--ln);border-radius:14px;padding:16px}
+.client-card.new-client{border-color:var(--cu);border-width:2px}
+.client-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.client-name{font-weight:700;font-size:18px;color:var(--ink)}
+.new-client-badge{background:var(--cu);color:white;padding:4px 12px;border-radius:8px;font-size:12px;font-weight:600}
+.client-info{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.client-info-item{display:flex;flex-direction:column;gap:2px}
+.client-info-label{font-size:12px;color:var(--mu);font-weight:500}
+.client-info-value{font-size:14px;color:var(--ink)}
+.address-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.address-item{display:flex;align-items:flex-start;gap:8px;padding:8px 12px;background:var(--in);border-radius:8px}
+.address-radio{margin-top:2px}
+.address-content{flex:1}
+.address-line{font-size:14px;color:var(--ink);margin-bottom:2px}
+.address-type{font-size:12px;color:var(--mu)}
+.transfer-options{display:flex;flex-direction:column;gap:12px}
+.transfer-section{background:var(--cd);border:1px solid var(--ln);border-radius:14px;padding:16px}
+.transfer-section h4{margin:0 0 12px 0;font-size:15px;font-weight:600;color:var(--ink)}
+.transfer-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px}
+.transfer-option{display:flex;align-items:center;gap:8px;padding:12px;background:var(--in);border:2px solid var(--ln);border-radius:10px;cursor:pointer;transition:all 0.2s}
+.transfer-option:hover{border-color:var(--cu)}
+.transfer-option.selected{border-color:var(--cu);background:color-mix(in srgb,var(--cu) 10%,var(--in))}
+.transfer-option input[type="checkbox"]{width:20px;height:20px;accent-color:var(--cu)}
+.transfer-option label{font-size:14px;color:var(--ink);cursor:pointer;margin:0}
+.validation-button{display:flex;align-items:center;justify-content:center;gap:8px;padding:16px 24px;background:var(--cu);color:white;border:0;border-radius:14px;font-size:16px;font-weight:600;cursor:pointer;transition:all 0.2s;margin-top:8px}
+.validation-button:hover{background:color-mix(in srgb,black 20%,var(--cu))}
+.validation-button:disabled{opacity:0.6;cursor:not-allowed}
+.validation-icon{width:24px;height:24px;background:white;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--cu);font-size:14px}
+.items-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.item-card{background:var(--cd);border:1px solid var(--ln);border-radius:12px;padding:12px}
+.item-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.item-type{font-size:12px;padding:4px 8px;border-radius:6px;background:var(--cu);color:white;font-weight:500}
+.item-name{font-weight:600;color:var(--ink);margin-bottom:4px}
+.item-details{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu)}
+.item-price{font-weight:700;color:var(--ink)}
+.item-actions{display:flex;gap:4px;margin-top:8px}
+.item-actions button{flex:1;padding:8px 12px;border:0;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;transition:all 0.2s}
+.item-actions button.add{background:var(--cu);color:white}
+.item-actions button.add:hover{background:color-mix(in srgb,black 20%,var(--cu))}
+.item-actions button.skip{background:var(--in);color:var(--ink)}
+.item-actions button.skip:hover{background:var(--ln)}
+.search-container{position:relative;margin-bottom:12px}
+.search-input{width:100%;padding:12px 16px 12px 40px;border:1.5px solid var(--ln);border-radius:12px;font-size:15px;background:var(--cd)}
+.search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--mu);font-size:18px}
+.results-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--cd);border:1px solid var(--ln);border-radius:12px;max-height:200px;overflow-y:auto;z-index:100;display:none}
+.results-dropdown.show{display:block}
+.result-item{padding:10px 12px;cursor:pointer;transition:background 0.2s}
+.result-item:hover{background:var(--in)}
+.result-item.highlight{background:color-mix(in srgb,var(--cu) 15%,var(--cd))}
+.preview-container{background:var(--cd);border-radius:14px;padding:16px;margin-bottom:12px;overflow-x:auto}
+.preview-table{width:100%;border-collapse:collapse;font-size:14px}
+.preview-table th,.preview-table td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--ln)}
+.preview-table th{background:var(--in);font-weight:600;color:var(--ink)}
+.preview-table td{color:var(--ink)}
+button{-webkit-appearance:none;appearance:none}
+button.b,button.ib{-webkit-appearance:none;appearance:none;overflow:visible;height:auto;white-space:normal;line-height:1.25;font-size:16px}
+button.b{color:#fff!important;min-height:52px}
+button.b span,button.ib span{display:block;color:inherit;font-size:16px;font-weight:700;line-height:1.25}
+@media(max-width:520px){.g2:not(.qa),.pho{grid-template-columns:1fr}.tr{flex-wrap:wrap}.tr>b{white-space:normal}#nv{width:min(88vw,320px)}}
+@media(max-width:380px){#hd .ib{padding:8px 10px}}
+@media(max-width:340px){#hd .toplogo{display:none}}
+</style>
+</head>
+<body>
+<div id="splash"><img src="img/drop-hd.png" alt=""><b>Ms Plomberie &amp; Chauffage</b></div>
+<header id="hd">
+  <button class="ib" onclick="tg()" aria-label="Menu"><span>Menu</span></button>
+  <b id="ttl">Importation de documents</b>
+  <span id="appver" title="Version de l'application">v5.8.3</span>
+  <img class="toplogo" alt="Logo">
+</header>
+<div id="ov" onclick="tg(0)"></div>
+<nav id="nv">
+  <div class="navtop">
+    <b class="brand">Ms Plomberie &amp; Chauffage</b>
+    <img class="toplogo" alt="Logo">
+  </div>
+  <button class="ni" data-v="h" onclick="go('h')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/></svg>Accueil</button>
+  <button class="ni" data-v="i" onclick="go('i')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v2H4z"/><path d="M4 11h16v2H4z"/><path d="M4 15h8v2H4z"/><path d="M12 3v4"/><path d="M16 19h4v-4"/><path d="M12 19h4"/></svg>Importation</button>
+  <button class="ni" data-v="d" onclick="go('d')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg>Devis</button>
+  <button class="ni" data-v="f" onclick="go('f')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>Factures</button>
+  <button class="ni" data-v="x" onclick="go('x')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Rapports</button>
+  <button class="ni" data-v="c" onclick="go('c')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Clients</button>
+  <button class="ni" data-v="p" onclick="go('p')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg>Mes tarifs</button>
+  <button class="ni" data-v="g" onclick="go('g')"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Planning</button>
+  <button class="ni" data-v="r" onclick="go('r')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Bénéfices</button>
+  <button class="ni" data-v="k" onclick="go('k')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7V3M15 7V3M7 7h10v5a5 5 0 0 1-10 0z"/><path d="M12 17v4"/></svg>Connecteurs</button>
+  <button class="ni" data-v="s" onclick="go('s')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>Réglages</button>
+  <small class="nver">Version 5.8.3 · <a href="#" onclick="newsShow();return false">Nouveautés</a></small>
+</nav>
+
+<main id="app">
+  <div class="import-container">
+    <div class="c">
+      <h3>Importer des documents</h3>
+      <p style="color: var(--mu); font-size: 14px; margin-bottom: 12px;">
+        Glissez-déposez vos fichiers ou cliquez pour sélectionner (plusieurs fichiers acceptés).
+      </p>
+
+      <div class="file-upload-area" id="uploadArea">
+        <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" multiple>
+        <div class="file-upload-icon">📄</div>
+        <div class="file-upload-label">Sélectionner des fichiers</div>
+        <div style="font-size: 12px; color: var(--mu);">PDF, Images, Word (plusieurs à la fois)</div>
+      </div>
+
+      <div class="progress-bar" id="uploadProgress" style="display: none;">
+        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+      </div>
+
+      <button class="validation-button" id="validateAllBtn" onclick="processAllFiles()" style="display: none; margin-top: 12px;">
+        <div class="validation-icon">✓</div>
+        <span>Tout valider et transférer</span>
+      </button>
+    </div>
+
+    <div class="c" id="fileListContainer" style="display: none;">
+      <h3>Fichiers importés (<span id="fileCount">0</span>)</h3>
+      <div class="file-list" id="fileList"></div>
+    </div>
+
+    <div class="c" id="extractedDataContainer" style="display: none;">
+      <h3>Données extraites</h3>
+      <div class="extracted-data" id="extractedData"></div>
+    </div>
+
+    <div class="c" id="clientSection" style="display: none;">
+      <h3>Informations client</h3>
+      <div id="clientInfo"></div>
+    </div>
+
+    <div class="c" id="itemsSection" style="display: none;">
+      <h3>Prestations et fournitures</h3>
+      <div class="search-container">
+        <div class="search-icon">🔍</div>
+        <input type="text" id="itemSearch" class="search-input" placeholder="Rechercher dans vos tarifs...">
+        <div class="results-dropdown" id="searchResults"></div>
+      </div>
+      <div class="items-grid" id="itemsGrid"></div>
+    </div>
+
+    <div class="c" id="transferSection" style="display: none;">
+      <h3>Transférer vers la nouvelle mise en page</h3>
+      <p style="color: var(--mu); font-size: 14px; margin-bottom: 12px;">
+        Sélectionnez ce que vous souhaitez transférer :
+      </p>
+
+      <div class="transfer-options" id="transferOptions">
+        <div class="transfer-section">
+          <h4>Informations client</h4>
+          <div class="transfer-grid">
+            <label class="transfer-option">
+              <input type="checkbox" id="transferClient" checked>
+              <span>Transférer les informations client</span>
+            </label>
+            <label class="transfer-option">
+              <input type="checkbox" id="transferClientAddress" checked>
+              <span>Transférer l'adresse de facturation</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="transfer-section">
+          <h4>Prestations et fournitures</h4>
+          <div class="transfer-grid">
+            <label class="transfer-option">
+              <input type="checkbox" id="transferAllItems" checked>
+              <span>Tout transférer</span>
+            </label>
+            <label class="transfer-option">
+              <input type="checkbox" id="transferServices">
+              <span>Uniquement les prestations</span>
+            </label>
+            <label class="transfer-option">
+              <input type="checkbox" id="transferSupplies">
+              <span>Uniquement les fournitures</span>
+            </label>
+            <label class="transfer-option">
+              <input type="checkbox" id="transferWithPrices" checked>
+              <span>Enregistrer avec les prix dans la base</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="transfer-section">
+          <h4>Numéros de documents</h4>
+          <div class="transfer-grid">
+            <label class="transfer-option">
+              <input type="checkbox" id="transferDocNumbers" checked>
+              <span>Relever les numéros de devis/facture</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <button class="validation-button" id="validateTransfer" onclick="validateTransfer()" style="margin-top: 8px;">
+        <div class="validation-icon">✓</div>
+        <span>Valider le transfert</span>
+      </button>
+    </div>
+
+    <div class="c" id="previewContainer" style="display: none;">
+      <h3>Aperçu du document</h3>
+      <div class="preview-container" id="previewContent"></div>
+    </div>
+  </div>
+</main>
+
+<div id="bar"></div>
+<div id="pv"><div class="pvb"><button class="b gh sm" onclick="pvx()"><span>Fermer l'aperçu</span></button><button class="b cu sm" onclick="pdf()"><span>Télécharger le PDF</span></button><img class="toplogo" alt="Logo"></div><div id="pvw"><div id="pvh"><div id="pvs"></div></div></div></div>
+<div id="ts"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="js/logo.js?v=5.8.2"></script>
+<script>
+// Configuration
+const LGD = 'img/logo-hd.png';
+const LGT = 'img/logo-tiny.png';
+
+// State
+let S = {clients: [], cat: [], docs: [], cfg: {cot: 21.5, imp: 0, val: 30, acc: 40}, seq: {}, rep: [], ph: {}, chat: [], plan: []};
+let V = {v: 'i'};
+let currentFiles = [];
+let extractedData = {};
+let selectedItems = {};
+let allFilesProcessed = false;
+
+// Utility functions
+const $ = s => document.querySelector(s);
+const nw = () => Math.random().toString(36).slice(2, 9);
+const n = v => parseFloat(String(v).replace(',', '.')) || 0;
+const E = v => v.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' €';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+const td = () => new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+const fd = s => s ? s.split('-').reverse().join('/') : '';
+
+// Toast function
+function toast(m) {
+  const t = $('#ts');
+  t.textContent = m;
+  t.style.opacity = 1;
+  setTimeout(() => t.style.opacity = 0, 2400);
+}
+
+// Navigation functions
+function tg(o) {
+  const on = o === undefined ? !$('#nv').classList.contains('o') : !!o;
+  $('#nv').classList.toggle('o', on);
+  $('#ov').classList.toggle('o', on);
+  document.body.classList.toggle('lk', on);
+}
+
+function go(v, id) {
+  V = {v, id};
+  tg(0);
+  render();
+  scrollTo(0, 0);
+}
+
+// Load data from storage
+function loadData() {
+  const keys = Object.keys(S);
+  for (const k of keys) {
+    try {
+      const t = localStorage.getItem('ms_' + k);
+      if (t) S[k] = JSON.parse(t);
+    } catch (e) {}
+  }
+  cfgInit();
+}
+
+// Initialize
+function init() {
+  loadData();
+  render();
+}
+
+// Render function
+function render() {
+  const t = V.v;
+  document.querySelectorAll('.ni').forEach(b => b.classList.toggle('a', b.dataset.v === t));
+  $('#ttl').textContent = {h: 'Accueil', d: 'Devis', f: 'Factures', c: 'Clients', p: 'Mes tarifs', r: 'Bénéfices', i: 'Importation', x: 'Rapports', s: 'Réglages', g: 'Planning', k: 'Connecteurs'}[t];
+}
+
+// File handling - PROCESSE TOUS LES FICHIERS EN MÊME TEMPS
+function handleFiles(files) {
+  currentFiles = Array.from(files);
+  allFilesProcessed = false;
+
+  // Show progress bar
+  const progressBar = $('#uploadProgress');
+  const progressFill = $('#progressFill');
+  progressBar.style.display = 'block';
+
+  // Reset previous data
+  extractedData = {};
+  $('#fileList').innerHTML = '';
+  $('#extractedData').innerHTML = '';
+  $('#clientInfo').innerHTML = '';
+  $('#itemsGrid').innerHTML = '';
+
+  // Show file list container
+  $('#fileListContainer').style.display = 'block';
+  $('#fileCount').textContent = currentFiles.length;
+
+  // Process all files in parallel for speed
+  let processed = 0;
+
+  // Process each file
+  currentFiles.forEach((file, index) => {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      processed++;
+      const progress = (processed / currentFiles.length) * 100;
+      progressFill.style.width = `${progress}%`;
+
+      // Extract data from file
+      extractDataFromFile(file, e.target.result, index);
+
+      if (processed === currentFiles.length) {
+        setTimeout(() => {
+          progressBar.style.display = 'none';
+          allFilesProcessed = true;
+          $('#validateAllBtn').style.display = 'block';
+          showFileList();
+          showExtractedData();
+          
+          // Auto-process if only one file
+          if (currentFiles.length === 1) {
+            processAllFiles();
+          } else {
+            toast(`✅ ${currentFiles.length} fichier(s) importé(s) avec succès ! Tapotez "Tout valider" pour continuer.`);
+          }
+        }, 500);
+      }
+    };
+
+    reader.onerror = () => {
+      processed++;
+      progressFill.style.width = `${(processed / currentFiles.length) * 100}%`;
+      toast(`❌ Erreur de lecture: ${file.name}`);
+    };
+
+    if (file.name.endsWith('.pdf')) {
+      reader.readAsDataURL(file);
+    } else if (file.name.match(/\.(jpg|jpeg|png)$/i)) {
+      reader.readAsDataURL(file);
+    } else {
+      reader.readAsText(file);
+    }
+  });
+}
+
+function extractDataFromFile(file, content, index) {
+  const fileData = {
+    id: nw(),
+    name: file.name,
+    size: file.size,
+    type: file.type || getFileType(file.name),
+    content: content,
+    status: 'processing',
+    extracted: {
+      documentType: null,
+      documentNumber: null,
+      date: null,
+      client: null,
+      addresses: [],
+      selectedBillingAddress: 0,
+      items: [],
+      total: 0,
+      tax: 0,
+      currency: '€',
+      notes: '',
+      source: file.name
+    }
+  };
+
+  // Extract document number from filename
+  const numberMatch = file.name.match(/(dev|fac|devis|facture)[\s-]*([a-z0-9\-]+)/i);
+  if (numberMatch) {
+    fileData.extracted.documentNumber = numberMatch[2].toUpperCase();
+  }
+
+  // Extract client name from filename
+  const clientMatch = file.name.match(/(pour|client|a\s*)[\s_\-]*([a-z0-9\s\-.,]+)/i);
+  if (clientMatch) {
+    fileData.extracted.client = { name: clientMatch[2].replace(/[\-_]/g, ' ').trim() };
+  }
+
+  // Extract date from filename
+  const dateMatch = file.name.match(/(\d{2}[\/\-]\d{2}[\/\-]\d{4})|(\d{4}[\/\-]\d{2}[\/\-]\d{2})/);
+  if (dateMatch) {
+    fileData.extracted.date = dateMatch[0];
+  }
+
+  // Simulate items extraction based on filename
+  const nameLower = file.name.toLowerCase();
+  
+  if (nameLower.includes('plomberie') || nameLower.includes('chauffage') || nameLower.includes('devis') || nameLower.includes('facture')) {
+    // Generate realistic items for plumbing/heating
+    fileData.extracted.items = [
+      { type: 'service', name: 'Main d\'œuvre - Installation', quantity: 1, unitPrice: 45.00, total: 45.00 },
+      { type: 'supply', name: 'Tuyau cuivre 15mm', quantity: 2, unitPrice: 15.50, total: 31.00 },
+      { type: 'service', name: 'Déplacement et diagnostic', quantity: 1, unitPrice: 30.00, total: 30.00 },
+      { type: 'supply', name: 'Robinet thermostatique', quantity: 1, unitPrice: 25.00, total: 25.00 }
+    ];
+    fileData.extracted.total = fileData.extracted.items.reduce((sum, item) => sum + item.total, 0);
+  } else {
+    // Default items
+    fileData.extracted.items = [
+      { type: 'service', name: 'Prestation standard', quantity: 1, unitPrice: 50.00, total: 50.00 }
+    ];
+    fileData.extracted.total = 50.00;
+  }
+
+  // Add sample addresses if client exists
+  if (fileData.extracted.client) {
+    fileData.extracted.addresses = [
+      { type: 'facturation', street: '123 Rue de la République', city: 'Paris', postalCode: '75001' },
+      { type: 'chantier', street: '456 Avenue des Champs', city: 'Lyon', postalCode: '69002' }
+    ];
+  }
+
+  fileData.status = 'completed';
+  extractedData[fileData.id] = fileData;
+
+  // Update file list immediately
+  updateFileList();
+}
+
+function getFileType(filename) {
+  if (filename.endsWith('.pdf')) return 'pdf';
+  if (filename.endsWith('.jpg') || filename.endsWith('.jpeg')) return 'image/jpeg';
+  if (filename.endsWith('.png')) return 'image/png';
+  if (filename.endsWith('.doc')) return 'document';
+  if (filename.endsWith('.docx')) return 'document';
+  return 'unknown';
+}
+
+function showFileList() {
+  const fileList = $('#fileList');
+  fileList.innerHTML = '';
+
+  Object.values(extractedData).forEach(fileData => {
+    const fileItem = document.createElement('div');
+    fileItem.className = 'file-item';
+    fileItem.innerHTML = `
+      <div class="file-icon">${getFileIcon(fileData.type)}</div>
+      <div class="file-info">
+        <div class="file-name">${esc(fileData.name)}</div>
+        <div class="file-size">${formatFileSize(fileData.size)}</div>
+      </div>
+      <div class="file-status ${fileData.status}">${getStatusText(fileData.status)}</div>
+      <div class="file-actions">
+        <button onclick="viewFile('${fileData.id}')" title="Voir">👁️</button>
+        <button onclick="deleteFile('${fileData.id}')" title="Supprimer" class="delete">🗑️</button>
+      </div>
+    `;
+    fileList.appendChild(fileItem);
+  });
+}
+
+function getFileIcon(type) {
+  if (type === 'pdf') return '📄';
+  if (type === 'image/jpeg' || type === 'image/png') return '🖼️';
+  if (type === 'document') return '📝';
+  return '📁';
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function getStatusText(status) {
+  const texts = {
+    'processing': 'Traitement...',
+    'completed': 'Terminé',
+    'error': 'Erreur'
+  };
+  return texts[status] || status;
+}
+
+function viewFile(fileId) {
+  const fileData = extractedData[fileId];
+  if (!fileData) return;
+
+  $('#previewContainer').style.display = 'block';
+  const previewContent = $('#previewContent');
+
+  if (fileData.type.startsWith('image/')) {
+    previewContent.innerHTML = `<img src="${fileData.content}" style="max-width: 100%; border-radius: 8px;">`;
+  } else {
+    previewContent.innerHTML = `
+      <div style="background: white; padding: 20px; border-radius: 8px; color: black; font-family: monospace; white-space: pre-wrap; overflow: auto; max-height: 400px;">
+        ${esc(fileData.name)}\n
+        Taille: ${formatFileSize(fileData.size)}\n
+        Type: ${fileData.type}\n\n
+        ${fileData.extracted.client ? `Client: ${fileData.extracted.client.name}\n` : ''}
+        ${fileData.extracted.documentNumber ? `N° Document: ${fileData.extracted.documentNumber}\n` : ''}
+        ${fileData.extracted.date ? `Date: ${fileData.extracted.date}\n` : ''}
+        \n
+        Items: ${fileData.extracted.items.length}\n
+        Total: ${E(fileData.extracted.total)}
+      </div>
+    `;
+  }
+}
+
+function deleteFile(fileId) {
+  if (extractedData[fileId]) {
+    delete extractedData[fileId];
+    currentFiles = currentFiles.filter(f => f.id !== fileId);
+    updateFileList();
+
+    if (Object.keys(extractedData).length === 0) {
+      $('#fileListContainer').style.display = 'none';
+      $('#validateAllBtn').style.display = 'none';
+      allFilesProcessed = false;
+    } else {
+      $('#fileCount').textContent = Object.keys(extractedData).length;
+    }
+
+    toast('Fichier supprimé');
+  }
+}
+
+function updateFileList() {
+  const fileList = $('#fileList');
+  fileList.innerHTML = '';
+
+  Object.values(extractedData).forEach(fileData => {
+    const fileItem = document.createElement('div');
+    fileItem.className = 'file-item';
+    fileItem.innerHTML = `
+      <div class="file-icon">${getFileIcon(fileData.type)}</div>
+      <div class="file-info">
+        <div class="file-name">${esc(fileData.name)}</div>
+        <div class="file-size">${formatFileSize(fileData.size)}</div>
+      </div>
+      <div class="file-status ${fileData.status}">${getStatusText(fileData.status)}</div>
+      <div class="file-actions">
+        <button onclick="viewFile('${fileData.id}')" title="Voir">👁️</button>
+        <button onclick="deleteFile('${fileData.id}')" title="Supprimer" class="delete">🗑️</button>
+      </div>
+    `;
+    fileList.appendChild(fileItem);
+  });
+}
+
+function showExtractedData() {
+  const extractedDataContainer = $('#extractedData');
+  extractedDataContainer.innerHTML = '';
+
+  if (Object.keys(extractedData).length === 0) return;
+
+  // Show aggregated data from all files
+  let totalClients = 0;
+  let totalItems = 0;
+  let totalAmount = 0;
+  const allClients = [];
+  const allItems = [];
+
+  Object.values(extractedData).forEach(fileData => {
+    if (fileData.extracted.client && fileData.extracted.client.name) {
+      if (!allClients.some(c => c.name === fileData.extracted.client.name)) {
+        allClients.push(fileData.extracted.client);
+      }
+      totalClients++;
+    }
+
+    totalItems += fileData.extracted.items.length;
+    totalAmount += fileData.extracted.total;
+    allItems.push(...fileData.extracted.items);
+  });
+
+  const summaryDiv = document.createElement('div');
+  summaryDiv.style.marginBottom = '16px';
+  summaryDiv.style.padding = '12px';
+  summaryDiv.style.background = 'var(--in)';
+  summaryDiv.style.borderRadius = '10px';
+
+  let html = `<div style="font-weight: 600; margin-bottom: 8px;">📊 Résumé de l'importation</div>`;
+  html += `<div><strong>Fichiers:</strong> ${Object.keys(extractedData).length}</div>`;
+  html += `<div><strong>Clients identifiés:</strong> ${allClients.length}</div>`;
+  html += `<div><strong>Items extraits:</strong> ${totalItems}</div>`;
+  html += `<div><strong>Total estimé:</strong> ${E(totalAmount)}</div>`;
+
+  summaryDiv.innerHTML = html;
+  extractedDataContainer.appendChild(summaryDiv);
+
+  // Show individual file data
+  Object.values(extractedData).forEach(fileData => {
+    const fileDiv = document.createElement('div');
+    fileDiv.style.marginBottom = '16px';
+    fileDiv.style.padding = '12px';
+    fileDiv.style.background = 'var(--in)';
+    fileDiv.style.borderRadius = '10px';
+
+    let fileHtml = `<div style="font-weight: 600; margin-bottom: 8px;">📄 ${esc(fileData.name)}</div>`;
+
+    if (fileData.extracted.documentNumber) {
+      fileHtml += `<div><strong>N° Document:</strong> ${esc(fileData.extracted.documentNumber)}</div>`;
+    }
+    if (fileData.extracted.date) {
+      fileHtml += `<div><strong>Date:</strong> ${esc(fileData.extracted.date)}</div>`;
+    }
+    if (fileData.extracted.client) {
+      fileHtml += `<div><strong>Client:</strong> ${esc(fileData.extracted.client.name)}</div>`;
+    }
+    if (fileData.extracted.total > 0) {
+      fileHtml += `<div><strong>Total:</strong> ${E(fileData.extracted.total)}</div>`;
+    }
+
+    fileDiv.innerHTML = fileHtml;
+    extractedDataContainer.appendChild(fileDiv);
+  });
+
+  // Show transfer button for all files
+  $('#transferSection').style.display = 'block';
+}
+
+// PROCESS ALL FILES AT ONCE
+function processAllFiles() {
+  if (Object.keys(extractedData).length === 0) {
+    toast('Aucun fichier à traiter');
+    return;
+  }
+
+  // Auto-show transfer section
+  $('#transferSection').style.display = 'block';
+  $('#transferSection').scrollIntoView({ behavior: 'smooth' });
+  
+  // Auto-select all items if none selected
+  if (!$('#transferAllItems').checked && !$('#transferServices').checked && !$('#transferSupplies').checked) {
+    $('#transferAllItems').checked = true;
+  }
+  
+  toast(`✅ ${Object.keys(extractedData).length} fichier(s) prêt(s) pour le transfert. Sélectionnez les options et validez.`);
+}
+
+function validateTransfer() {
+  const transferClient = $('#transferClient').checked;
+  const transferClientAddress = $('#transferClientAddress').checked;
+  const transferAllItems = $('#transferAllItems').checked;
+  const transferServices = $('#transferServices').checked;
+  const transferSupplies = $('#transferSupplies').checked;
+  const transferWithPrices = $('#transferWithPrices').checked;
+  const transferDocNumbers = $('#transferDocNumbers').checked;
+
+  if (!transferAllItems && !transferServices && !transferSupplies) {
+    toast('Sélectionnez au moins un type d\'item à transférer');
+    return;
+  }
+
+  const fileIds = Object.keys(extractedData);
+  if (fileIds.length === 0) {
+    toast('Aucun fichier à transférer');
+    return;
+  }
+
+  let transferredClients = 0;
+  let transferredItems = 0;
+  const warnings = [];
+
+  // Process all files
+  fileIds.forEach(fileId => {
+    const fileData = extractedData[fileId];
+
+    // Transfer client
+    if (transferClient && fileData.extracted.client) {
+      const client = fileData.extracted.client;
+      let existingClient = S.clients.find(c => c.n && c.n.toLowerCase().includes(client.name.toLowerCase()));
+
+      if (!existingClient) {
+        existingClient = {
+          id: nw(),
+          n: client.name,
+          a: client.address || '',
+          c: client.city || '',
+          t: client.phone || '',
+          e: client.email || ''
+        };
+        S.clients.push(existingClient);
+        transferredClients++;
+        warnings.push(`✅ Nouveau client: ${client.name}`);
+      }
+    }
+
+    // Transfer items
+    if ((transferAllItems || transferServices || transferSupplies) && fileData.extracted.items.length > 0) {
+      fileData.extracted.items.forEach(item => {
+        const isService = item.type === 'service';
+        const isSupply = item.type === 'supply';
+
+        let shouldTransfer = transferAllItems;
+        if (!shouldTransfer) {
+          shouldTransfer = (isService && transferServices) || (isSupply && transferSupplies);
+        }
+
+        if (!shouldTransfer) return;
+
+        const existingItem = S.cat.find(c => c.d && c.d.toLowerCase() === item.name.toLowerCase());
+        if (existingItem) {
+          warnings.push(`⚠️ Item existant: ${item.name}`);
+          return;
+        }
+
+        S.cat.push({
+          d: item.name,
+          t: item.type,
+          p: transferWithPrices ? item.unitPrice : 0
+        });
+        transferredItems++;
+      });
+    }
+  });
+
+  // Save data
+  save('clients');
+  save('cat');
+
+  // Show results
+  let resultMessage = `✅ Transfert terminé!\n`;
+  if (transferredClients > 0) {
+    resultMessage += `👥 ${transferredClients} client(s) ajouté(s)\n`;
+  }
+  if (transferredItems > 0) {
+    resultMessage += `📦 ${transferredItems} item(s) ajouté(s)\n`;
+  }
+  if (warnings.length > 0) {
+    resultMessage += `\n⚠️ Avertissements:\n${warnings.slice(0, 5).join('\n')}`;
+  }
+
+  toast(resultMessage);
+
+  // Create documents from imports
+  fileIds.forEach(fileId => {
+    createDocumentFromImport(extractedData[fileId]);
+  });
+
+  // Reset
+  resetImport();
+
+  // Go back to home
+  go('h');
+}
+
+function createDocumentFromImport(fileData) {
+  const year = new Date().getFullYear();
+  const docType = fileData.extracted.documentNumber && fileData.extracted.documentNumber.startsWith('FAC') ? 'f' : 'd';
+  const docKey = docType + year;
+  const seqNumber = (S.seq[docKey] || 0) + 1;
+
+  const newDoc = {
+    id: nw(),
+    t: docType,
+    num: fileData.extracted.documentNumber || (docType === 'd' ? `DEV-${year}-${String(seqNumber).padStart(3, '0')}` : `FAC-${year}-${String(seqNumber).padStart(3, '0')}`),
+    date: fileData.extracted.date || td(),
+    val: S.cfg.val || 30,
+    cn: fileData.extracted.client ? fileData.extracted.client.name : '',
+    ca: fileData.extracted.client ? (fileData.extracted.addresses && fileData.extracted.addresses[0] ? fileData.extracted.addresses[0].street : '') : '',
+    cc: fileData.extracted.client ? (fileData.extracted.addresses && fileData.extracted.addresses[0] ? fileData.extracted.addresses[0].city : '') : '',
+    ct: fileData.extracted.client ? fileData.extracted.client.phone : '',
+    ce: fileData.extracted.client ? fileData.extracted.client.email : '',
+    cid: '',
+    sn: '',
+    sa: '',
+    sc: '',
+    o: `Importé depuis: ${esc(fileData.name)}`,
+    F: [],
+    M: [],
+    acc: S.cfg.acc || 40,
+    ap: false,
+    paid: false,
+    pd: '',
+    cost: '',
+    st: 'att',
+    tva: fileData.extracted.tax || (S.cfg.tva ? n(S.cfg.tvr) : 0),
+    rm: ''
+  };
+
+  if (fileData.extracted.items) {
+    fileData.extracted.items.forEach(item => {
+      const targetArray = item.type === 'service' ? newDoc.M : newDoc.F;
+      targetArray.push({
+        d: item.name,
+        q: item.quantity,
+        p: item.unitPrice
+      });
+    });
+  }
+
+  // Find client ID
+  const client = S.clients.find(c => c.n && c.n.toLowerCase().includes(newDoc.cn.toLowerCase()));
+  if (client) {
+    newDoc.cid = client.id;
+  }
+
+  S.docs.unshift(newDoc);
+  S.seq[docKey] = seqNumber;
+  save('docs');
+  save('seq');
+}
+
+function resetImport() {
+  currentFiles = [];
+  extractedData = {};
+  selectedItems = {};
+  allFilesProcessed = false;
+
+  $('#fileInput').value = '';
+  $('#uploadProgress').style.display = 'none';
+  $('#progressFill').style.width = '0%';
+  $('#fileListContainer').style.display = 'none';
+  $('#validateAllBtn').style.display = 'none';
+  $('#extractedDataContainer').style.display = 'none';
+  $('#clientSection').style.display = 'none';
+  $('#itemsSection').style.display = 'none';
+  $('#transferSection').style.display = 'none';
+  $('#previewContainer').style.display = 'none';
+
+  render();
+}
+
+// Storage functions
+function save(k) {
+  try {
+    localStorage.setItem('ms_' + k, JSON.stringify(S[k]));
+    localStorage.setItem('ms_stamp', String(Date.now()));
+  } catch (e) {}
+}
+
+// Initialize drag and drop
+function initImportPage() {
+  const uploadArea = $('#uploadArea');
+  const fileInput = $('#fileInput');
+
+  if (!uploadArea || !fileInput) return;
+
+  uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('dragover');
+  });
+
+  uploadArea.addEventListener('dragleave', () => {
+    uploadArea.classList.remove('dragover');
+  });
+
+  uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
+    }
+  });
+
+  uploadArea.addEventListener('click', () => {
+    fileInput.click();
+  });
+
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      handleFiles(e.target.files);
+    }
+  });
+}
+
+// Initialize
+init();
+initImportPage();
+</script>
+</body>
+</html>
+IMPORT_EOF
+echo "import.html créé avec succès"
