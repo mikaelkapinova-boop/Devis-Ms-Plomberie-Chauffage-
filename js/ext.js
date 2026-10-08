@@ -238,7 +238,7 @@ function homePlan(){const today=td(),L=S.plan.filter(e=>e.st==='p'&&e.date>=toda
 
 
 /* ---------- Importation de documents ---------- */
-function openFullImport(){location.href='import.html?v=6.0.0';}
+function openFullImport(){if(typeof render==='function'){V={v:'i'};render();scrollTo(0,0);}}
 
 function importPage(){ return getImportHTML(); }
 
