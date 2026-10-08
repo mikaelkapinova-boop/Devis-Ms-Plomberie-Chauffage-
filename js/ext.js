@@ -39,7 +39,7 @@ return `<div class="c"><h3>Mon entreprise (en-tête des documents)</h3>${I('Rais
 <div class="c"><h3>Accès</h3><p class="mu" style="margin:0 0 8px;font-size:13px">L'appli est protégée par identifiant et mot de passe. Les données envoyées hors de l'appareil (GitHub, boîte de réception) sont chiffrées avec ce mot de passe.</p><button class="b gh sm" onclick="authLogout()">Se déconnecter</button></div>
 <div class="c"><h3>Zone sensible</h3><button class="b rd sm" data-t="Tout effacer sur cet appareil" onclick="arm2(this,wipe)">Tout effacer sur cet appareil</button></div>
 <p class="mu" style="text-align:center;font-size:12px">Version ${APPV}</p>`}
-const APPV='5.4';
+const APPV='6.0.0';
 function wipe(){for(const k in S)localStorage.removeItem('ms_'+k);localStorage.removeItem('ms_stamp');localStorage.removeItem('ms_key');sessionStorage.removeItem('ms_key');idbPut('pack',null);location.reload()}
 
 /* ---------- Sauvegarde / restauration ---------- */
@@ -238,6 +238,8 @@ function homePlan(){const today=td(),L=S.plan.filter(e=>e.st==='p'&&e.date>=toda
 
 
 /* ---------- Importation de documents ---------- */
+function openFullImport(){location.href='import.html?v=6.0.0';}
+
 function importPage() {
   return `<div class="import-container">
     <div class="c">
@@ -251,6 +253,9 @@ function importPage() {
         <div class="file-upload-icon">📄</div>
         <div class="file-upload-label">Sélectionner des fichiers</div>
         <div style="font-size: 12px; color: var(--mu);">PDF, Images, Word</div>
+        <button class="validation-button" type="button" onclick="openFullImport()" style="margin-top:16px;width:100%;">
+          <div class="validation-icon">✓</div><span>Transférer vers la nouvelle mise en page</span>
+        </button>
       </div>
       
       <div class="progress-bar" id="uploadProgress" style="display: none;">
