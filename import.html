@@ -1408,7 +1408,7 @@ function initImportPage() {
     }
   });
   const transferNowButton=$('#transferNowButton');
-  if(transferNowButton) transferNowButton.addEventListener('click',()=>{
+  if(transferNowButton) transferNowButton.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation();
     const ids=Object.keys(extractedData);
     if(!ids.length){toast('Sélectionnez d’abord un document');return;}
     const last=extractedData[ids[ids.length-1]];
@@ -1962,12 +1962,12 @@ function selectedTransferScope(){return document.querySelector('input[name="tran
 document.addEventListener('change',e=>{if(e.target.name==='transferScope')document.querySelectorAll('.scope-option').forEach(x=>x.classList.toggle('selected',x.querySelector('input')===e.target))});
 function validateTransfer(){const scope=selectedTransferScope(),withPrices=$('#transferWithPrices')?.checked!==false,transferDocNumbers=$('#transferDocNumbers')?.checked!==false,ids=Object.keys(extractedData);if(!ids.length){toast('Aucun fichier à transférer');return}ids.forEach(id=>transferFile(extractedData[id],scope,withPrices,transferDocNumbers));toast('✓ Transfert terminé');setTimeout(resetImport,700)}
 function transferFile(fileData,scope,withPrices,transferDocNumbers){
- const data=fileData.extracted||{},norm=s=>String(s||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim();
+ const data=fileData.extracted||{},norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
  let client=null;
  if((scope==='client'||scope==='all')&&data.client?.name){
    client=S.clients.find(c=>{
      const a=norm(c.n),b=norm(data.client.name);
-     return a&&b&&(a===b||(data.client.email&&norm(c.e)===norm(data.client.email))||(data.client.phone&&String(c.t||'').replace(/\\D/g,'')===String(data.client.phone).replace(/\\D/g,'')));
+     return a&&b&&(a===b||(data.client.email&&norm(c.e)===norm(data.client.email))||(data.client.phone&&String(c.t||'').replace(/\D/g,'')===String(data.client.phone).replace(/\D/g,'')));
    });
    if(!client){client={id:nw(),n:data.client.name,a:'',c:'',t:data.client.phone||'',e:data.client.email||'',addresses:[]};S.clients.push(client)}
    if(!Array.isArray(client.addresses))client.addresses=[];
