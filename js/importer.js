@@ -131,12 +131,12 @@ async function extractDataFromFile(file){
  if(file.size>50*1024*1024)throw new Error('Fichier supérieur à 50 Mo');const type=file.type||getFileType(file.name);let text='',preview='';
  if(type==='pdf'||/\.pdf$/i.test(file.name)){const b=await file.arrayBuffer();text=await extractPdfText(b);preview=URL.createObjectURL(new Blob([b],{type:'application/pdf'}))}
  else if(/\.docx$/i.test(file.name)){const b=await file.arrayBuffer();if(window.mammoth){const x=await window.mammoth.extractRawText({arrayBuffer:b});text=x.value||''}preview=await readDataURL(file)}
- else if(/\.(txt|csv)$/i.test(file.name)){text=await readText(file);preview=text}else if(type.startsWith('image/'))preview=await readDataURL(file);else{text=await readText(file);preview=text}
+ else if(/\.(txt|csv)$/i.test(file.name)){text=await readText(file);preview=text}else if(type.startsWith('image/')){preview=await readDataURL(file);if(window.Tesseract){try{const o=await Tesseract.recognize(file,'fra+eng');text=o?.data?.text||''}catch(e){text=''}}}else{text=await readText(file);preview=text}
  const extracted=parseDocumentText(file.name,text),id=nw();extractedData[id]={id,name:file.name,size:file.size,type,content:preview||text,status:'completed',extracted};
 }
 function readText(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(r.error||new Error('Lecture impossible'));r.readAsText(file)})}
 function readDataURL(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(r.error||new Error('Lecture impossible'));r.readAsDataURL(file)})}
-async function extractPdfText(buffer){let pdfjs;try{pdfjs=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs')}catch(e){return ''}const pdf=await pdfjs.getDocument({data:buffer}).promise,parts=[];for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i),tc=await page.getTextContent();parts.push(tc.items.map(x=>x.str||'').join(' '))}return parts.join('\n')}
+async function extractPdfText(buffer){try{let pdfjs=window.pdfjsLib;if(!pdfjs){try{pdfjs=(await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs'))}catch(e){return ''}}const pdf=await pdfjs.getDocument({data:buffer}).promise,parts=[];for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i),tc=await page.getTextContent();parts.push(tc.items.map(x=>x.str||'').join(' '))}return parts.join('\n')}catch(e){return ''}}
 function parseDocumentText(filename,text){
  const raw=(text||'').replace(/\u0000/g,' ').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n').trim();
  const nm=raw.match(/((?:DEVIS?|DEV|FACTURE|FAC)[\s-]*[A-Z0-9]+(?:[\s-]+[A-Z0-9]+)*)/i)||filename.match(/((?:DEVIS?|DEV|FACTURE|FAC)[\s-]*[A-Z0-9]+(?:[\s-]+[A-Z0-9]+)*)/i);
