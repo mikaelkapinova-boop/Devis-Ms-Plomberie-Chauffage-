@@ -215,9 +215,9 @@ function parseDocumentText(filename,text){
  }
  if(!clientName)clientName=filename.replace(/\.[^.]+$/,'').replace(/^(devis|facture|fac|dev)[\s_-]*/i,'').replace(/[._-]+/g,' ').trim();
  const chantierIdx=lines.findIndex(x=>/^chantier\b/i.test(x));
- const objetIdx=lines.findIndex(x=>/^objet\b/i.test(x));
- const periodeIdx=lines.findIndex(x=>/^p[ée]riode pr[ée]vue\b/i.test(x));
- const refIdx=lines.findIndex(x=>/^r[ée]f[ée]rence\b/i.test(x));
+ const objetIdx=lines.findIndex(x=>/^objet\b/i.test(x)||/\|\|\|\s*objet\s*$/i.test(x));
+ const periodeIdx=lines.findIndex(x=>/^p[ée]riode pr[ée]vue\b/i.test(x)||/^(?:p[ée]riode pr[ée]vue)\s*\|\|\|/i.test(x));
+ const refIdx=lines.findIndex(x=>/^r[ée]f[ée]rence\b/i.test(x)||/\|\|\|\s*r[ée]f[ée]rence\s*$/i.test(x));
  const chantier=chantierIdx>=0?((lines[chantierIdx].includes('|||')&&/^objet$/i.test((lines[chantierIdx].split(/\|\|\|/)[1]||'').trim()))?(lines[chantierIdx+1]?.split(/\|\|\|/)[0]||'').trim():(lines[chantierIdx].split(/\|\|\|/)[1]||lines[chantierIdx+1]||'').trim()):'';
  const object=objetIdx>=0?((lines[objetIdx+1]?.split(/\|\|\|/)[1]||lines[objetIdx+1]||'').trim()):''; 
  const period=periodeIdx>=0?(lines[periodeIdx+1]?.split(/\|\|\|/)[0]||lines[periodeIdx+1]||'').trim():'';
