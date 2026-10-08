@@ -232,7 +232,7 @@ function parseDocumentText(filename,text){
      const qM=before.match(/(?:^|\s)(\d+(?:[.,]\d+)?)\s*(?:ensembles?|flexibles?|unit[ée]s?|pcs?|pi[èe]ces?)?\s*$/i);
      const quantity=qM?money(qM[1]):1;
      const desc=(qM?before.slice(0,qM.index):before).replace(/\s+Forfait$/i,'').trim();
-     items.push({type:'supply',name:desc,quantity,purchaseTotal:euro[euro.length-1].value,unitPrice:quantity?euro[euro.length-1].value/quantity:0});
+     items.push({type:'supply',name:desc,quantity,purchaseTotal:euro[euro.length-1].value,unitPrice:quantity?euro[euro.length-1].value/quantity:0,saleUnitPrice:quantity?euro[euro.length-1].value/quantity*1.30:0});
    }
  }
  const totalM=plain.match(/total\s+net(?:\s+du\s+devis)?[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
@@ -680,11 +680,56 @@ function highlightResult(element) {
 function selectedTransferScope(){return document.querySelector('input[name="transferScope"]:checked')?.value||'client'}
 document.addEventListener('change',e=>{if(e.target.name==='transferScope')document.querySelectorAll('.scope-option').forEach(x=>x.classList.toggle('selected',x.querySelector('input')===e.target))});
 function validateTransfer(){const scope=selectedTransferScope(),withPrices=$('#transferWithPrices')?.checked!==false,transferDocNumbers=$('#transferDocNumbers')?.checked!==false,ids=Object.keys(extractedData);if(!ids.length){toast('Aucun fichier à transférer');return}ids.forEach(id=>transferFile(extractedData[id],scope,withPrices,transferDocNumbers));toast('✓ Transfert terminé');setTimeout(()=>render(),500)}
-function transferFile(fileData,scope,withPrices,transferDocNumbers){const data=fileData.extracted,norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();let client=null;
-if((scope==='client'||scope==='all')&&data.client?.name){client=S.clients.find(c=>norm(c.n)===norm(data.client.name));if(!client){client={id:nw(),n:data.client.name,a:'',c:'',t:data.client.phone||'',e:data.client.email||'',addresses:[]};S.clients.push(client)}if(!Array.isArray(client.addresses))client.addresses=[];(data.addresses||[]).forEach(addr=>{if(!client.addresses.some(a=>norm(a.street)===norm(addr.street)&&String(a.postalCode)===String(addr.postalCode)))client.addresses.push({...addr})});if(!client.t&&data.client.phone)client.t=data.client.phone;if(!client.e&&data.client.email)client.e=data.client.email;save('clients')}
-if(scope==='services'||scope==='supplies'||scope==='all'){(data.items||[]).forEach(item=>{const ok=scope==='all'||(scope==='services'&&item.type==='service')||(scope==='supplies'&&item.type==='supply');if(!ok||item.skipped)return;const old=S.cat.find(x=>norm(x.d)===norm(item.name));if(old){if(withPrices&&!n(old.p))old.p=n(item.unitPrice);return}S.cat.push({d:item.name,t:item.type,p:withPrices?n(item.unitPrice):0})});save('cat')}
-if(scope==='all'&&transferDocNumbers&&data.documentNumber){if(S.docs.some(d=>norm(d.num)===norm(data.documentNumber))){toast('⚠️ Numéro déjà enregistré : '+data.documentNumber);return}const type=data.documentType==='facture'?'f':'d',year=new Date().getFullYear(),key=type+year,seq=(S.seq[key]||0)+1,bill=data.addresses?.[data.selectedBillingAddress||0],doc={id:nw(),t:type,num:data.documentNumber,date:data.date||td(),val:S.cfg.val||30,cn:client?.n||data.client?.name||'',ca:bill?.street||client?.a||'',cc:[bill?.postalCode,bill?.city].filter(Boolean).join(' ')||client?.c||'',ct:client?.t||data.client?.phone||'',ce:client?.e||data.client?.email||'',cid:client?.id||'',sn:'',sa:'',sc:'',o:'Importé depuis document : '+fileData.name,F:[],M:[],acc:S.cfg.acc||40,ap:false,paid:false,pd:'',cost:'',st:'att',tva:0,rm:''};(data.items||[]).forEach(item=>{if(!item.skipped)(item.type==='service'?doc.M:doc.F).push({d:item.name,q:item.quantity||1,p:n(item.unitPrice)})});S.docs.unshift(doc);S.seq[key]=seq;save('docs');save('seq')}}
-
+function transferFile(fileData,scope,withPrices,transferDocNumbers){
+ const data=fileData.extracted||{},norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+ let client=null;
+ if((scope==='client'||scope==='all')&&data.client?.name){
+   client=S.clients.find(c=>norm(c.n)===norm(data.client.name));
+   if(!client){client={id:nw(),n:data.client.name,a:'',c:'',t:data.client.phone||'',e:data.client.email||'',addresses:[]};S.clients.push(client)}
+   if(!Array.isArray(client.addresses))client.addresses=[];
+   (data.addresses||[]).forEach(addr=>{if(!client.addresses.some(a=>norm(a.street)===norm(addr.street)&&String(a.postalCode)===String(addr.postalCode)))client.addresses.push({...addr})});
+   if(!client.t&&data.client.phone)client.t=data.client.phone;
+   if(!client.e&&data.client.email)client.e=data.client.email;
+   if(!client.a&&data.addresses?.[0]?.street)client.a=data.addresses[0].street;
+   if(!client.c&&data.addresses?.[0])client.c=[data.addresses[0].postalCode,data.addresses[0].city].filter(Boolean).join(' ');
+   save('clients');
+ }
+ if(scope==='services'||scope==='supplies'||scope==='all'){
+   (data.items||[]).forEach(item=>{
+     const ok=scope==='all'||(scope==='services'&&item.type==='service')||(scope==='supplies'&&item.type==='supply');
+     if(!ok||item.skipped)return;
+     const old=S.cat.find(x=>norm(x.d)===norm(item.name));
+     const price=withPrices?n(item.type==='supply'?(item.saleUnitPrice||item.unitPrice):item.unitPrice):0;
+     if(old){if(withPrices&&!n(old.p))old.p=price;return}
+     S.cat.push({d:item.name,t:item.type,p:price});
+   });
+   save('cat');
+ }
+ if(scope==='all'&&transferDocNumbers&&data.documentNumber){
+   if(S.docs.some(d=>norm(d.num)===norm(data.documentNumber))){toast('⚠️ Numéro déjà enregistré : '+data.documentNumber);return}
+   const type=data.documentType==='facture'?'f':'d',year=(data.date||td()).slice(0,4)||new Date().getFullYear(),key=type+year,seq=(S.seq[key]||0)+1;
+   const bill=data.addresses?.[data.selectedBillingAddress||0];
+   const doc={id:nw(),t:type,num:data.documentNumber,date:data.date||td(),val:S.cfg.val||30,
+     cn:client?.n||data.client?.name||'',ca:bill?.street||client?.a||'',cc:[bill?.postalCode,bill?.city].filter(Boolean).join(' ')||client?.c||'',
+     ct:client?.t||data.client?.phone||'',ce:client?.e||data.client?.email||'',cid:client?.id||'',sn:data.chantier||'',sa:'',sc:'',
+     o:data.object||'',F:[],M:[],acc:S.cfg.acc||40,ap:false,paid:false,pd:'',cost:'',st:'att',tva:0,rm:'',ref:data.reference||''};
+   const supplies=(data.items||[]).filter(x=>x.type==='supply'&&!x.skipped),targetSupply=n(data.supplySaleTotal)||supplies.reduce((s,x)=>s+(n(x.purchaseTotal)||0)*1.30,0);
+   let usedSupply=0;
+   (data.items||[]).forEach((item,idx)=>{
+     if(item.skipped)return;
+     if(item.type==='service'){
+       doc.M.push({d:item.name,q:item.quantity||1,p:withPrices?n(item.unitPrice):0});
+     }else if(item.type==='supply'){
+       const q=n(item.quantity)||1; let p=withPrices?n(item.saleUnitPrice||item.unitPrice):0;
+       const isLast=supplies[supplies.length-1]===item;
+       if(withPrices&&isLast){p=Math.max(0,(targetSupply-usedSupply)/q)} else if(withPrices){p=n(item.saleUnitPrice||item.unitPrice)}
+       usedSupply+=q*p;
+       doc.F.push({d:item.name,q,p});
+     }
+   });
+   S.docs.unshift(doc);S.seq[key]=seq;save('docs');save('seq');
+ }
+}
 function resetImport() {
   currentFiles = [];
   extractedData = {};
