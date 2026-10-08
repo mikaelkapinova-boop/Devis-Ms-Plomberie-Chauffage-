@@ -253,10 +253,10 @@ function importPage() {
         <div class="file-upload-icon">📄</div>
         <div class="file-upload-label">Sélectionner des fichiers</div>
         <div style="font-size: 12px; color: var(--mu);">PDF, Images, Word</div>
-        <button class="validation-button" type="button" onclick="openFullImport()" style="margin-top:16px;width:100%;">
-          <div class="validation-icon">✓</div><span>Transférer vers la nouvelle mise en page</span>
-        </button>
       </div>
+      <button class="validation-button" type="button" onclick="openFullImport()" style="margin-top:12px;width:100%;">
+        <div class="validation-icon">✓</div><span>Transférer vers la nouvelle mise en page</span>
+      </button>
       
       <div class="progress-bar" id="uploadProgress" style="display: none;">
         <div class="progress-fill" id="progressFill" style="width: 0%"></div>
