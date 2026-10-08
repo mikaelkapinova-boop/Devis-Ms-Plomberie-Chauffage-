@@ -1096,6 +1096,9 @@ body.kb #bar {
         <div class="file-upload-icon">📄</div>
         <div class="file-upload-label">Sélectionner des fichiers</div>
         <div style="font-size: 12px; color: var(--mu);">PDF, Images, Word</div>
+        <button class="validation-button" id="transferNowButton" type="button" disabled style="margin-top:16px;opacity:.45;cursor:not-allowed;">
+          <div class="validation-icon">✓</div><span>Transférer vers la nouvelle mise en page</span>
+        </button>
       </div>
       
       <div class="progress-bar" id="uploadProgress" style="display: none;">
@@ -1354,15 +1357,27 @@ function initImportPage() {
   });
   
   // Click to select files
-  uploadArea.addEventListener('click', () => {
+  uploadArea.addEventListener('click', (e) => {
+    if (e.target === fileInput) return;
     fileInput.click();
   });
+  fileInput.addEventListener('click', e => e.stopPropagation());
   
   // File input change
   fileInput.addEventListener('change', (e) => {
     if (e.target.files.length > 0) {
+      const btn=$('#transferNowButton');
+      if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
       handleFiles(e.target.files);
     }
+  });
+  const transferNowButton=$('#transferNowButton');
+  if(transferNowButton) transferNowButton.addEventListener('click',()=>{
+    const ids=Object.keys(extractedData);
+    if(!ids.length){toast('Sélectionnez d’abord un document');return;}
+    const last=extractedData[ids[ids.length-1]];
+    processFile(last.id);
+    $('#transferSection')?.scrollIntoView({behavior:'smooth',block:'center'});
   });
   
   // Initialize item search
@@ -1488,6 +1503,8 @@ function viewFile(fileId) {
 function processFile(fileId) {
   const fileData = extractedData[fileId];
   if (!fileData) return;
+  const transferCta=$('#transferNowButton');
+  if(transferCta){transferCta.disabled=false;transferCta.style.opacity='1';transferCta.style.cursor='pointer';}
   
   // Show client section
   $('#clientSection').style.display = 'block';
