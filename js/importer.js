@@ -178,158 +178,101 @@ async function extractPdfText(buffer){
   }catch(e){return ''}
 }
 function parseDocumentText(filename,text){
- const raw=String(text||'').replace(/\u0000/g,' ').replace(/\r/g,'').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n').trim();
- const lines=raw.split(/\n+/).map(s=>s.trim()).filter(Boolean);
- const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/œ/g,'oe').replace(/Œ/g,'OE').replace(/[’']/g,"'").toLowerCase().replace(/\s+/g,' ').trim();
- const money=s=>{const v=String(s||'').replace(/\s/g,'').replace(/[€]/g,'').replace(',','.');const n=parseFloat(v);return Number.isFinite(n)?n:0};
- const eurRe=/(\d[\d ]*[.,]\d{2})\s*€/g;
- const euroTokens=line=>{const out=[];for(const m of String(line).matchAll(/\[\[EUR:(\d[\d ]*[.,]\d{2})\]\]/g))out.push({value:money(m[1]),index:m.index});if(out.length)return out;for(const m of String(line).matchAll(eurRe))out.push({value:money(m[1]),index:m.index});return out};
- const plain=raw.replace(/\s*\|\|\|\s*/g,' ');
- const own={name:/ms\s+plomberie|mikael\s+salillari/i,mail:/mikael\.salillari@hotmail\.fr/i,phone:/07\s*49\s*24\s*85\s*59/i,address:/285\s+rue\s+jeanne\s+d.?arc/i};
- const cleanLabel=(s,label)=>String(s||'').replace(new RegExp('^\\s*'+label+'\\s*[:：-]?\\s*','i'),'').trim();
- const stripRole=s=>String(s||'').replace(/^(?:nom|client|raison sociale|soci[eé]t[eé]|adresse|t[eé]l[eé]phone|t[eé]l|email|e-mail|mail)\s*[:：-]\s*/i,'').trim();
- const dateM=plain.match(/\b(\d{2})[\/-](\d{2})[\/-](\d{4})\b|\b(\d{4})[\/-](\d{2})[\/-](\d{2})\b/);
- const date=dateM?(dateM[4]?dateM[4]+'-'+dateM[5]+'-'+dateM[6]:dateM[3]+'-'+dateM[2]+'-'+dateM[1]):null;
- const numCandidates=[...plain.matchAll(/\b(?:DEVIS|DEV|FACTURE|FAC)\s*[-_: ]\s*([A-Z0-9][A-Z0-9_-]{2,})/ig)].map(m=>m[0]);
- const filenameNum=filename.match(/\b(?:DEVIS|DEV|FACTURE|FAC)[\s_-]*(?=[A-Z0-9_-]*\d)[A-Z0-9]+(?:[\s_-]+[A-Z0-9]+)*/i)?.[0]||'';
- const rawNum=numCandidates.find(x=>/\d/.test(x))||filenameNum;
- const documentNumber=rawNum?rawNum.replace(/[:_ ]+/g,'-').replace(/-+/g,'-').toUpperCase():null;
- const documentType=/(facture|invoice|\bfac[\s_-]?\d)/i.test(filename+' '+plain)?'facture':'devis';
-
- // 1) Séparer strictement l'émetteur (MS Plomberie) du client.
- const emails=[...plain.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig)].map(m=>m[0]);
- const phones=[...plain.matchAll(/(?:\+33\s?[1-9]|0[1-9])(?:[ .-]?\d{2}){4}/g)].map(m=>m[0]);
- const clientBlock=[];
- let clientName='',clientEmail='',clientPhone='',clientAddress='',clientPostal='',clientCity='';
- const addCandidate=(s)=>{
-   const v=stripRole(String(s||'').trim());
-   if(!v||own.name.test(v)||own.mail.test(v)||own.phone.test(v)||own.address.test(v)||/^\d{5}\s+\w/.test(v))return;
-   if(!clientName&&v.length>=2&&!/^(devis|facture|objet|chantier|référence|periode prévue|période prévue|siret)$/i.test(v))clientName=v;
- };
- // Format 2 colonnes PDF : DEVIS ||| Client, puis CHANTIER ||| Objet.
- const devisIdx=lines.findIndex(x=>/^\s*(?:DEVIS|FACTURE)\b/i.test(x)||/\|\|\|\s*(?:dev(is)?|facture)\s*$/i.test(x));
- if(devisIdx>=0){
-   const p=lines[devisIdx].split('|||').map(s=>s.trim());
-   if(p.length>1)addCandidate(p[1]);
-   if(!clientName&&lines[devisIdx+1]){
-     const q=lines[devisIdx+1].split('|||').map(s=>s.trim());
-     if(q.length>1)addCandidate(q[1]);
-   }
- }
- // Formats structurés : Client/Nom/Raison sociale.
- const explicitName=/^(?:client|nom du client|nom|raison sociale|société)\s*[:：-]\s*(.+)$/i;
- for(let i=0;i<lines.length;i++){
-   const m=lines[i].match(explicitName);
-   if(m&&!clientName)addCandidate(m[1]);
-   if(/^(?:client|nom du client|nom|raison sociale|société)\s*[:：-]?\s*$/i.test(lines[i])&&lines[i+1])addCandidate(lines[i+1]);
- }
- // Le chantier est une donnée client/site, jamais le nom du fichier.
- const chantierIdx=lines.findIndex(x=>/^chantier\b/i.test(x));
- let chantier='';
- if(chantierIdx>=0){
-   const p=lines[chantierIdx].split('|||').map(s=>s.trim());
-   chantier=p.length>1&&!/^objet$/i.test(p[1])?p[1]:(p[0].replace(/^chantier\s*[:：-]?\s*/i,'')||lines[chantierIdx+1]?.split('|||')[0]?.trim()||'');
-   if(!clientName&&chantier)clientName=stripRole(chantier);
- }
- // Extraire les champs client uniquement depuis leur zone explicite.
- const scanStart=Math.max(0,devisIdx>=0?devisIdx:chantierIdx>=0?chantierIdx:0);
- const scanEnd=Math.min(lines.length,scanStart+18);
- const nearby=lines.slice(scanStart,scanEnd);
- for(let i=0;i<nearby.length;i++){
-   const line=nearby[i];
-   if(!clientEmail){const m=line.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);if(m&&!own.mail.test(m[0]))clientEmail=m[0]}
-   if(!clientPhone){const m=line.match(/(?:\+33\s?[1-9]|0[1-9])(?:[ .-]?\d{2}){4}/);if(m&&!own.phone.test(m[0]))clientPhone=m[0]}
-   let m=line.match(/^(?:adresse|adresse de facturation|adresse client)\s*[:：-]\s*(.+)$/i);if(m)clientAddress=m[1].trim();
-   m=line.match(/^(?:code postal|cp)\s*[:：-]\s*(\d{5})$/i);if(m)clientPostal=m[1];
-   m=line.match(/^(?:ville|city)\s*[:：-]\s*(.+)$/i);if(m)clientCity=m[1].trim();
-   m=line.match(/^(?:adresse|adresse de facturation|adresse client)\s*[:：-]?\s*(\d{1,5}\s+.+?)\s+(\d{5})\s+(.+)$/i);
-   if(m){clientAddress=m[1].trim();clientPostal=m[2];clientCity=m[3].trim()}
- }
- // Adresses : ne retenir que des adresses réellement client/site, jamais celles de MS Plomberie.
- const addresses=[];
- const pushAddr=(street,postalCode,city,type='facturation')=>{
-   if(!street||own.address.test(street)||own.name.test(street)||own.mail.test(street))return;
-   const key=norm(street)+'|'+postalCode+'|'+norm(city);
-   if(!addresses.some(a=>norm(a.street)+'|'+a.postalCode+'|'+norm(a.city)===key))addresses.push({type,street:street.trim(),postalCode:String(postalCode||''),city:String(city||'').trim()});
- };
- if(clientAddress&&clientPostal&&clientCity)pushAddr(clientAddress,clientPostal,clientCity,'facturation');
- for(const line of lines){
-   let m=line.match(/(?:adresse(?: de facturation| client)?\s*[:：-]\s*)?(\d{1,5}\s+(?:rue|avenue|av\.?|boulevard|bd\.?|chemin|route|impasse|all[ée]e|place)\s+[A-Za-zÀ-ÿ0-9'’ .-]{2,100}?)[,;]?\s*(\d{5})\s+([A-Za-zÀ-ÿ'’ .-]{2,60})$/i);
-   if(m&&!own.name.test(m[0])&&!own.address.test(m[0]))pushAddr(m[1],m[2],m[3],/chantier|travaux|site/i.test(line)?'chantier':'facturation');
- }
- const explicitAddressLines=lines.filter(x=>/^(?:adresse|adresse de facturation|adresse client)\b/i.test(x));
- if(explicitAddressLines.length&&addresses.length===0){
-   const l=explicitAddressLines[0],m=l.match(/(?:adresse|adresse de facturation|adresse client)\s*[:：-]\s*(.+)$/i);if(m)clientAddress=m[1].trim();
- }
-
- // Objet / période / référence, en respectant les colonnes du PDF.
- const colValue=(label)=>{
-   const re=new RegExp(label,'i');
-   const idx=lines.findIndex(x=>re.test(x));
-   if(idx<0)return '';
-   const p=lines[idx].split('|||').map(s=>s.trim());
-   const leftHas=new RegExp('^'+label+'\\b','i').test(p[0]||'');
-   const rightHas=new RegExp('^'+label+'\\b','i').test(p[1]||'');
-   const next=lines[idx+1]?.split('|||').map(s=>s.trim())||[];
-   if(rightHas)return (next[1]||'').trim();
-   if(leftHas)return (next[0]||'').trim();
-   return (p[1]||p[0]||'').replace(new RegExp('^'+label+'\\s*[:：-]?\\s*','i'),'').trim();
- };
- const objet=colValue('objet'),period=colValue('p[ée]riode pr[ée]vue'),reference=colValue('r[ée]f[ée]rence');
-
- // 2) Lignes tarifaires : on conserve séparément désignation, quantité, PU et total.
- let section='',items=[];
- for(const line of lines){
-   const f=norm(line);
-   if(/^1\.\s*main-d.*oeuvre/i.test(f)){section='services';continue}
-   if(/^2\.\s*fournitures/i.test(f)){section='supplies';continue}
-   if(/^3\.\s*synthese/i.test(f)||/^4\.\s*conditions/i.test(f)){section='';continue}
-   if(!section)continue;
-   const euro=euroTokens(line); if(!euro.length)continue;
-   if(/^(sous-total|co[uû]t d'achat|estimation du co[uû]t|famille|ref\.?|designation|page)/i.test(f))continue;
-   const before=line.slice(0,euro[0].index).trim();
-   if(section==='services'&&euro.length>=2){
-     const qM=before.match(/\[\[QTY:(\d+(?:[.,]\d+)?)\]\]/)||before.match(/(?:^|\s)(\d+(?:[.,]\d+)?)\s*$/);
-     const quantity=qM?money(qM[1]):1;
-     let desc=(qM?before.slice(0,qM.index):before).replace(/^(?:\d{1,3}(?:[.,]\d+)?|—|-)\s*/,'').trim();
-     if(desc&&desc.length>2)items.push({type:'service',name:desc,quantity,unitPrice:euro[0].value,total:euro[euro.length-1].value});
-   }else if(section==='supplies'){
-     const qM=before.match(/\[\[QTY:(\d+(?:[.,]\d+)?)\]\]/)||before.match(/(?:^|\s)(\d+(?:[.,]\d+)?)\s*(?:ensembles?|flexibles?|unit[ée]s?|pcs?|pi[èe]ces?)?\s*$/i);
-     const quantity=qM?money(qM[1]):1;
-     let desc=(qM?before.slice(0,qM.index):before).replace(/\s+Forfait$/i,'').trim();
-     if(desc&&desc.length>2)items.push({type:'supply',name:desc,quantity,purchaseTotal:euro[euro.length-1].value,unitPrice:quantity?euro[euro.length-1].value/quantity:0,saleUnitPrice:quantity?euro[euro.length-1].value/quantity*1.30:0});
-   }
- }
- const searchable=norm(plain);
- const totalM=searchable.match(/total\s+net(?:\s+du\s+devis)?[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
- const laborM=searchable.match(/(?:sous-total|total)\s+main-d.?oeuvre[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
- const supplyCostM=searchable.match(/co[uû]t d'achat estimatif fournitures[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
- const supplySaleM=searchable.match(/fournitures valoris[ée]es avec marge[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
- // Les libellés peuvent être sur une seule ligne : « Nom : X Adresse : Y Téléphone : Z ».
- for(const line of lines){
-   let m=line.match(/(?:^|\s)(?:nom du client|client|nom)\s*[:：-]\s*(.+?)(?=\s+(?:adresse|t[eé]l[eé]phone|t[eé]l|email|e-mail|mail)\s*[:：-]|$)/i);
-   if(m&&!clientName)addCandidate(m[1]);
-   m=line.match(/(?:adresse de facturation|adresse client|adresse)\s*[:：-]\s*(\d{1,5}\s+(?:rue|avenue|av\.?|boulevard|bd\.?|chemin|route|impasse|all[ée]e|place)\s+.+?)(?=\s+(?:code postal|cp|ville|t[eé]l[eé]phone|t[eé]l|email|e-mail|mail)\s*[:：-]|$)/i);
-   if(m&&!own.address.test(m[1]))clientAddress=m[1].trim();
-   m=line.match(/(?:code postal|cp)\s*[:：-]\s*(\d{5})/i); if(m)clientPostal=m[1];
-   m=line.match(/(?:ville|city)\s*[:：-]\s*([^,;]+?)(?=\s+(?:t[eé]l[eé]phone|t[eé]l|email|e-mail|mail)\s*[:：-]|$)/i); if(m)clientCity=m[1].trim();
-   m=line.match(/(?:t[eé]l[eé]phone|t[eé]l)\s*[:：-]\s*((?:\+33\s?[1-9]|0[1-9])(?:[ .-]?\d{2}){4})/i); if(m&&!own.phone.test(m[1]))clientPhone=m[1];
-   m=line.match(/(?:email|e-mail|mail)\s*[:：-]\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i); if(m&&!own.mail.test(m[1]))clientEmail=m[1];
- }
- if(!clientName||own.name.test(clientName)||own.mail.test(clientName)||own.phone.test(clientName))clientName='';
- if(clientName&&/^(nom|adresse|client|devis|facture)\s*[:：-]/i.test(clientName))clientName=stripRole(clientName);
- if(clientName&&clientName.toLowerCase().includes('adresse'))clientName=clientName.replace(/\s+adresse\s*:?.*$/i,'').trim();
- const client=clientName?{name:clientName,email:clientEmail,phone:clientPhone,address:clientAddress,postalCode:clientPostal,city:clientCity}:null;
- return {
-   client,documentNumber,date,documentType,items,
-   total:totalM?money(totalM[1]):items.reduce((s,x)=>s+(x.type==='service'?x.total:x.purchaseTotal||0),0),
-   laborTotal:laborM?money(laborM[1]):items.filter(x=>x.type==='service').reduce((s,x)=>s+x.total,0),
-   supplyPurchaseTotal:supplyCostM?money(supplyCostM[1]):items.filter(x=>x.type==='supply').reduce((s,x)=>s+(x.purchaseTotal||0),0),
-   supplySaleTotal:supplySaleM?money(supplySaleM[1]):0,
-   addresses,selectedBillingAddress:0,chantier,object:objet,period,reference,warnings:[]
- };
+  const raw=String(text||'').replace(/\u0000/g,' ').replace(/\r/g,'').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n').trim();
+  const lines=raw.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+  const norm=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[’']/g,"'").replace(/\s+/g,' ').trim();
+  const money=x=>{const n=parseFloat(String(x||'').replace(/\s/g,'').replace('€','').replace(',','.'));return Number.isFinite(n)?n:0};
+  const eur=line=>{const a=[];for(const m of String(line).matchAll(/(\d[\d ]*[.,]\d{2})\s*€/g))a.push({value:money(m[1]),index:m.index});return a};
+  const own={name:/ms\s+plomberie|mikael\s+salillari/i,mail:/mikael\.salillari@hotmail\.fr/i,phone:/07\s*49\s*24\s*85\s*59/i,address:/285\s+rue\s+jeanne\s+d.?arc/i};
+  const isOwn=x=>Object.values(own).some(r=>r.test(String(x||'')));
+  const clean=x=>String(x||'').replace(/^(?:client|nom du client|destinataire|adresse|adresse client|adresse de facturation|t[eé]l[eé]phone|t[eé]l|email|e-mail|mail|objet|chantier|r[ée]f[ée]rence)\s*[:：-]?\s*/i,'').replace(/\s+/g,' ').trim();
+  const dateM=raw.match(/\b(\d{2})[\/-](\d{2})[\/-](\d{4})\b|\b(\d{4})[\/-](\d{2})[\/-](\d{2})\b/);
+  const date=dateM?(dateM[4]?dateM[4]+'-'+dateM[5]+'-'+dateM[6]:dateM[3]+'-'+dateM[2]+'-'+dateM[1]):null;
+  const n1=[...raw.matchAll(/\b(?:DEVIS|DEV|FACTURE|FAC)\s*[-_: ]\s*([A-Z0-9][A-Z0-9_-]{2,})/ig)].map(m=>m[0]);
+  const n2=String(filename||'').match(/\b(?:DEVIS|DEV|FACTURE|FAC)[\s_-]*(?=[A-Z0-9_-]*\d)[A-Z0-9]+(?:[\s_-]+[A-Z0-9]+)*/i)?.[0]||'';
+  const rawNum=n1.find(x=>/\d/.test(x))||n2;
+  const documentNumber=rawNum?rawNum.replace(/[:_ ]+/g,'-').replace(/-+/g,'-').toUpperCase():null;
+  const documentType=/(facture|invoice|\bfac[\s_-]?\d)/i.test(filename+' '+raw)?'facture':'devis';
+  let clientName='',clientEmail='',clientPhone='',clientAddress='',clientPostal='',clientCity='',issuerName='',issuerEmail='',issuerPhone='',issuerAddress='';
+  let issuerPostal='',issuerCity='',chantier='',object='',period='',reference='',clientExplicit=false;
+  const confidence={clientName:0,clientAddress:0,clientPhone:0,clientEmail:0,items:0};
+  const warnings=[];
+  const setName=(v,c)=>{v=clean(v);if(v&&!isOwn(v)&&!/^(devis|facture|objet|chantier|r[ée]f[ée]rence|siret|tva)$/i.test(v)&&!clientName){clientName=v;confidence.clientName=c;clientExplicit=c>=.9}};
+  const setAddress=(v,p='',city='',c=.8)=>{v=String(v||'').trim();if(!v||isOwn(v))return;clientAddress=v;clientPostal=String(p||'').trim();clientCity=String(city||'').trim();confidence.clientAddress=Math.max(confidence.clientAddress,c)};
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i],next=lines[i+1]||'',pair=line.split('|||').map(x=>x.trim());
+    let m=line.match(/^(?:client|nom du client|destinataire)\s*[:：-]\s*(.+)$/i);
+    if(m){setName(m[1],.99);continue}
+    if(/^(?:client|nom du client|destinataire)\s*[:：-]?\s*$/i.test(line)){setName(next,.99);continue}
+    m=line.match(/^(?:adresse client|adresse de facturation)\s*[:：-]\s*(.+)$/i);
+    if(m){const a=m[1].match(/^(.+?)\s*,?\s*(\d{5})\s+(.+)$/);a?setAddress(a[1],a[2],a[3],.98):setAddress(m[1],'','',.92);continue}
+    m=line.match(/^adresse\s*[:：-]\s*(.+)$/i);
+    if(m&&!isOwn(m[1])){const a=m[1].match(/^(.+?)\s*,?\s*(\d{5})\s+(.+)$/);a?setAddress(a[1],a[2],a[3],.9):setAddress(m[1],'','',.82)}
+    m=line.match(/^(?:code postal|cp)\s*[:：-]\s*(\d{5})$/i);if(m&&!clientPostal)clientPostal=m[1];
+    m=line.match(/^(?:ville|city)\s*[:：-]\s*(.+)$/i);if(m&&!clientCity)clientCity=clean(m[1]);
+    m=line.match(/^(?:t[eé]l[eé]phone|t[eé]l|portable|mobile)\s*[:：-]\s*((?:\+33\s?[1-9]|0[1-9])(?:[ .-]?\d{2}){4})/i);if(m&&!own.phone.test(m[1])&&!clientPhone){clientPhone=m[1];confidence.clientPhone=.98}
+    m=line.match(/^(?:email|e-mail|mail|courriel)\s*[:：-]\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);if(m&&!own.mail.test(m[1])&&!clientEmail){clientEmail=m[1];confidence.clientEmail=.98}
+    m=line.match(/^(?:objet)\s*[:：-]\s*(.+)$/i);if(m)object=clean(m[1]);
+    m=line.match(/^(?:p[ée]riode pr[ée]vue|validit[ée]|date de prestation)\s*[:：-]\s*(.+)$/i);if(m)period=clean(m[1]);
+    m=line.match(/^(?:r[ée]f[ée]rence|r[ée]f\.?)\s*[:：-]\s*(.+)$/i);if(m)reference=clean(m[1]);
+    m=line.match(/^(?:chantier|site des travaux|lieu des travaux)\s*[:：-]\s*(.+)$/i);if(m)chantier=clean(m[1]);
+    if(pair.length>1){
+      const l=pair[0],r=pair[1];
+      if(/^(?:client|nom du client|destinataire)\b/i.test(l))setName(r,.99);
+      else if(/^(?:adresse client|adresse de facturation)\b/i.test(l)){const a=r.match(/^(.+?)\s*,?\s*(\d{5})\s+(.+)$/);a?setAddress(a[1],a[2],a[3],.98):setAddress(r,'','',.92)}
+      else if(/^(?:objet)\b/i.test(l)&&!object)object=r;
+      else if(/^(?:chantier|site des travaux)\b/i.test(l)&&!chantier)chantier=r;
+      else if(/^(?:r[ée]f[ée]rence|r[ée]f\.?)\b/i.test(l)&&!reference)reference=r;
+    }
+  }
+  for(const line of lines){
+    let m=line.match(/(?:nom du client|client|destinataire)\s*[:：-]\s*(.+?)(?=\s+(?:adresse|t[eé]l[eé]phone|t[eé]l|email|e-mail|mail)\s*[:：-]|$)/i);if(m&&!clientName)setName(m[1],.94);
+    m=line.match(/(?:adresse de facturation|adresse client)\s*[:：-]\s*(\d{1,5}\s+(?:rue|avenue|av\.?|boulevard|bd\.?|chemin|route|impasse|all[ée]e|place)\s+.+?)(?=\s+(?:code postal|cp|ville|t[eé]l[eé]phone|t[eé]l|email|e-mail|mail)\s*[:：-]|$)/i);if(m&&!isOwn(m[1]))setAddress(m[1],clientPostal,clientCity,.94);
+  }
+  const addresses=[],pushAddr=(street,postal,city,type='facturation',c=.8)=>{street=String(street||'').trim();if(!street||isOwn(street))return;const key=norm(street)+'|'+postal+'|'+norm(city);if(!addresses.some(a=>norm(a.street)+'|'+a.postalCode+'|'+norm(a.city)===key))addresses.push({type,street,postalCode:String(postal||''),city:String(city||''),confidence:c})};
+  if(clientAddress)pushAddr(clientAddress,clientPostal,clientCity,'facturation',confidence.clientAddress||.8);
+  for(const line of lines){const m=line.match(/(?:adresse(?: de facturation| client)?\s*[:：-]\s*)?(\d{1,5}\s+(?:rue|avenue|av\.?|boulevard|bd\.?|chemin|route|impasse|all[ée]e|place)\s+[A-Za-zÀ-ÿ0-9'’ .-]{2,100}?)[,;]?\s*(\d{5})\s+([A-Za-zÀ-ÿ'’ .-]{2,60})$/i);if(m&&!isOwn(m[0]))pushAddr(m[1],m[2],m[3],/chantier|travaux|site/i.test(line)?'chantier':'facturation',.82)}
+  const ownLines=lines.filter(x=>isOwn(x));
+  if(ownLines.length){issuerName='Ms Plomberie & Chauffage';const em=raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig)||[];issuerEmail=em.find(x=>own.mail.test(x))||'';const ph=raw.match(/(?:\+33\s?[1-9]|0[1-9])(?:[ .-]?\d{2}){4}/g)||[];issuerPhone=ph.find(x=>own.phone.test(x))||'';const am=raw.match(/(?:\d{1,5}\s+)?(?:rue|avenue|av\.?|boulevard|bd\.?|chemin|route|impasse|all[ée]e|place)\s+[A-Za-zÀ-ÿ0-9'’ .-]+/i);if(am&&own.address.test(am[0]))issuerAddress=am[0].trim()}
+  let section='',items=[];
+  for(const line of lines){
+    const f=norm(line);
+    if(/^1\.\s*main-d.*oeuvre/i.test(f)){section='service';continue}
+    if(/^2\.\s*fournitures/i.test(f)){section='supply';continue}
+    if(/^3\.\s*synthese/i.test(f)||/^4\.\s*conditions/i.test(f)){section='';continue}
+    if(!section)continue;
+    const e=eur(line);if(!e.length||/^(sous-total|co[uû]t d'achat|famille|ref\.?|designation|description|page)/i.test(f))continue;
+    const before=line.slice(0,e[0].index).trim();
+    const qM=before.match(/\[\[QTY:(\d+(?:[.,]\d+)?)\]\]/)||before.match(/(?:^|\s)(\d+(?:[.,]\d+)?)\s*(?:unit[ée]s?|pcs?|pi[èe]ces?)?\s*$/i);
+    const q=qM?money(qM[1]):1,desc=(qM?before.slice(0,qM.index):before).replace(/^(?:\d{1,3}(?:[.,]\d+)?|—|-)\s*/,'').trim();
+    if(!desc||desc.length<3)continue;
+    if(section==='service'&&e.length>=2)items.push({type:'service',name:desc,quantity:q,unitPrice:e[0].value,total:e[e.length-1].value,confidence:.9});
+    if(section==='supply'){const purchaseTotal=e[e.length-1].value;items.push({type:'supply',name:desc,quantity:q,purchaseTotal,unitPrice:q?purchaseTotal/q:0,saleUnitPrice:q?purchaseTotal/q*1.30:0,confidence:.88})}
+  }
+  const search=norm(raw),amount=re=>{const m=search.match(re);return m?money(m[1]):0};
+  const totalHT=amount(/total\s+ht[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i)||amount(/total\s+net(?:\s+du\s+devis)?[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
+  const totalTTC=amount(/total\s+ttc[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
+  const tvaAmount=amount(/tva(?:\s+\d+(?:[.,]\d+)?\s*%)?[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
+  const lineTotal=items.reduce((s,x)=>s+(x.type==='service'?x.total:x.purchaseTotal||0),0);
+  const total=totalHT||totalTTC||lineTotal;
+  if(!clientName)warnings.push('Client non identifié avec certitude. Le nom du fichier n’est jamais utilisé comme nom client.');
+  if(clientName&&confidence.clientName<.9)warnings.push('Nom du client inféré : vérification recommandée.');
+  if(clientAddress&&!clientPostal&&!clientCity)warnings.push('Adresse client détectée mais code postal/ville non confirmés.');
+  if(!items.length&&/(devis|facture)/i.test(documentType))warnings.push('Aucune ligne tarifaire structurée détectée.');
+  if(totalHT&&items.length&&Math.abs(lineTotal-totalHT)>.02)warnings.push('Le total des lignes ne correspond pas au total HT détecté.');
+  if(totalHT&&totalTTC&&tvaAmount&&Math.abs(totalHT+tvaAmount-totalTTC)>.02)warnings.push('HT + TVA ne correspond pas au TTC détecté.');
+  return {
+    client:clientName?{name:clientName,email:clientEmail,phone:clientPhone,address:clientAddress,postalCode:clientPostal,city:clientCity}:null,
+    issuer:issuerName?{name:issuerName,email:issuerEmail,phone:issuerPhone,address:issuerAddress,postalCode:issuerPostal,city:issuerCity}:null,
+    documentNumber,date,documentType,items,total,totalHT,totalTTC,tvaAmount,
+    laborTotal:items.filter(x=>x.type==='service').reduce((s,x)=>s+x.total,0),
+    supplyPurchaseTotal:items.filter(x=>x.type==='supply').reduce((s,x)=>s+(x.purchaseTotal||0),0),
+    supplySaleTotal:items.filter(x=>x.type==='supply').reduce((s,x)=>s+(x.saleUnitPrice||0)*x.quantity,0),
+    addresses,selectedBillingAddress:0,chantier,object,period,reference,
+    confidence:{...confidence,items:items.length?items.reduce((s,x)=>s+(x.confidence||.8),0)/items.length:0},
+    warnings,source:{filename:String(filename||''),textLength:raw.length}
+  };
 }
-
 function getFileType(filename) {
   if (filename.endsWith('.pdf')) return 'pdf';
   if (filename.endsWith('.jpg') || filename.endsWith('.jpeg')) return 'image/jpeg';
