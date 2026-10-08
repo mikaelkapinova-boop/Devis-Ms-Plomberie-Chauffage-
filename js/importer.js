@@ -249,7 +249,9 @@ function parseDocumentText(filename,text){
      const desc=(qM?before.slice(0,qM.index):before).replace(/\s+Forfait$/i,'').trim();
      items.push({type:'supply',name:desc,quantity,purchaseTotal:euro[euro.length-1].value,unitPrice:quantity?euro[euro.length-1].value/quantity:0,saleUnitPrice:quantity?euro[euro.length-1].value/quantity*1.30:0});
    }
-const searchable=norm(plain);\n const totalM=searchable.match(/total\s+net(?:\s+du\s+devis)?[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
+ }
+ const searchable=norm(plain);
+ const totalM=searchable.match(/total\s+net(?:\s+du\s+devis)?[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
  const laborM=searchable.match(/sous-total\s+main-d.?oeuvre[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
  const supplyCostM=searchable.match(/co[uû]t d'achat estimatif fournitures[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
  const supplySaleM=searchable.match(/fournitures valoris[ée]es avec marge[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
