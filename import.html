@@ -304,6 +304,39 @@ label {
   pointer-events: none
 }
 
+/* iPhone responsive hardening */
+#splash{display:none!important}
+button.validation-button{-webkit-appearance:none;appearance:none;width:100%;min-height:56px;box-sizing:border-box;background:var(--cu)!important;color:#fff!important;border:0!important;text-align:center;font:600 16px/1.25 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif}
+@media(max-width:520px){
+  body{overflow-x:hidden}
+  #hd{gap:6px;padding:8px max(10px,env(safe-area-inset-right,0px)) 8px max(10px,env(safe-area-inset-left,0px));border-radius:0 0 18px 18px}
+  #hd .ib{padding:8px 9px;border-radius:12px;font-size:15px}
+  #hd .ib span{font-size:15px}
+  #hd #ttl{font-size:17px;text-align:center;min-width:0}
+  #hd #appver{font-size:13px;white-space:nowrap}
+  #hd .toplogo{width:40px;max-width:40px;margin-left:0}
+  main{padding:10px 10px calc(var(--bar-h) + var(--off) + 18px)}
+  .c{padding:14px;border-radius:16px}
+  .file-upload-area{padding:28px 12px}
+  .file-upload-icon{font-size:40px}
+  .file-upload-label{font-size:16px}
+  .validation-button{margin-top:10px!important;padding:14px 12px!important;border-radius:14px!important}
+  .validation-button span{white-space:normal;overflow-wrap:anywhere}
+  .transfer-grid,.items-grid{grid-template-columns:1fr}
+  .client-info{grid-template-columns:1fr}
+  .transfer-section{padding:13px}
+  .transfer-option{min-height:48px}
+  .file-item{min-width:0}
+  .file-name{max-width:55vw}
+}
+@media(max-width:380px){
+  #hd .toplogo{display:none}
+  #hd #ttl{font-size:16px}
+  #hd #appver{font-size:12px}
+  .c{padding:12px}
+  .file-upload-area{padding:24px 10px}
+}
+
 /* Import specific styles */
 .import-container {
   display: flex;
@@ -1022,7 +1055,7 @@ body.kb #bar {
 .transfer-scope{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.scope-option{position:relative;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--in);border:1.5px solid var(--ln);border-radius:14px;cursor:pointer;font-size:14px;font-weight:600}.scope-option input{position:absolute;opacity:0}.scope-check{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--mu);display:grid;place-items:center;color:transparent;flex:none}.scope-option.selected{border-color:var(--cu);background:color-mix(in srgb,var(--cu) 9%,var(--in))}.scope-option.selected .scope-check{background:var(--cu);border-color:var(--cu);color:#fff}.import-warning{display:flex;gap:8px;padding:10px 12px;margin-top:10px;border-radius:12px;background:color-mix(in srgb,var(--cu) 10%,var(--in));font-size:13px}.file-actions button.square{width:36px;height:36px;border:1px solid var(--ln);border-radius:10px;background:var(--in)}@media(max-width:520px){.transfer-scope{grid-template-columns:1fr}}\n</style>
 </head>
 <body>
-<div id="splash"><img src="img/drop-hd.png" alt=""><b>Ms Plomberie &amp; Chauffage</b></div>
+
 <header id="hd">
   <button class="ib" onclick="tg()" aria-label="Menu"><span>Menu</span></button>
   <b id="ttl">Importation de documents</b>
@@ -1231,11 +1264,11 @@ function getImportHTML() {
           <div class="file-upload-icon">📄</div>
           <div class="file-upload-label">Sélectionner des fichiers</div>
           <div style="font-size: 12px; color: var(--mu);">PDF, Images, Word</div>
+        </div>
+        
           <button class="validation-button" id="transferNowButton" type="button" disabled style="margin-top:16px;opacity:.45;cursor:not-allowed;">
             <div class="validation-icon">✓</div><span>Transférer vers la nouvelle mise en page</span>
           </button>
-        </div>
-        
         <div class="progress-bar" id="uploadProgress" style="display: none;">
           <div class="progress-fill" id="progressFill" style="width: 0%"></div>
         </div>
