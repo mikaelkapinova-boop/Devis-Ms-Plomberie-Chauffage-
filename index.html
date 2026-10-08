@@ -1897,7 +1897,7 @@ document.querySelectorAll('.ni').forEach(b=>b.classList.toggle('a',b.dataset.v==
 $('#ttl').textContent={d:'Devis',f:'Factures',c:'Clients',p:'Mes tarifs',r:'Bénéfices',h:'Accueil',x:'Rapports',xe:'Rapport',e:d&&d.t==='f'?'Facture':'Devis',ce:'Client',a:'Assistant',s:'Réglages',g:'Planning',k:'Connecteurs',i:'Importation'}[t];
 document.querySelectorAll('.toplogo').forEach(im=>{ if(!im.dataset.ok){ im.src=LGD; im.dataset.ok='1' } });
 $('#ad').style.display=['r','e','ce','h','xe','a','s','k'].includes(t)?'none':'';
-$('#app').innerHTML=({d:list,f:list,c:cli,p:tar,r:rap,e:edit,ce:cliE,h:home,x:rlist,xe:redit,a:chatV,s:setV,g:plV,k:cxV,i:importPage})[t]();
+$('#app').innerHTML=({d:list,f:list,c:cli,p:tar,r:rap,e:edit,ce:cliE,h:home,x:rlist,xe:redit,a:chatV,s:setV,g:plV,k:cxV,i:importPage})[t]();if(t==='i'&&typeof initImportPage==='function')initImportPage();
 const b=$('#bar');b.style.display=d?'flex':'none';
 if(d)b.innerHTML=`<button class="b gh" onclick="pvo()"><span>Voir l'aperçu</span></button><button class="b" onclick="pdf()"><span>Télécharger le PDF</span></button>${d.t==='f'?`<button class="b cu" onclick="pay(!cur().paid);render()"><span>${d.paid?'Annuler le paiement':'Marquer payée'}</span></button>`:`<button class="b cu" onclick="conv()"><span>Créer la facture</span></button>`}<button class="b gh" onclick="shr()"><span>Partager le PDF</span></button>`;
 if(t==='xe'){b.style.display='flex';b.innerHTML='<button class="b gh" onclick="pvo()"><span>Voir l\'aperçu</span></button><button class="b" onclick="pdf()"><span>Télécharger le PDF</span></button><button class="b gh" onclick="shr()"><span>Partager le PDF</span></button>'}
