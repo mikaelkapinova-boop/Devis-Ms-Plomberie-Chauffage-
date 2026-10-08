@@ -186,7 +186,7 @@ function parseDocumentText(filename,text){
  const plain=raw.replace(/\s*\|\|\|\s*/g,' ');
  const dateM=plain.match(/\b(\d{2})[\/-](\d{2})[\/-](\d{4})\b|\b(\d{4})[\/-](\d{2})[\/-](\d{2})\b/);
  const date=dateM?(dateM[4]?dateM[4]+'-'+dateM[5]+'-'+dateM[6]:dateM[3]+'-'+dateM[2]+'-'+dateM[1]):td();
- const numM=(filename+'\n'+plain).match(/\b((?:DEVIS|DEV|FACTURE|FAC)[\s_-]*[A-Z0-9]+(?:[\s_-]+[A-Z0-9]+)*)\b/i);
+ const numM=(plain.match(/\b((?:DEVIS|DEV|FACTURE|FAC)[\s_-]*(?=[A-Z0-9_-]*\d)[A-Z0-9]+(?:[\s_-]+[A-Z0-9]+)*)\b/i)||filename.match(/\b((?:DEVIS|DEV|FACTURE|FAC)[\s_-]*(?=[A-Z0-9_-]*\d)[A-Z0-9]+(?:[\s_-]+[A-Z0-9]+)*)\b/i));
  const documentNumber=numM?numM[1].replace(/\s+/g,'-').replace(/_/g,'-').toUpperCase():null;
  const documentType=/(facture|invoice|fac[\s_-]?\d)/i.test(filename+' '+plain)?'facture':'devis';
  const emailAll=[...plain.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig)].map(x=>x[0]);
