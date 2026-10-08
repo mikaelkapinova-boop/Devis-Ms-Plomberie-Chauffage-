@@ -238,22 +238,21 @@ function parseDocumentText(filename,text){
    if(/^(sous-total|cout d'achat estimatif|estimation du cout|famille|ref\.?|designation|page)/i.test(f))continue;
    if(section==='services' && euro.length>=2){
      const before=line.slice(0,euro[0].index).trim();
-     const qM=before.match(/(?:^|\s)(\d+(?:[.,]\d+)?)\s*$/);
+     const qM=before.match(/\[\[QTY:(\d+(?:[.,]\d+)?)\]\]/)||before.match(/(?:^|\s)(\d+(?:[.,]\d+)?)\s*$/);
      const quantity=qM?money(qM[1]):1;
-     let desc=(qM?before.slice(0,qM.index):before).replace(/^(?:\d{1,3}(?:[.,]\d+)?|—|-)\s+/,'').trim();
+     let desc=(qM?before.slice(0,qM.index):before).replace(/^(?:\d{1,3}(?:[.,]\d+)?|—|-|\s)+/,'').trim();
      items.push({type:'service',name:desc,quantity,unitPrice:euro[0].value,total:euro[euro.length-1].value});
    } else if(section==='supplies'){
      const before=line.slice(0,euro[0].index).trim();
-     const qM=before.match(/(?:^|\s)(\d+(?:[.,]\d+)?)\s*(?:ensembles?|flexibles?|unit[ée]s?|pcs?|pi[èe]ces?)?\s*$/i);
+     const qM=before.match(/\[\[QTY:(\d+(?:[.,]\d+)?)\]\]/)||before.match(/(?:^|\s)(\d+(?:[.,]\d+)?)\s*(?:ensembles?|flexibles?|unit[ée]s?|pcs?|pi[èe]ces?)?\s*$/i);
      const quantity=qM?money(qM[1]):1;
      const desc=(qM?before.slice(0,qM.index):before).replace(/\s+Forfait$/i,'').trim();
      items.push({type:'supply',name:desc,quantity,purchaseTotal:euro[euro.length-1].value,unitPrice:quantity?euro[euro.length-1].value/quantity:0,saleUnitPrice:quantity?euro[euro.length-1].value/quantity*1.30:0});
    }
- }
- const totalM=plain.match(/total\s+net(?:\s+du\s+devis)?[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
- const laborM=plain.match(/sous-total\s+main-d.?oeuvre[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
- const supplyCostM=plain.match(/co[uû]t d'achat estimatif fournitures[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
- const supplySaleM=plain.match(/fournitures valoris[ée]es avec marge[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
+const searchable=norm(plain);\n const totalM=searchable.match(/total\s+net(?:\s+du\s+devis)?[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
+ const laborM=searchable.match(/sous-total\s+main-d.?oeuvre[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
+ const supplyCostM=searchable.match(/co[uû]t d'achat estimatif fournitures[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
+ const supplySaleM=searchable.match(/fournitures valoris[ée]es avec marge[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
  return {
    client:clientName?{name:clientName,email:clientEmail,phone:clientPhone}:null,
    documentNumber,date,documentType,items,
