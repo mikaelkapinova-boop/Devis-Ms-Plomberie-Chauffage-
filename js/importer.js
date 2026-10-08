@@ -218,10 +218,10 @@ function parseDocumentText(filename,text){
  const objetIdx=lines.findIndex(x=>/^objet\b/i.test(x));
  const periodeIdx=lines.findIndex(x=>/^p[ée]riode pr[ée]vue\b/i.test(x));
  const refIdx=lines.findIndex(x=>/^r[ée]f[ée]rence\b/i.test(x));
- const chantier=chantierIdx>=0?(lines[chantierIdx].split(/\|\|\|/)[1]||lines[chantierIdx+1]||'').trim():'';
- const object=objetIdx>=0?(lines[objetIdx].split(/\|\|\|/)[1]||lines[objetIdx+1]||'').trim()+' '+(lines[objetIdx+1]&&!lines[objetIdx].includes('|||')?lines[objetIdx+2]||'':''):''; 
- const period=periodeIdx>=0?(lines[periodeIdx].split(/\|\|\|/)[0].replace(/^p[ée]riode pr[ée]vue/i,'').trim()||lines[periodeIdx+1]||''):'';
- const reference=refIdx>=0?(lines[refIdx].split(/\|\|\|/)[1]||lines[refIdx+1]||'').trim():'';
+ const chantier=chantierIdx>=0?((lines[chantierIdx].includes('|||')&&/^objet$/i.test((lines[chantierIdx].split(/\|\|\|/)[1]||'').trim()))?(lines[chantierIdx+1]?.split(/\|\|\|/)[0]||'').trim():(lines[chantierIdx].split(/\|\|\|/)[1]||lines[chantierIdx+1]||'').trim()):'';
+ const object=objetIdx>=0?((lines[objetIdx+1]?.split(/\|\|\|/)[1]||lines[objetIdx+1]||'').trim()):''; 
+ const period=periodeIdx>=0?(lines[periodeIdx+1]?.split(/\|\|\|/)[0]||lines[periodeIdx+1]||'').trim():'';
+ const reference=refIdx>=0?(lines[refIdx+1]?.split(/\|\|\|/)[1]||lines[refIdx+1]||'').trim():'';
  const addresses=[];
  for(const line of lines){
    const m=line.match(/(\d{1,5}\s+(?:rue|avenue|av\.?|boulevard|bd\.?|chemin|route|impasse|all[ée]e)\s+[^\n,;]{2,80})[,;]?\s*(\d{5})\s+([^\n,;]+)/i);
