@@ -189,7 +189,7 @@ function parseDocumentText(filename,text){
  const cleanLabel=(s,label)=>String(s||'').replace(new RegExp('^\\s*'+label+'\\s*[:：-]?\\s*','i'),'').trim();
  const stripRole=s=>String(s||'').replace(/^(?:nom|client|raison sociale|soci[eé]t[eé]|adresse|t[eé]l[eé]phone|t[eé]l|email|e-mail|mail)\s*[:：-]\s*/i,'').trim();
  const dateM=plain.match(/\b(\d{2})[\/-](\d{2})[\/-](\d{4})\b|\b(\d{4})[\/-](\d{2})[\/-](\d{2})\b/);
- const date=dateM?(dateM[4]?dateM[4]+'-'+dateM[5]+'-'+dateM[6]:dateM[3]+'-'+dateM[2]+'-'+dateM[1]):td();
+ const date=dateM?(dateM[4]?dateM[4]+'-'+dateM[5]+'-'+dateM[6]:dateM[3]+'-'+dateM[2]+'-'+dateM[1]):null;
  const numCandidates=[...plain.matchAll(/\b(?:DEVIS|DEV|FACTURE|FAC)\s*[-_: ]\s*([A-Z0-9][A-Z0-9_-]{2,})/ig)].map(m=>m[0]);
  const filenameNum=filename.match(/\b(?:DEVIS|DEV|FACTURE|FAC)[\s_-]*(?=[A-Z0-9_-]*\d)[A-Z0-9]+(?:[\s_-]+[A-Z0-9]+)*/i)?.[0]||'';
  const rawNum=numCandidates.find(x=>/\d/.test(x))||filenameNum;
@@ -264,11 +264,16 @@ function parseDocumentText(filename,text){
 
  // Objet / période / référence, en respectant les colonnes du PDF.
  const colValue=(label)=>{
-   const idx=lines.findIndex(x=>new RegExp('^'+label+'\\b','i').test(x)||new RegExp('\\|\\|\\|\\s*'+label+'\\s*$','i').test(x));
+   const re=new RegExp(label,'i');
+   const idx=lines.findIndex(x=>re.test(x));
    if(idx<0)return '';
    const p=lines[idx].split('|||').map(s=>s.trim());
-   if(p.length>1&&!new RegExp('^'+label+'\\b','i').test(p[1]))return p[1];
-   return (lines[idx+1]?.split('|||').map(s=>s.trim())[p.length>1?0:0]||'').trim();
+   const leftHas=new RegExp('^'+label+'\\b','i').test(p[0]||'');
+   const rightHas=new RegExp('^'+label+'\\b','i').test(p[1]||'');
+   const next=lines[idx+1]?.split('|||').map(s=>s.trim())||[];
+   if(rightHas)return (next[1]||'').trim();
+   if(leftHas)return (next[0]||'').trim();
+   return (p[1]||p[0]||'').replace(new RegExp('^'+label+'\\s*[:：-]?\\s*','i'),'').trim();
  };
  const objet=colValue('objet'),period=colValue('p[ée]riode pr[ée]vue'),reference=colValue('r[ée]f[ée]rence');
 
