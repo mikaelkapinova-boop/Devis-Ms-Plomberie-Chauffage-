@@ -162,7 +162,7 @@ async function extractPdfText(buffer){
           for(let mi=moneyIdx.length-1;mi>=0;mi--){
             const i=moneyIdx[mi],amount=vals[i].text,prev=vals[i-1];
             vals[i]={x:vals[i].x,text:'[[EUR:'+amount+']]'};used.add(i+1);
-            if(prev && /^\d+(?:[.,]\d+)?$/.test(prev.text) && (mi===0 || prev.x<vals[i].x)){
+            if(prev && mi===0 && /^\d+(?:[.,]\d+)?$/.test(prev.text)){
               vals[i-1]={x:prev.x,text:'[[QTY:'+prev.text+']]'};used.add(i-1);
             }
           }
