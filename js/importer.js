@@ -219,6 +219,7 @@ function parseDocumentText(filename,text){
     if(pair.length>1){
       const l=pair[0],r=pair[1];
       if(/^(?:client|nom du client|destinataire)\b/i.test(l))setName(r,.99);
+      else if(/^(?:devis|facture)\b/i.test(l)&&!clientName&&!/^(?:n[°o]?|num[ée]ro|date)\b/i.test(r)&&!/^\d+[\/-]\d+[\/-]\d{4}$/.test(r)){setName(r,.9)}
       else if(/^(?:adresse client|adresse de facturation)\b/i.test(l)){const a=r.match(/^(.+?)\s*,?\s*(\d{5})\s+(.+)$/);a?setAddress(a[1],a[2],a[3],.98):setAddress(r,'','',.92)}
       else if(/^(?:objet)\b/i.test(l)&&!object)object=r;
       else if(/^(?:chantier|site des travaux)\b/i.test(l)&&!chantier)chantier=r;
