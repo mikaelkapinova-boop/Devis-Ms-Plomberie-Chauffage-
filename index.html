@@ -169,6 +169,28 @@ button.b{color:var(--bg)!important}
 .pd .ft span:first-child{min-width:0}.pd .ft .pg{flex:none;color:#3b556a;font-weight:700;white-space:nowrap}
 .pdf-stack{width:794px}#pvs .pdf-page{margin-bottom:14px;box-shadow:0 8px 24px #00000022}
 #appver{font-size:11px;font-weight:700;opacity:.72;white-space:nowrap;padding:3px 7px;border:1px solid #ffffff55;border-radius:99px}#nv .nver{display:block;padding:18px 22px 0;color:var(--mu);font-size:12px}#nv .nver a{color:var(--cu)}
+/* iPhone responsive v6.0 */
+@media(max-width:520px){
+  html,body{width:100%;max-width:100%;overflow-x:hidden}
+  #hd{gap:5px;padding:8px max(10px,env(safe-area-inset-right,0px)) 8px max(10px,env(safe-area-inset-left,0px));min-height:56px}
+  #hd .ib{padding:8px 8px;font-size:15px;border-radius:10px}
+  #hd .ib span{font-size:15px}
+  #hd #ttl{font-size:16px;min-width:0;overflow:hidden;text-overflow:ellipsis;text-align:center}
+  #hd #appver{font-size:12px;white-space:nowrap;flex:none}
+  #hd .toplogo{width:34px;max-width:34px;margin-left:0}
+  main{width:100%;max-width:100%;padding:10px 10px calc(var(--bar-h) + var(--off) + 20px)}
+  .c{width:100%;max-width:100%;padding:14px;border-radius:16px}
+  #bar{left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom,0px));padding:8px;border-radius:20px;gap:7px}
+  #bar .b{min-height:48px;padding:9px 6px;font-size:14px;white-space:normal;line-height:1.2}
+  .pvb{gap:7px;padding-left:10px;padding-right:10px}
+  .pvb .b{font-size:14px;min-height:44px;padding:8px 7px}
+}
+@media(max-width:380px){
+  #hd .toplogo{display:none}
+  #hd #ttl{font-size:15px}
+  #hd #appver{font-size:11px}
+  #bar .b{font-size:13px}
+}
 </style></head><body>
 <div id="splash"><img src="img/drop-hd.png" alt=""><b>Ms Plomberie &amp; Chauffage</b></div>
 <header id="hd"><button class="ib" onclick="tg()" aria-label="Menu"><span>Menu</span></button><b id="ttl"></b><span id="appver" title="Version de l’application">v6.0.0</span><button class="ib" id="ad" onclick="add()" aria-label="Ajouter"><span>Ajouter</span></button><img class="toplogo" alt="Logo"></header>
