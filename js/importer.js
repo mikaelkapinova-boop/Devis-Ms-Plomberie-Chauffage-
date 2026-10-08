@@ -153,9 +153,24 @@ async function extractPdfText(buffer){
       rows.sort((a,b)=>b.y-a.y);
       pages.push(rows.map(row=>{
         row.items.sort((a,b)=>a.x-b.x);
-        const minX=row.items[0]?.x||0,maxX=row.items.reduce((m,v)=>Math.max(m,v.x),0),split=minX+(maxX-minX)*.52;
-        const left=row.items.filter(v=>v.x<=split).map(v=>v.text).join(' ').trim();
-        const right=row.items.filter(v=>v.x>split).map(v=>v.text).join(' ').trim();
+        const vals=row.items.slice(), moneyIdx=[];
+        for(let i=0;i<vals.length;i++){
+          if(/^\d[\d ]*[.,]\d{2}$/.test(vals[i].text) && vals[i+1] && vals[i+1].text==='€') moneyIdx.push(i);
+        }
+        if(moneyIdx.length){
+          const used=new Set();
+          for(let mi=moneyIdx.length-1;mi>=0;mi--){
+            const i=moneyIdx[mi],amount=vals[i].text,prev=vals[i-1];
+            vals[i]={x:vals[i].x,text:'[[EUR:'+amount+']]'};used.add(i+1);
+            if(prev && /^\d+(?:[.,]\d+)?$/.test(prev.text) && (mi===0 || prev.x<vals[i].x)){
+              vals[i-1]={x:prev.x,text:'[[QTY:'+prev.text+']]'};used.add(i-1);
+            }
+          }
+          for(let i=vals.length-1;i>=0;i--) if(used.has(i) && vals[i].text==='€') vals.splice(i,1);
+        }
+        const minX=vals[0]?.x||0,maxX=vals.reduce((m,v)=>Math.max(m,v.x),0),split=minX+(maxX-minX)*.52;
+        const left=vals.filter(v=>v.x<=split).map(v=>v.text).join(' ').trim();
+        const right=vals.filter(v=>v.x>split).map(v=>v.text).join(' ').trim();
         return right?left+' ||| '+right:left;
       }).filter(Boolean).join('\n'));
     }
@@ -167,7 +182,7 @@ function parseDocumentText(filename,text){
  const lines=raw.split(/\n+/).map(x=>x.trim()).filter(Boolean);
  const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/Œ/g,'OE').replace(/œ/g,'oe').replace(/’/g,"'").toLowerCase().trim();
  const money=s=>parseFloat(String(s||'').replace(/\s/g,'').replace(',','.'))||0;
- const euroTokens=line=>[...String(line).matchAll(/(\d[\d ]*[.,]\d{2})\s*€/g)].map(m=>({value:money(m[1]),index:m.index}));
+ const euroTokens=line=>{const out=[];for(const m of String(line).matchAll(/\[\[EUR:(\d[\d ]*[.,]\d{2})\]\]/g))out.push({value:money(m[1]),index:m.index});if(out.length)return out;return [...String(line).matchAll(/(\d[\d ]*[.,]\d{2})\s*€/g)].map(m=>({value:money(m[1]),index:m.index}))};
  const plain=raw.replace(/\s*\|\|\|\s*/g,' ');
  const dateM=plain.match(/\b(\d{2})[\/-](\d{2})[\/-](\d{4})\b|\b(\d{4})[\/-](\d{2})[\/-](\d{2})\b/);
  const date=dateM?(dateM[4]?dateM[4]+'-'+dateM[5]+'-'+dateM[6]:dateM[3]+'-'+dateM[2]+'-'+dateM[1]):td();
