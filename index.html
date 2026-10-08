@@ -191,6 +191,1632 @@ button.b{color:var(--bg)!important}
   #hd #appver{font-size:11px}
   #bar .b{font-size:13px}
 }
+/* Import specific styles */
+.import-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px
+}
+
+.file-upload-area {
+  border: 2px dashed var(--ln);
+  border-radius: 14px;
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--in)
+}
+
+.file-upload-area:hover {
+  border-color: var(--cu);
+  background: color-mix(in srgb, var(--cu) 10%, var(--in))
+}
+
+.file-upload-area.dragover {
+  border-color: var(--cu);
+  background: color-mix(in srgb, var(--cu) 15%, var(--in))
+}
+
+.file-upload-area input[type="file"] {
+  display: none
+}
+
+.file-upload-label {
+  color: var(--mu);
+  font-size: 14px;
+  margin-bottom: 8px
+}
+
+.file-upload-icon {
+  font-size: 48px;
+  color: var(--cu);
+  margin-bottom: 8px
+}
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--cd);
+  border: 1px solid var(--ln);
+  border-radius: 12px;
+  transition: all 0.2s
+}
+
+.file-item:hover {
+  background: var(--in)
+}
+
+.file-icon {
+  width: 40px;
+  height: 40px;
+  background: var(--cu);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 20px
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0
+}
+
+.file-name {
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis
+}
+
+.file-size {
+  font-size: 12px;
+  color: var(--mu)
+}
+
+.file-status {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--in);
+  color: var(--mu)
+}
+
+.file-status.processing { background: var(--cu); color: white }
+.file-status.completed { background: var(--ok); color: white }
+.file-status.error { background: var(--rd); color: white }
+
+.file-actions {
+  display: flex;
+  gap: 4px
+}
+
+.file-actions button {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: var(--in);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  transition: all 0.2s
+}
+
+.file-actions button:hover {
+  background: var(--ln)
+}
+
+.file-actions button.delete:hover {
+  background: var(--rd);
+  color: white
+}
+
+.preview-container {
+  background: var(--cd);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 12px;
+  overflow-x: auto
+}
+
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px
+}
+
+.preview-table th,
+.preview-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--ln)
+}
+
+.preview-table th {
+  background: var(--in);
+  font-weight: 600;
+  color: var(--ink)
+}
+
+.preview-table td {
+  color: var(--ink)
+}
+
+.extracted-data {
+  display: flex;
+  flex-direction: column;
+  gap: 12px
+}
+
+.client-card {
+  background: var(--cd);
+  border: 1px solid var(--ln);
+  border-radius: 14px;
+  padding: 16px
+}
+
+.client-card.new-client {
+  border-color: var(--cu);
+  border-width: 2px
+}
+
+.client-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px
+}
+
+.client-name {
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--ink)
+}
+
+.new-client-badge {
+  background: var(--cu);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600
+}
+
+.client-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px
+}
+
+.client-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px
+}
+
+.client-info-label {
+  font-size: 12px;
+  color: var(--mu);
+  font-weight: 500
+}
+
+.client-info-value {
+  font-size: 14px;
+  color: var(--ink)
+}
+
+.address-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px
+}
+
+.address-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--in);
+  border-radius: 8px
+}
+
+.address-radio {
+  margin-top: 2px
+}
+
+.address-content {
+  flex: 1
+}
+
+.address-line {
+  font-size: 14px;
+  color: var(--ink);
+  margin-bottom: 2px
+}
+
+.address-type {
+  font-size: 12px;
+  color: var(--mu)
+}
+
+.transfer-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px
+}
+
+.transfer-section {
+  background: var(--cd);
+  border: 1px solid var(--ln);
+  border-radius: 14px;
+  padding: 16px
+}
+
+.transfer-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink)
+}
+
+.transfer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 8px
+}
+
+.transfer-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--in);
+  border: 2px solid var(--ln);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s
+}
+
+.transfer-option:hover {
+  border-color: var(--cu)
+}
+
+.transfer-option.selected {
+  border-color: var(--cu);
+  background: color-mix(in srgb, var(--cu) 10%, var(--in))
+}
+
+.transfer-option input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--cu)
+}
+
+.transfer-option label {
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+  margin: 0
+}
+
+.validation-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 24px;
+  background: var(--cu);
+  color: white;
+  border: 0;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 8px
+}
+
+.validation-button:hover {
+  background: color-mix(in srgb, black 20%, var(--cu))
+}
+
+.validation-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed
+}
+
+.validation-icon {
+  width: 24px;
+  height: 24px;
+  background: white;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cu);
+  font-size: 14px
+}
+
+.items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px
+}
+
+.item-card {
+  background: var(--cd);
+  border: 1px solid var(--ln);
+  border-radius: 12px;
+  padding: 12px
+}
+
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px
+}
+
+.item-type {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--cu);
+  color: white;
+  font-weight: 500
+}
+
+.item-name {
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 4px
+}
+
+.item-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--mu)
+}
+
+.item-price {
+  font-weight: 700;
+  color: var(--ink)
+}
+
+.item-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px
+}
+
+.item-actions button {
+  flex: 1;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s
+}
+
+.item-actions button.add {
+  background: var(--cu);
+  color: white
+}
+
+.item-actions button.add:hover {
+  background: color-mix(in srgb, black 20%, var(--cu))
+}
+
+.item-actions button.skip {
+  background: var(--in);
+  color: var(--ink)
+}
+
+.item-actions button.skip:hover {
+  background: var(--ln)
+}
+
+.search-container {
+  position: relative;
+  margin-bottom: 12px
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 16px 12px 40px;
+  border: 1.5px solid var(--ln);
+  border-radius: 12px;
+  font-size: 15px;
+  background: var(--cd)
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--mu);
+  font-size: 18px
+}
+
+.results-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--cd);
+  border: 1px solid var(--ln);
+  border-radius: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+  display: none
+}
+
+.results-dropdown.show {
+  display: block
+}
+
+.result-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 0.2s
+}
+
+.result-item:hover {
+  background: var(--in)
+}
+
+.result-item.highlight {
+  background: color-mix(in srgb, var(--cu) 15%, var(--cd))
+}
+
+.progress-bar {
+  width: 100%;
+  height: 4px;
+  background: var(--ln);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--cu);
+  border-radius: 2px;
+  transition: width 0.3s
+}
+
+@media(max-width: 520px) {
+  .g2:not(.qa), .pho {
+    grid-template-columns: 1fr
+  }
+  .tr {
+    flex-wrap: wrap
+  }
+  .tr > b {
+    white-space: normal
+  }
+  #nv {
+    width: min(88vw, 320px)
+  }
+}
+
+@media(max-width: 380px) {
+  #hd .ib {
+    padding: 8px 10px
+  }
+}
+
+@media(max-width: 340px) {
+  #hd .toplogo {
+    display: none
+  }
+}
+
+button {
+  -webkit-appearance: none;
+  appearance: none
+}
+
+button.b, button.ib {
+  -webkit-appearance: none;
+  appearance: none;
+  overflow: visible;
+  height: auto;
+  white-space: normal;
+  line-height: 1.25;
+  font-size: 16px
+}
+
+button.b {
+  color: #fff !important;
+  min-height: 52px
+}
+
+button.b span, button.ib span {
+  display: block;
+  color: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25
+}
+
+#hd {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top,0px)) max(12px, env(safe-area-inset-right,0px)) 12px max(12px, env(safe-area-inset-left,0px))
+}
+
+#hd .ib {
+  width: auto;
+  min-width: 0;
+  height: auto;
+  padding: 9px 12px;
+  flex: none;
+  color: #fff !important
+}
+
+#hd #ttl {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(16px, 5vw, 20px)
+}
+
+.toplogo {
+  width: clamp(38px, 11vw, 54px);
+  height: auto;
+  aspect-ratio: 54/40;
+  object-fit: contain;
+  background: transparent;
+  border-radius: 0;
+  margin-left: 8px;
+  flex: none
+}
+
+.navtop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 8px 0
+}
+
+.navtop .brand {
+  flex: 1;
+  padding-bottom: 0
+}
+
+#nv {
+  padding-top: calc(14px + env(safe-area-inset-top,0px));
+  padding-bottom: calc(20px + env(safe-area-inset-bottom,0px));
+  padding-left: env(safe-area-inset-left,0px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch
+}
+
+.pvb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: max(12px, env(safe-area-inset-left,0px));
+  padding-right: max(12px, env(safe-area-inset-right,0px))
+}
+
+.pvb .b {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 10px
+}
+
+.pvb .toplogo {
+  margin-left: 0
+}
+
+#pvw {
+  min-height: 0;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px max(8px, env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(8px, env(safe-area-inset-left,0px))
+}
+
+#bar {
+  flex-wrap: wrap;
+  left: max(12px, env(safe-area-inset-left,0px));
+  right: max(12px, env(safe-area-inset-right,0px));
+  bottom: var(--off);
+  padding: 10px;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto
+}
+
+#bar .b {
+  flex: 1 1 calc(50% - 4px);
+  min-width: 0;
+  min-height: 48px;
+  height: auto;
+  padding: 10px 8px
+}
+
+body.lk {
+  overflow: hidden
+}
+
+body.kb #bar {
+  display: none !important
+}
+
+@media (min-width: 520px) {
+  #bar .b {
+    flex: 1 1 0
+  }
+}
+
+@media (max-width: 520px) {
+  .g2:not(.qa), .pho {
+    grid-template-columns: 1fr
+  }
+  .tr {
+    flex-wrap: wrap
+  }
+  .tr > b {
+    white-space: normal
+  }
+  #nv {
+    width: min(88vw, 320px)
+  }
+}
+
+@media (max-width: 380px) {
+  #hd .ib {
+    padding: 8px 10px
+  }
+}
+
+@media (max-width: 340px) {
+  #hd .toplogo {
+    display: none
+  }
+}
+.transfer-scope{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.scope-option{position:relative;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--in);border:1.5px solid var(--ln);border-radius:14px;cursor:pointer;font-size:14px;font-weight:600}.scope-option input{position:absolute;opacity:0}.scope-check{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--mu);display:grid;place-items:center;color:transparent;flex:none}.scope-option.selected{border-color:var(--cu);background:color-mix(in srgb,var(--cu) 9%,var(--in))}.scope-option.selected .scope-check{background:var(--cu);border-color:var(--cu);color:#fff}.import-warning{display:flex;gap:8px;padding:10px 12px;margin-top:10px;border-radius:12px;background:color-mix(in srgb,var(--cu) 10%,var(--in));font-size:13px}.file-actions button.square{width:36px;height:36px;border:1px solid var(--ln);border-radius:10px;background:var(--in)}@media(max-width:520px){.transfer-scope{grid-template-columns:1fr}}\n</style>
+</head>
+<body>
+
+<header id="hd">
+  <button class="ib" onclick="tg()" aria-label="Menu"><span>Menu</span></button>
+  <b id="ttl">Importation de documents</b>
+  <span id="appver" title="Version de l'application">v6.0.0</span>
+  <img class="toplogo" alt="Logo">
+</header>
+<div id="ov" onclick="tg(0)"></div>
+<nav id="nv">
+  <div class="navtop">
+    <b class="brand">Ms Plomberie &amp; Chauffage</b>
+    <img class="toplogo" alt="Logo">
+  </div>
+  <button class="ni" data-v="h" onclick="go('h')">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/></svg>
+    Accueil
+  </button>
+  <button class="ni" data-v="i" onclick="go('i')">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v2H4z"/><path d="M4 11h16v2H4z"/><path d="M4 15h8v2H4z"/><path d="M12 3v4"/><path d="M16 19h4v-4"/><path d="M12 19h4"/></svg>
+    Importation
+  </button>
+  <button class="ni" data-v="d" onclick="go('d')">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg>
+    Devis
+  </button>
+  <button class="ni" data-v="f" onclick="go('f')">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>
+    Factures
+  </button>
+  <button class="ni" data-v="x" onclick="go('x')">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+    Rapports
+  </button>
+  <button class="ni" data-v="c" onclick="go('c')">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+    Clients
+  </button>
+  <button class="ni" data-v="p" onclick="go('p')">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg>
+    Mes tarifs
+  </button>
+  <button class="ni" data-v="g" onclick="go('g')">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+    Planning
+  </button>
+  <button class="ni" data-v="r" onclick="go('r')">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+    Bénéfices
+  </button>
+  <button class="ni" data-v="k" onclick="go('k')">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7V3M15 7V3M7 7h10v5a5 5 0 0 1-10 0z"/><path d="M12 17v4"/></svg>
+    Connecteurs
+  </button>
+  <button class="ni" data-v="s" onclick="go('s')">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>
+    Réglages
+  </button>
+  <small class="nver">Version 6.0.0 · <a href="#" onclick="newsShow();return false">Nouveautés</a></small>
+</nav>
+
+<main id="app">
+  <div class="import-container">
+    <!-- File Upload Section -->
+    <div class="c">
+      <h3>Importer des documents</h3>
+      <p style="color: var(--mu); font-size: 14px; margin-bottom: 12px;">
+        Glissez-déposez vos fichiers PDF, images ou documents ici, ou cliquez pour sélectionner.
+      </p>
+      
+      <div class="file-upload-area" id="uploadArea">
+        <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" multiple>
+        <div class="file-upload-icon">📄</div>
+        <div class="file-upload-label">Sélectionner des fichiers</div>
+        <div style="font-size: 12px; color: var(--mu);">PDF, Images, Word</div>
+        <button class="validation-button" id="transferNowButton" type="button" disabled style="margin-top:16px;opacity:.45;cursor:not-allowed;">
+          <div class="validation-icon">✓</div><span>Transférer vers la nouvelle mise en page</span>
+        </button>
+      </div>
+      
+      <div class="progress-bar" id="uploadProgress" style="display: none;">
+        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <!-- File List -->
+    <div class="c" id="fileListContainer" style="display: none;">
+      <h3>Fichiers importés</h3>
+      <div class="file-list" id="fileList"></div>
+    </div>
+
+    <!-- Extracted Data Preview -->
+    <div class="c" id="extractedDataContainer" style="display: none;">
+      <h3>Données extraites</h3>
+      <div class="extracted-data" id="extractedData"></div>
+    </div>
+
+    <!-- Client Section -->
+    <div class="c" id="clientSection" style="display: none;">
+      <h3>Informations client</h3>
+      <div id="clientInfo"></div>
+    </div>
+
+    <!-- Items Section -->
+    <div class="c" id="itemsSection" style="display: none;">
+      <h3>Prestations et fournitures</h3>
+      
+      <!-- Search for existing items -->
+      <div class="search-container">
+        <div class="search-icon">🔍</div>
+        <input type="text" id="itemSearch" class="search-input" placeholder="Rechercher dans vos tarifs...">
+        <div class="results-dropdown" id="searchResults"></div>
+      </div>
+      
+      <div class="items-grid" id="itemsGrid"></div>
+    </div>
+
+    <!-- Transfer Options -->
+    <div class="c" id="transferSection" style="display:none">
+<h3>Transférer vers la nouvelle mise en page</h3><p style="color:var(--mu);font-size:14px;margin-bottom:12px">Choisissez ce qui doit être transféré :</p>
+<div class="transfer-section"><h4>Éléments à transférer</h4><div class="transfer-scope">
+<label class="scope-option selected"><input type="radio" name="transferScope" value="client" checked><span class="scope-check">✓</span><span>Client seul</span></label>
+<label class="scope-option"><input type="radio" name="transferScope" value="services"><span class="scope-check">✓</span><span>Prestations</span></label>
+<label class="scope-option"><input type="radio" name="transferScope" value="supplies"><span class="scope-check">✓</span><span>Fournitures</span></label>
+<label class="scope-option"><input type="radio" name="transferScope" value="all"><span class="scope-check">✓</span><span>Tout</span></label></div>
+<label class="transfer-option" style="margin-top:10px"><input type="checkbox" id="transferWithPrices" checked><span>Enregistrer les prix dans « Mes tarifs »</span></label>
+<label class="transfer-option" style="margin-top:8px"><input type="checkbox" id="transferDocNumbers" checked><span>Relever les numéros de devis et factures</span></label></div>
+<button class="validation-button" id="validateTransfer" onclick="validateTransfer()"><div class="validation-icon">✓</div><span>Valider le transfert</span></button></div>
+
+<div class="c" id="previewContainer" style="display: none;">
+      <h3>Aperçu du document</h3>
+      <div class="preview-container" id="previewContent"></div>
+    </div>
+  </div>
+</main>
+
+<div id="bar"></div>
+<div id="pv"><div class="pvb"><button class="b gh sm" onclick="pvx()"><span>Fermer l'aperçu</span></button><button class="b cu sm" onclick="pdf()"><span>Télécharger le PDF</span></button><img class="toplogo" alt="Logo"></div><div id="pvw"><div id="pvh"><div id="pvs"></div></div></div></div>
+<div id="ts"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="js/logo.js?v=5.8.2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
+<script>
+// Configuration
+const LGD = 'img/logo-hd.png';
+const LGT = 'img/logo-tiny.png';
+
+// State
+let S = {clients: [], cat: [], docs: [], cfg: {cot: 21.5, imp: 0, val: 30, acc: 40}, seq: {}, rep: [], ph: {}, chat: [], plan: []};
+let V = {v: 'i6'};
+let currentFiles = [];
+let extractedData = {};
+let selectedItems = { services: [], supplies: [] };
+
+// Utility functions
+const $ = s => document.querySelector(s);
+const nw = () => Math.random().toString(36).slice(2, 9);
+const n = v => parseFloat(String(v).replace(',', '.')) || 0;
+const E = v => v.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' €';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const td = () => new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+const fd = s => s ? s.split('-').reverse().join('/') : '';
+
+// Navigation functions
+function tg(o) {
+  const on = o === undefined ? !$('#nv').classList.contains('o') : !!o;
+  $('#nv').classList.toggle('o', on);
+  $('#ov').classList.toggle('o', on);
+  document.body.classList.toggle('lk', on);
+}
+
+function go(v, id) {
+  V = {v, id};
+  tg(0);
+  render();
+  scrollTo(0, 0);
+}
+
+function render() {
+  const t = V.v;
+  document.querySelectorAll('.ni').forEach(b => b.classList.toggle('a', b.dataset.v === t));
+  $('#ttl').textContent = {h: 'Accueil', d: 'Devis', f: 'Factures', c: 'Clients', p: 'Mes tarifs', r: 'Bénéfices', i: 'Importation', x: 'Rapports', s: 'Réglages', g: 'Planning', k: 'Connecteurs'}[t];
+  
+  // Hide all import-specific sections
+  ['fileListContainer', 'extractedDataContainer', 'clientSection', 'itemsSection', 'transferSection', 'previewContainer'].forEach(id => {
+    $(`#${id}`).style.display = 'none';
+  });
+  
+  if (t === 'i') {
+    $('#app').innerHTML = getImportHTML();
+    initImportPage();
+  }
+}
+
+function getImportHTML() {
+  return `
+    <div class="import-container">
+      <div class="c">
+        <h3>Importer des documents</h3>
+        <p style="color: var(--mu); font-size: 14px; margin-bottom: 12px;">
+          Glissez-déposez vos fichiers PDF, images ou documents ici, ou cliquez pour sélectionner.
+        </p>
+        
+        <div class="file-upload-area" id="uploadArea">
+          <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" multiple>
+          <div class="file-upload-icon">📄</div>
+          <div class="file-upload-label">Sélectionner des fichiers</div>
+          <div style="font-size: 12px; color: var(--mu);">PDF, Images, Word</div>
+        </div>
+        
+          <button class="validation-button" id="transferNowButton" type="button" disabled style="margin-top:16px;opacity:.45;cursor:not-allowed;">
+            <div class="validation-icon">✓</div><span>Transférer vers la nouvelle mise en page</span>
+          </button>
+        <div class="progress-bar" id="uploadProgress" style="display: none;">
+          <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <div class="c" id="fileListContainer" style="display: none;">
+        <h3>Fichiers importés</h3>
+        <div class="file-list" id="fileList"></div>
+      </div>
+
+      <div class="c" id="extractedDataContainer" style="display: none;">
+        <h3>Données extraites</h3>
+        <div class="extracted-data" id="extractedData"></div>
+      </div>
+
+      <div class="c" id="clientSection" style="display: none;">
+        <h3>Informations client</h3>
+        <div id="clientInfo"></div>
+      </div>
+
+      <div class="c" id="itemsSection" style="display: none;">
+        <h3>Prestations et fournitures</h3>
+        
+        <div class="search-container">
+          <div class="search-icon">🔍</div>
+          <input type="text" id="itemSearch" class="search-input" placeholder="Rechercher dans vos tarifs...">
+          <div class="results-dropdown" id="searchResults"></div>
+        </div>
+        
+        <div class="items-grid" id="itemsGrid"></div>
+      </div>
+
+      <div class="c" id="transferSection" style="display: none;">
+        <h3>Transférer vers la nouvelle mise en page</h3>
+        <p style="color: var(--mu); font-size: 14px; margin-bottom: 12px;">
+          Sélectionnez ce que vous souhaitez transférer :
+        </p>
+        
+        <div class="transfer-options" id="transferOptions">
+          <div class="transfer-section">
+            <h4>Informations client</h4>
+            <div class="transfer-grid">
+              <label class="transfer-option">
+                <input type="checkbox" id="transferClient" checked>
+                <span>Transférer les informations client</span>
+              </label>
+              <label class="transfer-option">
+                <input type="checkbox" id="transferClientAddress" checked>
+                <span>Transférer l'adresse de facturation</span>
+              </label>
+            </div>
+          </div>
+          
+          <div class="transfer-section">
+            <h4>Prestations et fournitures</h4>
+            <div class="transfer-grid">
+              <label class="transfer-option">
+                <input type="checkbox" id="transferAllItems" checked>
+                <span>Tout transférer</span>
+              </label>
+              <label class="transfer-option">
+                <input type="checkbox" id="transferServices" checked>
+                <span>Uniquement les prestations</span>
+              </label>
+              <label class="transfer-option">
+                <input type="checkbox" id="transferSupplies" checked>
+                <span>Uniquement les fournitures</span>
+              </label>
+              <label class="transfer-option">
+                <input type="checkbox" id="transferWithPrices" checked>
+                <span>Enregistrer avec les prix dans la base</span>
+              </label>
+            </div>
+          </div>
+          
+          <div class="transfer-section">
+            <h4>Numéros de documents</h4>
+            <div class="transfer-grid">
+              <label class="transfer-option">
+                <input type="checkbox" id="transferDocNumbers" checked>
+                <span>Relever les numéros de devis/facture</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        <button class="validation-button" id="validateTransfer" onclick="validateTransfer()">
+          <div class="validation-icon">✓</div>
+          <span>Valider le transfert</span>
+        </button>
+      </div>
+
+      <div class="c" id="previewContainer" style="display: none;">
+        <h3>Aperçu du document</h3>
+        <div class="preview-container" id="previewContent"></div>
+      </div>
+    </div>
+  `;
+}
+
+function initImportPage() {
+  // Initialize drag and drop
+  const uploadArea = $('#uploadArea');
+  const fileInput = $('#fileInput');
+  
+  // Drag and drop events
+  uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('dragover');
+  });
+  
+  uploadArea.addEventListener('dragleave', () => {
+    uploadArea.classList.remove('dragover');
+  });
+  
+  uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
+    }
+  });
+  
+  // Click to select files
+  uploadArea.addEventListener('click', (e) => {
+    if (e.target === fileInput) return;
+    fileInput.click();
+  });
+  fileInput.addEventListener('click', e => e.stopPropagation());
+  
+  // File input change
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      const btn=$('#transferNowButton');
+      if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
+      handleFiles(e.target.files);
+    }
+  });
+  const transferNowButton=$('#transferNowButton');
+  if(transferNowButton) transferNowButton.addEventListener('click',()=>{
+    const ids=Object.keys(extractedData);
+    if(!ids.length){toast('Sélectionnez d’abord un document');return;}
+    const last=extractedData[ids[ids.length-1]];
+    processFile(last.id);
+    $('#transferSection')?.scrollIntoView({behavior:'smooth',block:'center'});
+  });
+  
+  // Initialize item search
+  initItemSearch();
+}
+
+async function handleFiles(files){
+ currentFiles=Array.from(files);const pb=$('#uploadProgress'),pf=$('#progressFill');pb.style.display='block';pf.style.width='0%';let done=0;
+ for(const file of currentFiles){try{await extractDataFromFile(file)}catch(e){const id=nw();extractedData[id]={id,name:file.name,size:file.size,type:getFileType(file.name),content:'',status:'error',extracted:{client:null,documentNumber:null,date:null,items:[],total:0,addresses:[],selectedBillingAddress:0,warnings:[e.message||'Extraction impossible']}}}done++;pf.style.width=(done/currentFiles.length*100)+'%'}pb.style.display='none';showFileList();const ids=Object.keys(extractedData);if(ids.length){const last=extractedData[ids[ids.length-1]];if(last&&last.status!=='error'){processFile(last.id);setTimeout(()=>$('#transferSection')?.scrollIntoView({behavior:'smooth',block:'center'}),250)}}
+}
+async function extractDataFromFile(file){
+ if(file.size>50*1024*1024)throw new Error('Fichier supérieur à 50 Mo');const type=file.type||getFileType(file.name);let text='',preview='';
+ if(type==='pdf'||/\.pdf$/i.test(file.name)){const b=await file.arrayBuffer();text=await extractPdfText(b);preview=URL.createObjectURL(new Blob([b],{type:'application/pdf'}))}
+ else if(/\.docx$/i.test(file.name)){const b=await file.arrayBuffer();if(window.mammoth){const x=await window.mammoth.extractRawText({arrayBuffer:b});text=x.value||''}preview=await readDataURL(file)}
+ else if(/\.(txt|csv)$/i.test(file.name)){text=await readText(file);preview=text}else if(type.startsWith('image/'))preview=await readDataURL(file);else{text=await readText(file);preview=text}
+ const extracted=parseDocumentText(file.name,text),id=nw();extractedData[id]={id,name:file.name,size:file.size,type,content:preview||text,status:'completed',extracted};
+}
+function readText(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(r.error||new Error('Lecture impossible'));r.readAsText(file)})}
+function readDataURL(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(r.error||new Error('Lecture impossible'));r.readAsDataURL(file)})}
+async function extractPdfText(buffer){let pdfjs;try{pdfjs=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs')}catch(e){return ''}const pdf=await pdfjs.getDocument({data:buffer}).promise,parts=[];for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i),tc=await page.getTextContent();parts.push(tc.items.map(x=>x.str||'').join(' '))}return parts.join('\n')}
+function parseDocumentText(filename,text){
+ const raw=(text||'').replace(/\u0000/g,' ').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n').trim();
+ const nm=raw.match(/((?:DEVIS?|DEV|FACTURE|FAC)[\s-]*[A-Z0-9]+(?:[\s-]+[A-Z0-9]+)*)/i)||filename.match(/((?:DEVIS?|DEV|FACTURE|FAC)[\s-]*[A-Z0-9]+(?:[\s-]+[A-Z0-9]+)*)/i);
+ const documentNumber=nm?nm[1].replace(/\s+/g,'-').toUpperCase():null,documentType=/(facture|invoice|fac[\s-]?\d)/i.test(filename+' '+raw)?'facture':'devis';
+ const d=raw.match(/\b(\d{2})[\/-](\d{2})[\/-](\d{4})\b|\b(\d{4})[\/-](\d{2})[\/-](\d{2})\b/),date=d?(d[4]?d[4]+'-'+d[5]+'-'+d[6]:d[3]+'-'+d[2]+'-'+d[1]):td();
+ const email=(raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)||[])[0]||'',phone=(raw.match(/(?:\+33\s?[1-9]|0[1-9])(?:[ .-]?\d{2}){4}/)||[])[0]||'';
+ let name='';const nm2=raw.match(/(?:client|nom du client|raison sociale|factur[ée] [àa]|pour|destinataire)\s*[:\-]?\s*([^\n]{2,80})/i);if(nm2)name=nm2[1].trim();if(!name)name=filename.replace(/\.[^.]+$/,'').replace(/^(devis|facture|fac|dev)[\s_-]*/i,'').replace(/[._-]+/g,' ').trim();
+ const addresses=[];const ar=/(\d{1,5}\s+(?:rue|avenue|av\.?|boulevard|bd\.?|chemin|route|impasse|all[ée]e)\s+[^\n,;]{2,80})[,;]?\s*(\d{5})\s+([^\n,;]+)/gi;let m;while((m=ar.exec(raw)))addresses.push({type:/chantier|travaux|site/i.test(m[0])?'chantier':'facturation',street:m[1].trim(),postalCode:m[2],city:m[3].trim()});
+ const items=[];raw.split(/\n+/).map(x=>x.trim()).filter(Boolean).forEach(line=>{const vals=[...line.matchAll(/(\d[\d ]*[,.]\d{2})\s*€?/g)].map(x=>parseFloat(x[1].replace(/ /g,'').replace(',','.')));if(!vals.length||/^(total|sous-total|tva|remise|acompte|reste à payer)/i.test(line))return;const desc=line.replace(/\d[\d ]*[,.]\d{2}\s*€?/g,'').trim();if(desc.length<3)return;const service=/(pose|installation|réparation|dépannage|main d.?œuvre|déplacement|intervention|diagnostic|heure|forfait)/i.test(desc);items.push({type:service?'service':'supply',name:desc,quantity:1,unitPrice:vals.length>1?vals[vals.length-2]:vals[0],total:vals[vals.length-1]})});
+ const totalM=raw.match(/(?:total(?: ttc)?|montant total)\s*[:=]?\s*(\d[\d ]*[,.]\d{2})/i),warnings=[];return {client:name?{name,email,phone}:null,documentNumber,date,documentType,items,total:totalM?parseFloat(totalM[1].replace(/ /g,'').replace(',','.')):items.reduce((s,x)=>s+x.total,0),addresses,selectedBillingAddress:0,warnings};
+}
+function getFileType(filename) {
+  if (filename.endsWith('.pdf')) return 'pdf';
+  if (filename.endsWith('.jpg') || filename.endsWith('.jpeg')) return 'image/jpeg';
+  if (filename.endsWith('.png')) return 'image/png';
+  if (filename.endsWith('.doc') || filename.endsWith('.docx')) return 'document';
+  return 'unknown';
+}
+
+function showFileList() {
+  $('#fileListContainer').style.display = 'block';
+  updateFileList();
+}
+
+function updateFileList() {
+  const fileList = $('#fileList');
+  fileList.innerHTML = '';
+  
+  Object.values(extractedData).forEach(fileData => {
+    const fileItem = document.createElement('div');
+    fileItem.className = 'file-item';
+    fileItem.innerHTML = `
+      <div class="file-icon">${getFileIcon(fileData.type)}</div>
+      <div class="file-info">
+        <div class="file-name">${esc(fileData.name)}</div>
+        <div class="file-size">${formatFileSize(fileData.size)}</div>
+      </div>
+      <div class="file-status ${fileData.status}">${getStatusText(fileData.status)}</div>
+      <div class="file-actions">
+        <button onclick="viewFile('${fileData.id}')" title="Voir">👁️</button>
+        <button onclick="processFile('${fileData.id}')" title="Traiter">⚙️</button>
+        <button onclick="deleteFile('${fileData.id}')" title="Supprimer" class="delete">🗑️</button>
+      </div>
+    `;
+    fileList.appendChild(fileItem);
+  });
+  
+  // If we have files, show the next section
+  if (Object.keys(extractedData).length > 0) {
+    $('#extractedDataContainer').style.display = 'block';
+    showExtractedData();
+  }
+}
+
+function getFileIcon(type) {
+  if (type === 'pdf') return '📄';
+  if (type === 'image/jpeg' || type === 'image/png') return '🖼️';
+  if (type === 'document') return '📝';
+  return '📁';
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function getStatusText(status) {
+  const texts = {
+    'processing': 'Traitement...',
+    'completed': 'Terminé',
+    'error': 'Erreur'
+  };
+  return texts[status] || status;
+}
+
+function viewFile(fileId) {
+  const fileData = extractedData[fileId];
+  if (!fileData) return;
+  
+  // Show preview
+  $('#previewContainer').style.display = 'block';
+  const previewContent = $('#previewContent');
+  
+  if (fileData.type.startsWith('image/')) {
+    previewContent.innerHTML = `<img src="${fileData.content}" style="max-width: 100%; border-radius: 8px;">`;
+  } else if (fileData.type === 'pdf') {
+    previewContent.innerHTML = `
+      <iframe src="${fileData.content}" style="width: 100%; height: 400px; border: none; border-radius: 8px;"></iframe>
+      <div style="margin-top: 8px; font-size: 12px; color: var(--mu);">
+        <strong>Nom:</strong> ${esc(fileData.name)}<br>
+        <strong>Taille:</strong> ${formatFileSize(fileData.size)}<br>
+        <strong>Type:</strong> ${fileData.type}
+      </div>
+    `;
+  } else {
+    previewContent.innerHTML = `
+      <pre style="white-space: pre-wrap; word-wrap: break-word; background: var(--in); padding: 12px; border-radius: 8px; font-size: 12px;">${esc(fileData.content.substring(0, 1000))}</pre>
+    `;
+  }
+}
+
+function processFile(fileId) {
+  const fileData = extractedData[fileId];
+  if (!fileData) return;
+  const transferCta=$('#transferNowButton');
+  if(transferCta){transferCta.disabled=false;transferCta.style.opacity='1';transferCta.style.cursor='pointer';}
+  
+  // Show client section
+  $('#clientSection').style.display = 'block';
+  showClientInfo(fileData);
+  
+  // Show items section
+  $('#itemsSection').style.display = 'block';
+  showItems(fileData);
+  
+  // Show transfer section
+  $('#transferSection').style.display = 'block';
+  
+  // Scroll to client section
+  $('#clientSection').scrollIntoView({ behavior: 'smooth' });
+}
+
+function showExtractedData() {
+  const extractedDataContainer = $('#extractedData');
+  extractedDataContainer.innerHTML = '';
+  
+  Object.values(extractedData).forEach(fileData => {
+    const fileDiv = document.createElement('div');
+    fileDiv.style.marginBottom = '16px';
+    fileDiv.style.padding = '12px';
+    fileDiv.style.background = 'var(--in)';
+    fileDiv.style.borderRadius = '10px';
+    
+    let html = `<div style="font-weight: 600; margin-bottom: 8px;">📄 ${esc(fileData.name)}</div>`;
+    
+    if (fileData.extracted.documentNumber) {
+      html += `<div><strong>N° Document:</strong> ${esc(fileData.extracted.documentNumber)}</div>`;
+    }
+    
+    if (fileData.extracted.date) {
+      html += `<div><strong>Date:</strong> ${esc(fileData.extracted.date)}</div>`;
+    }
+    
+    if (fileData.extracted.client) {
+      html += `<div><strong>Client:</strong> ${esc(fileData.extracted.client.name)}</div>`;
+    }
+    
+    if (fileData.extracted.total > 0) {
+      html += `<div><strong>Total:</strong> ${E(fileData.extracted.total)}</div>`;
+    }
+    
+    fileDiv.innerHTML = html;
+    extractedDataContainer.appendChild(fileDiv);
+  });
+}
+
+function showClientInfo(fileData) {
+  const clientInfo = $('#clientInfo');
+  const client = fileData.extracted.client;
+  
+  if (!client) {
+    clientInfo.innerHTML = '<p style="color: var(--mu);">Aucun client identifié dans ce document.</p>';
+    return;
+  }
+  
+  // Check if client exists in database
+  const existingClient = S.clients.find(c => 
+    c.n && c.n.toLowerCase().includes(client.name.toLowerCase())
+  );
+  
+  let html = '';
+  
+  if (!existingClient) {
+    // New client
+    html = `
+      <div class="client-card new-client">
+        <div class="client-header">
+          <div class="client-name">${esc(client.name)}</div>
+          <div class="new-client-badge">Nouveau client</div>
+        </div>
+        <div class="client-info">
+          <div class="client-info-item">
+            <div class="client-info-label">Adresse</div>
+            <div class="client-info-value">${esc(client.address || 'Non spécifiée')}</div>
+          </div>
+          <div class="client-info-item">
+            <div class="client-info-label">Téléphone</div>
+            <div class="client-info-value">${esc(client.phone || 'Non spécifié')}</div>
+          </div>
+          <div class="client-info-item">
+            <div class="client-info-label">Email</div>
+            <div class="client-info-value">${esc(client.email || 'Non spécifié')}</div>
+          </div>
+        </div>
+        
+        <button class="b cu sm" onclick="confirmNewClient('${fileData.id}')" style="margin-top: 12px;">
+          <span>Valider le client</span>
+        </button>
+      </div>
+    `;
+  } else {
+    // Existing client
+    html = `
+      <div class="client-card">
+        <div class="client-header">
+          <div class="client-name">${esc(existingClient.n)}</div>
+          <div class="bd ok">Client existant</div>
+        </div>
+        <div class="client-info">
+          <div class="client-info-item">
+            <div class="client-info-label">Adresse</div>
+            <div class="client-info-value">${esc(existingClient.a || 'Non spécifiée')}</div>
+          </div>
+          <div class="client-info-item">
+            <div class="client-info-label">Ville</div>
+            <div class="client-info-value">${esc(existingClient.c || 'Non spécifiée')}</div>
+          </div>
+          <div class="client-info-item">
+            <div class="client-info-label">Téléphone</div>
+            <div class="client-info-value">${esc(existingClient.t || 'Non spécifié')}</div>
+          </div>
+          <div class="client-info-item">
+            <div class="client-info-label">Email</div>
+            <div class="client-info-value">${esc(existingClient.e || 'Non spécifié')}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  
+  // Add addresses if available
+  if (fileData.extracted.addresses && fileData.extracted.addresses.length > 0) {
+    html += `
+      <div style="margin-top: 16px;">
+        <h4 style="margin: 0 0 8px 0; color: var(--ink);">Adresses disponibles</h4>
+        <div class="address-list">
+          ${fileData.extracted.addresses.map((addr, idx) => `
+            <div class="address-item">
+              <input type="radio" name="billingAddress_${fileData.id}" id="addr_${fileData.id}_${idx}" 
+                     ${idx === 0 ? 'checked' : ''} onchange="selectBillingAddress('${fileData.id}', ${idx})">
+              <div class="address-content">
+                <div class="address-line">${esc(addr.street)}</div>
+                <div class="address-line">${esc(addr.postalCode)} ${esc(addr.city)}</div>
+                <div class="address-type">${esc(addr.type)}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+  
+  clientInfo.innerHTML = html;
+}
+
+function confirmNewClient(fileId) {
+  const fileData = extractedData[fileId];
+  if (!fileData || !fileData.extracted.client) return;
+  
+  const client = fileData.extracted.client;
+  
+  // Create new client
+  const newClient = {
+    id: nw(),
+    n: client.name,
+    a: client.address || '',
+    c: client.city || '',
+    t: client.phone || '',
+    e: client.email || ''
+  };
+  
+  S.clients.push(newClient);
+  save('clients');
+  
+  toast('Client ajouté avec succès !');
+  
+  // Update display
+  showClientInfo(fileData);
+}
+
+function selectBillingAddress(fileId, index) {
+  const fileData = extractedData[fileId];
+  if (!fileData || !fileData.extracted.addresses) return;
+  
+  // Mark selected address
+  fileData.extracted.selectedBillingAddress = index;
+  
+  toast(`Adresse de facturation sélectionnée: ${fileData.extracted.addresses[index].street}`);
+}
+
+function showItems(fileData) {
+  const itemsGrid = $('#itemsGrid');
+  itemsGrid.innerHTML = '';
+  
+  if (!fileData.extracted.items || fileData.extracted.items.length === 0) {
+    itemsGrid.innerHTML = '<p style="color: var(--mu);">Aucun élément identifié dans ce document.</p>';
+    return;
+  }
+  
+  fileData.extracted.items.forEach((item, index) => {
+    const itemCard = document.createElement('div');
+    itemCard.className = 'item-card';
+    
+    const itemType = item.type === 'service' ? 'Prestation' : 'Fourniture';
+    const typeClass = item.type === 'service' ? 'service' : 'supply';
+    
+    itemCard.innerHTML = `
+      <div class="item-header">
+        <div class="item-type">${itemType}</div>
+        <input type="checkbox" id="item_${fileData.id}_${index}" 
+               onchange="toggleItemSelection('${fileData.id}', ${index}, this.checked)"
+               ${selectedItems[fileData.id] && selectedItems[fileData.id][index] ? 'checked' : ''}>
+      </div>
+      <div class="item-name">${esc(item.name)}</div>
+      <div class="item-details">
+        <div><strong>Quantité:</strong> ${esc(item.quantity)}</div>
+        <div><strong>Prix unitaire:</strong> ${E(item.unitPrice)}</div>
+        <div class="item-price"><strong>Total:</strong> ${E(item.total)}</div>
+      </div>
+      <div class="item-actions">
+        <button class="add" onclick="addItemToDatabase('${fileData.id}', ${index})">Ajouter à mes tarifs</button>
+        <button class="skip" onclick="skipItem('${fileData.id}', ${index})">Ignorer</button>
+      </div>
+    `;
+    
+    itemsGrid.appendChild(itemCard);
+  });
+}
+
+function toggleItemSelection(fileId, index, checked) {
+  if (!selectedItems[fileId]) {
+    selectedItems[fileId] = {};
+  }
+  selectedItems[fileId][index] = checked;
+}
+
+function addItemToDatabase(fileId, index) {
+  const fileData = extractedData[fileId];
+  if (!fileData || !fileData.extracted.items || !fileData.extracted.items[index]) return;
+  
+  const item = fileData.extracted.items[index];
+  
+  // Check if item already exists
+  const existingItem = S.cat.find(c => 
+    c.d && c.d.toLowerCase() === item.name.toLowerCase()
+  );
+  
+  if (existingItem) {
+    toast(`⚠️ ${esc(item.name)} existe déjà dans vos tarifs`);
+    return;
+  }
+  
+  // Add to database
+  S.cat.push({
+    d: item.name,
+    t: item.type,
+    p: item.unitPrice
+  });
+  
+  save('cat');
+  toast(`✅ ${esc(item.name)} ajouté à vos tarifs`);
+  
+  // Update search results
+  initItemSearch();
+}
+
+function skipItem(fileId, index) {
+  const fileData = extractedData[fileId];
+  if (!fileData || !fileData.extracted.items || !fileData.extracted.items[index]) return;
+  
+  // Mark as skipped
+  fileData.extracted.items[index].skipped = true;
+  
+  toast(`⏭️ ${esc(fileData.extracted.items[index].name)} ignoré`);
+}
+
+function initItemSearch() {
+  const searchInput = $('#itemSearch');
+  const searchResults = $('#searchResults');
+  
+  searchInput.addEventListener('input', () => {
+    const query = searchInput.value.toLowerCase();
+    
+    if (query.length < 2) {
+      searchResults.classList.remove('show');
+      return;
+    }
+    
+    const results = S.cat.filter(item => 
+      item.d && item.d.toLowerCase().includes(query)
+    );
+    
+    if (results.length === 0) {
+      searchResults.classList.remove('show');
+      return;
+    }
+    
+    searchResults.innerHTML = results.map((item, index) => `
+      <div class="result-item" onclick="selectSearchResult('${esc(item.d)}', '${item.t}', ${item.p})" onmouseenter="highlightResult(this)">
+        <div><strong>${esc(item.d)}</strong></div>
+        <div style="font-size: 12px; color: var(--mu);">${item.t === 'service' ? 'Prestation' : 'Fourniture'} - ${E(item.p)}</div>
+      </div>
+    `).join('');
+    
+    searchResults.classList.add('show');
+  });
+  
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.search-container')) {
+      searchResults.classList.remove('show');
+    }
+  });
+}
+
+function selectSearchResult(name, type, price) {
+  const searchInput = $('#itemSearch');
+  const searchResults = $('#searchResults');
+  
+  searchInput.value = name;
+  searchResults.classList.remove('show');
+  
+  toast(`🔍 ${esc(name)} sélectionné`);
+  
+  // Here you could add the selected item to the current document
+}
+
+function highlightResult(element) {
+  // Remove highlight from all
+  document.querySelectorAll('.result-item').forEach(el => {
+    el.classList.remove('highlight');
+  });
+  
+  // Add highlight to this one
+  element.classList.add('highlight');
+}
+
+function selectedTransferScope(){return document.querySelector('input[name="transferScope"]:checked')?.value||'client'}
+document.addEventListener('change',e=>{if(e.target.name==='transferScope')document.querySelectorAll('.scope-option').forEach(x=>x.classList.toggle('selected',x.querySelector('input')===e.target))});
+function validateTransfer(){const scope=selectedTransferScope(),withPrices=$('#transferWithPrices')?.checked!==false,transferDocNumbers=$('#transferDocNumbers')?.checked!==false,ids=Object.keys(extractedData);if(!ids.length){toast('Aucun fichier à transférer');return}ids.forEach(id=>transferFile(extractedData[id],scope,withPrices,transferDocNumbers));toast('✓ Transfert terminé');setTimeout(resetImport,700)}
+function transferFile(fileData,scope,withPrices,transferDocNumbers){const data=fileData.extracted,norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();let client=null;
+if((scope==='client'||scope==='all')&&data.client?.name){client=S.clients.find(c=>norm(c.n)===norm(data.client.name));if(!client){client={id:nw(),n:data.client.name,a:'',c:'',t:data.client.phone||'',e:data.client.email||'',addresses:[]};S.clients.push(client)}if(!client.t&&data.client.phone)client.t=data.client.phone;if(!client.e&&data.client.email)client.e=data.client.email;save('clients')}
+if(scope!=='client'){(data.items||[]).forEach(item=>{const ok=scope==='all'||(scope==='services'&&item.type==='service')||(scope==='supplies'&&item.type==='supply');if(!ok||item.skipped)return;const old=S.cat.find(x=>norm(x.d)===norm(item.name));if(old){if(withPrices&&!n(old.p))old.p=n(item.unitPrice);return}S.cat.push({d:item.name,t:item.type,p:withPrices?n(item.unitPrice):0})});save('cat')}
+if(transferDocNumbers&&data.documentNumber&&!S.docs.some(d=>norm(d.num)===norm(data.documentNumber))){const type=data.documentType==='facture'?'f':'d',year=new Date().getFullYear(),key=type+year,seq=(S.seq[key]||0)+1,bill=data.addresses?.[data.selectedBillingAddress||0],doc={id:nw(),t:type,num:data.documentNumber,date:data.date||td(),val:S.cfg.val||30,cn:client?.n||data.client?.name||'',ca:bill?.street||client?.a||'',cc:[bill?.postalCode,bill?.city].filter(Boolean).join(' ')||client?.c||'',ct:client?.t||data.client?.phone||'',ce:client?.e||data.client?.email||'',cid:client?.id||'',sn:'',sa:'',sc:'',o:'Importé depuis document : '+fileData.name,F:[],M:[],acc:S.cfg.acc||40,ap:false,paid:false,pd:'',cost:'',st:'att',tva:0,rm:''};(data.items||[]).forEach(item=>{if(!item.skipped)(item.type==='service'?doc.M:doc.F).push({d:item.name,q:item.quantity||1,p:n(item.unitPrice)})});S.docs.unshift(doc);S.seq[key]=seq;save('docs');save('seq')}else if(transferDocNumbers&&data.documentNumber)toast('⚠️ Numéro déjà enregistré : '+data.documentNumber)}
+function resetImport() {
+  currentFiles = [];
+  extractedData = {};
+  selectedItems = { services: [], supplies: [] };
+  
+  // Reset UI
+  $('#fileInput').value = '';
+  $('#uploadProgress').style.display = 'none';
+  $('#progressFill').style.width = '0%';
+  $('#fileListContainer').style.display = 'none';
+  $('#extractedDataContainer').style.display = 'none';
+  $('#clientSection').style.display = 'none';
+  $('#itemsSection').style.display = 'none';
+  $('#transferSection').style.display = 'none';
+  $('#previewContainer').style.display = 'none';
+  
+  // Re-render
+  render();
+}
+
+function deleteFile(fileId) {
+  if (extractedData[fileId]) {
+    delete extractedData[fileId];
+    updateFileList();
+    
+    // Check if we need to hide sections
+    if (Object.keys(extractedData).length === 0) {
+      $('#extractedDataContainer').style.display = 'none';
+      $('#clientSection').style.display = 'none';
+      $('#itemsSection').style.display = 'none';
+      $('#transferSection').style.display = 'none';
+    }
+    
+    toast('Fichier supprimé');
+  }
+}
+
+// Storage functions
+function save(k) {
+  try {
+    localStorage.setItem('ms_' + k, JSON.stringify(S[k]));
+    localStorage.setItem('ms_stamp', String(Date.now()));
+  } catch (e) {}
+}
+
+// Toast function
+function toast(m) {
+  const t = $('#ts');
+  t.textContent = m;
+  t.style.opacity = 1;
+  setTimeout(() => t.style.opacity = 0, 2400);
+}
+
+// Initialize
+function init() {
+  // Load data from storage
+  const keys = Object.keys(S);
+  for (const k of keys) {
+    try {
+      const t = localStorage.getItem('ms_' + k);
+      if (t) S[k] = JSON.parse(t);
+    } catch (e) {}
+  }
+  
+  // Set version
+  V = {v: 'i'};
+  
+  // Render
+  render();
+}
+
+// Start
+init();
+
+// Handle back navigation
+function goBack() {
+  go('h');
+}
+</script>
+</body>
+</html>
+/* Import intégré : responsive iPhone et thème natif */
+@media(max-width:520px){.import-container{width:100%;gap:10px}.file-upload-area{padding:28px 12px;border-radius:16px}.file-upload-label{font-size:16px}.file-upload-icon{font-size:40px}.file-item{min-width:0}.file-name{max-width:55vw}.transfer-scope{grid-template-columns:1fr}.transfer-grid{grid-template-columns:1fr}.client-info{grid-template-columns:1fr}.validation-button{width:100%;min-height:56px;padding:14px 12px;font-size:16px}.validation-button span{white-space:normal;overflow-wrap:anywhere}}
+@media(max-width:380px){.c{padding:12px}.file-upload-area{padding:24px 10px}.validation-button{font-size:15px}}
 </style></head><body>
 <div id="splash"><img src="img/drop-hd.png" alt=""><b>Ms Plomberie &amp; Chauffage</b></div>
 <header id="hd"><button class="ib" onclick="tg()" aria-label="Menu"><span>Menu</span></button><b id="ttl"></b><span id="appver" title="Version de l’application">v6.0.0</span><button class="ib" id="ad" onclick="add()" aria-label="Ajouter"><span>Ajouter</span></button><img class="toplogo" alt="Logo"></header>
@@ -387,6 +2013,7 @@ addEventListener('focusout',()=>setTimeout(()=>{if(!document.activeElement||!doc
 </script>
 <script src="js/pdfpages.js?v=6.0.0"></script>
 	<script src="js/ext.js?v=6.0.0"></script>
+<script src="js/importer.js?v=6.0.0"></script>
 <script src="js/chat2.js?v=6.0.0"></script>
 <script src="js/models.js?v=6.0.0"></script>
 <script src="js/assist.js?v=6.0.0"></script>
