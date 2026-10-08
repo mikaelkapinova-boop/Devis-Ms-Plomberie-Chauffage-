@@ -721,29 +721,29 @@ function transferFile(fileData,scope,withPrices,transferDocNumbers){
    });
    save('cat');
  }
- if(scope==='all'&&transferDocNumbers&&data.documentNumber){
-   if(S.docs.some(d=>norm(d.num)===norm(data.documentNumber))){toast('⚠️ Numéro déjà enregistré : '+data.documentNumber);return}
+ if(scope==='all'){
    const type=data.documentType==='facture'?'f':'d',year=(data.date||td()).slice(0,4)||new Date().getFullYear(),key=type+year,seq=(S.seq[key]||0)+1;
+   let docNumber=data.documentNumber||((type==='d'?'DEV-':'FAC-')+year+'-'+String(seq).padStart(3,'0'));
+   if(data.documentNumber&&transferDocNumbers&&S.docs.some(d=>norm(d.num)===norm(data.documentNumber))){toast('⚠️ Numéro déjà enregistré : '+data.documentNumber);return}
    const bill=data.addresses?.[data.selectedBillingAddress||0];
-   const doc={id:nw(),t:type,num:data.documentNumber,date:data.date||td(),val:S.cfg.val||30,
+   const doc={id:nw(),t:type,num:docNumber,date:data.date||td(),val:S.cfg.val||30,
      cn:client?.n||data.client?.name||'',ca:bill?.street||client?.a||'',cc:[bill?.postalCode,bill?.city].filter(Boolean).join(' ')||client?.c||'',
      ct:client?.t||data.client?.phone||'',ce:client?.e||data.client?.email||'',cid:client?.id||'',sn:data.chantier||'',sa:'',sc:'',
      o:data.object||'',F:[],M:[],acc:S.cfg.acc||40,ap:false,paid:false,pd:'',cost:'',st:'att',tva:0,rm:'',ref:data.reference||''};
    const supplies=(data.items||[]).filter(x=>x.type==='supply'&&!x.skipped),targetSupply=n(data.supplySaleTotal)||supplies.reduce((s,x)=>s+(n(x.purchaseTotal)||0)*1.30,0);
    let usedSupply=0;
-   (data.items||[]).forEach((item,idx)=>{
+   (data.items||[]).forEach(item=>{
      if(item.skipped)return;
-     if(item.type==='service'){
-       doc.M.push({d:item.name,q:item.quantity||1,p:withPrices?n(item.unitPrice):0});
-     }else if(item.type==='supply'){
-       const q=n(item.quantity)||1; let p=withPrices?n(item.saleUnitPrice||item.unitPrice):0;
+     if(item.type==='service')doc.M.push({d:item.name,q:item.quantity||1,p:withPrices?n(item.unitPrice):0});
+     else if(item.type==='supply'){
+       const q=n(item.quantity)||1;let p=withPrices?n(item.saleUnitPrice||item.unitPrice):0;
        const isLast=supplies[supplies.length-1]===item;
-       if(withPrices&&isLast){p=Math.max(0,(targetSupply-usedSupply)/q)} else if(withPrices){p=n(item.saleUnitPrice||item.unitPrice)}
-       usedSupply+=q*p;
-       doc.F.push({d:item.name,q,p});
+       if(withPrices&&isLast)p=Math.max(0,(targetSupply-usedSupply)/q);
+       usedSupply+=q*p;doc.F.push({d:item.name,q,p});
      }
    });
    S.docs.unshift(doc);S.seq[key]=seq;save('docs');save('seq');
+   if(!data.documentNumber)toast('ℹ️ Aucun numéro source détecté : numéro '+docNumber+' attribué par Ms Devis');
  }
 }
 function resetImport() {
