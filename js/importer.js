@@ -704,17 +704,21 @@ function selectedTransferScope(){return document.querySelector('input[name="tran
 document.addEventListener('change',e=>{if(e.target.name==='transferScope')document.querySelectorAll('.scope-option').forEach(x=>x.classList.toggle('selected',x.querySelector('input')===e.target))});
 function validateTransfer(){const scope=selectedTransferScope(),withPrices=$('#transferWithPrices')?.checked!==false,transferDocNumbers=$('#transferDocNumbers')?.checked!==false,ids=Object.keys(extractedData);if(!ids.length){toast('Aucun fichier à transférer');return}ids.forEach(id=>transferFile(extractedData[id],scope,withPrices,transferDocNumbers));toast('✓ Transfert terminé');setTimeout(()=>render(),500)}
 function transferFile(fileData,scope,withPrices,transferDocNumbers){
- const data=fileData.extracted||{},norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+ const data=fileData.extracted||{},norm=s=>String(s||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim();
  let client=null;
  if((scope==='client'||scope==='all')&&data.client?.name){
-   client=S.clients.find(c=>norm(c.n)===norm(data.client.name));
+   client=S.clients.find(c=>{
+     const a=norm(c.n),b=norm(data.client.name);
+     return a&&b&&(a===b||(data.client.email&&norm(c.e)===norm(data.client.email))||(data.client.phone&&String(c.t||'').replace(/\\D/g,'')===String(data.client.phone).replace(/\\D/g,'')));
+   });
    if(!client){client={id:nw(),n:data.client.name,a:'',c:'',t:data.client.phone||'',e:data.client.email||'',addresses:[]};S.clients.push(client)}
    if(!Array.isArray(client.addresses))client.addresses=[];
-   (data.addresses||[]).forEach(addr=>{if(!client.addresses.some(a=>norm(a.street)===norm(addr.street)&&String(a.postalCode)===String(addr.postalCode)))client.addresses.push({...addr})});
+   (data.addresses||[]).forEach(addr=>{if(addr?.street&&!client.addresses.some(a=>norm(a.street)===norm(addr.street)&&String(a.postalCode)===String(addr.postalCode)))client.addresses.push({...addr})});
    if(!client.t&&data.client.phone)client.t=data.client.phone;
    if(!client.e&&data.client.email)client.e=data.client.email;
-   if(!client.a&&(data.client?.address||data.addresses?.[0]?.street))client.a=data.client?.address||data.addresses[0].street;
-   if(!client.c&&(data.client?.postalCode||data.client?.city||data.addresses?.[0]))client.c=[data.client?.postalCode||data.addresses?.[0]?.postalCode,data.client?.city||data.addresses?.[0]?.city].filter(Boolean).join(' ');
+   const bill=data.addresses?.[data.selectedBillingAddress||0];
+   if(!client.a&&(data.client.address||bill?.street))client.a=data.client.address||bill.street;
+   if(!client.c&&(data.client.postalCode||data.client.city||bill))client.c=[data.client.postalCode||bill?.postalCode,data.client.city||bill?.city].filter(Boolean).join(' ');
    save('clients');
  }
  if(scope==='services'||scope==='supplies'||scope==='all'){
@@ -730,24 +734,17 @@ function transferFile(fileData,scope,withPrices,transferDocNumbers){
  }
  if(scope==='all'){
    const type=data.documentType==='facture'?'f':'d',year=(data.date||td()).slice(0,4)||new Date().getFullYear(),key=type+year,seq=(S.seq[key]||0)+1;
-   let docNumber=data.documentNumber||((type==='d'?'DEV-':'FAC-')+year+'-'+String(seq).padStart(3,'0'));
+   const docNumber=data.documentNumber||((type==='d'?'DEV-':'FAC-')+year+'-'+String(seq).padStart(3,'0'));
    if(data.documentNumber&&transferDocNumbers&&S.docs.some(d=>norm(d.num)===norm(data.documentNumber))){toast('⚠️ Numéro déjà enregistré : '+data.documentNumber);return}
    const bill=data.addresses?.[data.selectedBillingAddress||0];
    const doc={id:nw(),t:type,num:docNumber,date:data.date||td(),val:S.cfg.val||30,
-     cn:client?.n||data.client?.name||'',ca:bill?.street||client?.a||'',cc:[bill?.postalCode,bill?.city].filter(Boolean).join(' ')||client?.c||'',
-     ct:client?.t||data.client?.phone||'',ce:client?.e||data.client?.email||'',cid:client?.id||'',sn:data.chantier||'',sa:'',sc:'',
-     o:data.object||'',F:[],M:[],acc:S.cfg.acc||40,ap:false,paid:false,pd:'',cost:'',st:'att',tva:0,rm:'',ref:data.reference||''};
-   const supplies=(data.items||[]).filter(x=>x.type==='supply'&&!x.skipped),targetSupply=n(data.supplySaleTotal)||supplies.reduce((s,x)=>s+(n(x.purchaseTotal)||0)*1.30,0);
-   let usedSupply=0;
+     cn:client?.n||data.client?.name||'',ca:bill?.street||data.client?.address||client?.a||'',cc:[bill?.postalCode,bill?.city].filter(Boolean).join(' ')||[data.client?.postalCode,data.client?.city].filter(Boolean).join(' ')||client?.c||'',
+     ct:client?.t||data.client?.phone||'',ce:client?.e||data.client?.email||'',cid:client?.id||'',sn:data.chantier||'',sa:'',sc:'',o:data.object||'',F:[],M:[],
+     acc:S.cfg.acc||40,ap:false,paid:false,pd:'',cost:'',st:'att',tva:0,rm:'',ref:data.reference||''};
    (data.items||[]).forEach(item=>{
      if(item.skipped)return;
      if(item.type==='service')doc.M.push({d:item.name,q:item.quantity||1,p:withPrices?n(item.unitPrice):0});
-     else if(item.type==='supply'){
-       const q=n(item.quantity)||1;let p=withPrices?n(item.saleUnitPrice||item.unitPrice):0;
-       const isLast=supplies[supplies.length-1]===item;
-       if(withPrices&&isLast)p=Math.max(0,(targetSupply-usedSupply)/q);
-       usedSupply+=q*p;doc.F.push({d:item.name,q,p});
-     }
+     else if(item.type==='supply')doc.F.push({d:item.name,q:item.quantity||1,p:withPrices?n(item.saleUnitPrice||item.unitPrice):0});
    });
    S.docs.unshift(doc);S.seq[key]=seq;save('docs');save('seq');
    if(!data.documentNumber)toast('ℹ️ Aucun numéro source détecté : numéro '+docNumber+' attribué par Ms Devis');
