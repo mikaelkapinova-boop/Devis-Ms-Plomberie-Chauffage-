@@ -300,9 +300,18 @@ function parseDocumentText(filename,text){
  const laborM=searchable.match(/(?:sous-total|total)\s+main-d.?oeuvre[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
  const supplyCostM=searchable.match(/co[uû]t d'achat estimatif fournitures[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
  const supplySaleM=searchable.match(/fournitures valoris[ée]es avec marge[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
- const fallbackName=filename.replace(/\.[^.]+$/,'').replace(/^(devis|facture|fac|dev)[\s_-]*/i,'').replace(/[._-]+/g,' ').trim();
+ // Les libellés peuvent être sur une seule ligne : « Nom : X Adresse : Y Téléphone : Z ».
+ for(const line of lines){
+   let m=line.match(/(?:^|\s)(?:nom du client|client|nom)\s*[:：-]\s*(.+?)(?=\s+(?:adresse|t[eé]l[eé]phone|t[eé]l|email|e-mail|mail)\s*[:：-]|$)/i);
+   if(m&&!clientName)addCandidate(m[1]);
+   m=line.match(/(?:adresse de facturation|adresse client|adresse)\s*[:：-]\s*(\d{1,5}\s+(?:rue|avenue|av\.?|boulevard|bd\.?|chemin|route|impasse|all[ée]e|place)\s+.+?)(?=\s+(?:code postal|cp|ville|t[eé]l[eé]phone|t[eé]l|email|e-mail|mail)\s*[:：-]|$)/i);
+   if(m&&!own.address.test(m[1]))clientAddress=m[1].trim();
+   m=line.match(/(?:code postal|cp)\s*[:：-]\s*(\d{5})/i); if(m)clientPostal=m[1];
+   m=line.match(/(?:ville|city)\s*[:：-]\s*([^,;]+?)(?=\s+(?:t[eé]l[eé]phone|t[eé]l|email|e-mail|mail)\s*[:：-]|$)/i); if(m)clientCity=m[1].trim();
+   m=line.match(/(?:t[eé]l[eé]phone|t[eé]l)\s*[:：-]\s*((?:\+33\s?[1-9]|0[1-9])(?:[ .-]?\d{2}){4})/i); if(m&&!own.phone.test(m[1]))clientPhone=m[1];
+   m=line.match(/(?:email|e-mail|mail)\s*[:：-]\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i); if(m&&!own.mail.test(m[1]))clientEmail=m[1];
+ }
  if(!clientName||own.name.test(clientName)||own.mail.test(clientName)||own.phone.test(clientName))clientName='';
- if(!clientName&&fallbackName&&!/^devis\s*$/i.test(fallbackName))clientName=fallbackName;
  if(clientName&&/^(nom|adresse|client|devis|facture)\s*[:：-]/i.test(clientName))clientName=stripRole(clientName);
  if(clientName&&clientName.toLowerCase().includes('adresse'))clientName=clientName.replace(/\s+adresse\s*:?.*$/i,'').trim();
  const client=clientName?{name:clientName,email:clientEmail,phone:clientPhone,address:clientAddress,postalCode:clientPostal,city:clientCity}:null;
@@ -756,8 +765,8 @@ function transferFile(fileData,scope,withPrices,transferDocNumbers){
    (data.addresses||[]).forEach(addr=>{if(!client.addresses.some(a=>norm(a.street)===norm(addr.street)&&String(a.postalCode)===String(addr.postalCode)))client.addresses.push({...addr})});
    if(!client.t&&data.client.phone)client.t=data.client.phone;
    if(!client.e&&data.client.email)client.e=data.client.email;
-   if(!client.a&&data.addresses?.[0]?.street)client.a=data.addresses[0].street;
-   if(!client.c&&data.addresses?.[0])client.c=[data.addresses[0].postalCode,data.addresses[0].city].filter(Boolean).join(' ');
+   if(!client.a&&(data.client?.address||data.addresses?.[0]?.street))client.a=data.client?.address||data.addresses[0].street;
+   if(!client.c&&(data.client?.postalCode||data.client?.city||data.addresses?.[0]))client.c=[data.client?.postalCode||data.addresses?.[0]?.postalCode,data.client?.city||data.addresses?.[0]?.city].filter(Boolean).join(' ');
    save('clients');
  }
  if(scope==='services'||scope==='supplies'||scope==='all'){
