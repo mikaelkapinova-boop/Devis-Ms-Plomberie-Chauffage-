@@ -121,6 +121,57 @@ function getImportHTML() {
 let currentFiles=[];
 let extractedData={};
 let selectedItems={services:[],supplies:[]};
+function initImportPage() {
+  // Initialize drag and drop
+  const uploadArea = $('#uploadArea');
+  const fileInput = $('#fileInput');
+  
+  // Drag and drop events
+  uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('dragover');
+  });
+  
+  uploadArea.addEventListener('dragleave', () => {
+    uploadArea.classList.remove('dragover');
+  });
+  
+  uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
+    }
+  });
+  
+  // Click to select files
+  uploadArea.addEventListener('click', (e) => {
+    if (e.target === fileInput) return;
+    fileInput.click();
+  });
+  fileInput.addEventListener('click', e => e.stopPropagation());
+  
+  // File input change
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      const btn=$('#transferNowButton');
+      if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
+      handleFiles(e.target.files);
+    }
+  });
+  const transferNowButton=$('#transferNowButton');
+  if(transferNowButton) transferNowButton.addEventListener('click',()=>{
+    const ids=Object.keys(extractedData);
+    if(!ids.length){toast('Sélectionnez d’abord un document');return;}
+    const last=extractedData[ids[ids.length-1]];
+    processFile(last.id);
+    $('#transferSection')?.scrollIntoView({behavior:'smooth',block:'center'});
+  });
+  
+  // Initialize item search
+  initItemSearch();
+}
+
 async function handleFiles(files){
  currentFiles=Array.from(files);const pb=$('#uploadProgress'),pf=$('#progressFill');pb.style.display='block';pf.style.width='0%';let done=0;
  for(const file of currentFiles){try{await extractDataFromFile(file)}catch(e){const id=nw();extractedData[id]={id,name:file.name,size:file.size,type:getFileType(file.name),content:'',status:'error',extracted:{client:null,documentNumber:null,date:null,items:[],total:0,addresses:[],selectedBillingAddress:0,warnings:[e.message||'Extraction impossible']}}}done++;pf.style.width=(done/currentFiles.length*100)+'%'}pb.style.display='none';showFileList();const ids=Object.keys(extractedData);if(ids.length){const last=extractedData[ids[ids.length-1]];if(last&&last.status!=='error'){processFile(last.id);setTimeout(()=>$('#transferSection')?.scrollIntoView({behavior:'smooth',block:'center'}),250)}}
