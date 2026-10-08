@@ -131,15 +131,17 @@ async function extractDataFromFile(file){
  if(file.size>50*1024*1024)throw new Error('Fichier supérieur à 50 Mo');const type=file.type||getFileType(file.name);let text='',preview='';
  if(type==='pdf'||/\.pdf$/i.test(file.name)){const b=await file.arrayBuffer();text=await extractPdfText(b);preview=URL.createObjectURL(new Blob([b],{type:'application/pdf'}))}
  else if(/\.docx$/i.test(file.name)){const b=await file.arrayBuffer();if(window.mammoth){const x=await window.mammoth.extractRawText({arrayBuffer:b});text=x.value||''}preview=await readDataURL(file)}
- else if(/\.(txt|csv)$/i.test(file.name)){text=await readText(file);preview=text}else if(type.startsWith('image/')){preview=await readDataURL(file);if(window.Tesseract){try{const o=await Tesseract.recognize(file,'fra+eng');text=o?.data?.text||''}catch(e){text=''}}}else{text=await readText(file);preview=text}
+ else if(/\.(txt|csv)$/i.test(file.name)){text=await readText(file);preview=text}else if(type.startsWith('image/')){preview=await readDataURL(file);if(await loadTesseract()){try{const o=await Tesseract.recognize(file,'fra+eng');text=o?.data?.text||''}catch(e){text=''}}}else{text=await readText(file);preview=text}
  const extracted=parseDocumentText(file.name,text),id=nw();extractedData[id]={id,name:file.name,size:file.size,type,content:preview||text,status:'completed',extracted};
 }
+function loadTesseract(){if(window.Tesseract)return Promise.resolve(true);return new Promise(ok=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';s.onload=()=>ok(!!window.Tesseract);s.onerror=()=>{toast('OCR indisponible hors connexion');ok(false)};document.head.appendChild(s)})}
 function readText(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(r.error||new Error('Lecture impossible'));r.readAsText(file)})}
 function readDataURL(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(r.error||new Error('Lecture impossible'));r.readAsDataURL(file)})}
 async function extractPdfText(buffer){
   try{
     let pdfjs=window.pdfjsLib;
     if(!pdfjs){try{pdfjs=(await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs'))}catch(e){return ''}}
+    if(pdfjs.GlobalWorkerOptions&&!pdfjs.GlobalWorkerOptions.workerSrc)pdfjs.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
     const pdf=await pdfjs.getDocument({data:buffer}).promise, pages=[];
     for(let pn=1;pn<=pdf.numPages;pn++){
       const page=await pdf.getPage(pn),tc=await page.getTextContent(),items=(tc.items||[]).filter(x=>String(x.str||'').trim());
