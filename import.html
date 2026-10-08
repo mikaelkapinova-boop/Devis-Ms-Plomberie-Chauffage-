@@ -1019,6 +1019,8 @@ body.kb #bar {
     display: none
   }
 }
+
+.transfer-scope{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.scope-option{position:relative;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--in);border:1.5px solid var(--ln);border-radius:14px;cursor:pointer;font-size:14px;font-weight:600}.scope-option input{position:absolute;opacity:0}.scope-check{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--mu);display:grid;place-items:center;color:transparent;flex:none}.scope-option.selected{border-color:var(--cu);background:color-mix(in srgb,var(--cu) 9%,var(--in))}.scope-option.selected .scope-check{background:var(--cu);border-color:var(--cu);color:#fff}.import-warning{display:flex;gap:8px;padding:10px 12px;margin-top:10px;border-radius:12px;background:color-mix(in srgb,var(--cu) 10%,var(--in));font-size:13px}.file-actions button.square{width:36px;height:36px;border:1px solid var(--ln);border-radius:10px;background:var(--in)}@media(max-width:520px){.transfer-scope{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -1136,240 +1138,7 @@ body.kb #bar {
     </div>
 
     <!-- Transfer Options -->
-    <div class="c" id="transferSection" style="display: none;">
-      <h3>Transférer vers la nouvelle mise en page</h3>
-      <p style="color: var(--mu); font-size: 14px; margin-bottom: 12px;">
-        Sélectionnez ce que vous souhaitez transférer :
-      </p>
-      
-      <div class="transfer-options" id="transferOptions">
-        <div class="transfer-section">
-          <h4>Informations client</h4>
-          <div class="transfer-grid">
-            <label class="transfer-option">
-              <input type="checkbox" id="transferClient" checked>
-              <span>Transférer les informations client</span>
-            </label>
-            <label class="transfer-option">
-              <input type="checkbox" id="transferClientAddress" checked>
-              <span>Transférer l'adresse de facturation</span>
-            </label>
-          </div>
-        </div>
-        
-        <div class="transfer-section">
-          <h4>Prestations et fournitures</h4>
-          <div class="transfer-grid">
-            <label class="transfer-option">
-              <input type="checkbox" id="transferAllItems" checked>
-              <span>Tout transférer</span>
-            </label>
-            <label class="transfer-option">
-              <input type="checkbox" id="transferServices" checked>
-              <span>Uniquement les prestations</span>
-            </label>
-            <label class="transfer-option">
-              <input type="checkbox" id="transferSupplies" checked>
-              <span>Uniquement les fournitures</span>
-            </label>
-            <label class="transfer-option">
-              <input type="checkbox" id="transferWithPrices" checked>
-              <span>Enregistrer avec les prix dans la base</span>
-            </label>
-          </div>
-        </div>
-        
-        <div class="transfer-section">
-          <h4>Numéros de documents</h4>
-          <div class="transfer-grid">
-            <label class="transfer-option">
-              <input type="checkbox" id="transferDocNumbers" checked>
-              <span>Relever les numéros de devis/facture</span>
-            </label>
-          </div>
-        </div>
-      </div>
-      
-      <button class="validation-button" id="validateTransfer" onclick="validateTransfer()">
-        <div class="validation-icon">✓</div>
-        <span>Valider le transfert</span>
-      </button>
-    </div>
-
-    <!-- Preview Section -->
-    <div class="c" id="previewContainer" style="display: none;">
-      <h3>Aperçu du document</h3>
-      <div class="preview-container" id="previewContent"></div>
-    </div>
-  </div>
-</main>
-
-<div id="bar"></div>
-<div id="pv"><div class="pvb"><button class="b gh sm" onclick="pvx()"><span>Fermer l'aperçu</span></button><button class="b cu sm" onclick="pdf()"><span>Télécharger le PDF</span></button><img class="toplogo" alt="Logo"></div><div id="pvw"><div id="pvh"><div id="pvs"></div></div></div></div>
-<div id="ts"></div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="js/logo.js?v=5.8.2"></script>
-<script>
-// Configuration
-const LGD = 'img/logo-hd.png';
-const LGT = 'img/logo-tiny.png';
-
-// State
-let S = {clients: [], cat: [], docs: [], cfg: {cot: 21.5, imp: 0, val: 30, acc: 40}, seq: {}, rep: [], ph: {}, chat: [], plan: []};
-let V = {v: 'i'};
-let currentFiles = [];
-let extractedData = {};
-let selectedItems = { services: [], supplies: [] };
-
-// Utility functions
-const $ = s => document.querySelector(s);
-const nw = () => Math.random().toString(36).slice(2, 9);
-const n = v => parseFloat(String(v).replace(',', '.')) || 0;
-const E = v => v.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' €';
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-const td = () => new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
-const fd = s => s ? s.split('-').reverse().join('/') : '';
-
-// Navigation functions
-function tg(o) {
-  const on = o === undefined ? !$('#nv').classList.contains('o') : !!o;
-  $('#nv').classList.toggle('o', on);
-  $('#ov').classList.toggle('o', on);
-  document.body.classList.toggle('lk', on);
-}
-
-function go(v, id) {
-  V = {v, id};
-  tg(0);
-  render();
-  scrollTo(0, 0);
-}
-
-function render() {
-  const t = V.v;
-  document.querySelectorAll('.ni').forEach(b => b.classList.toggle('a', b.dataset.v === t));
-  $('#ttl').textContent = {h: 'Accueil', d: 'Devis', f: 'Factures', c: 'Clients', p: 'Mes tarifs', r: 'Bénéfices', i: 'Importation', x: 'Rapports', s: 'Réglages', g: 'Planning', k: 'Connecteurs'}[t];
-  
-  // Hide all import-specific sections
-  ['fileListContainer', 'extractedDataContainer', 'clientSection', 'itemsSection', 'transferSection', 'previewContainer'].forEach(id => {
-    $(`#${id}`).style.display = 'none';
-  });
-  
-  if (t === 'i') {
-    $('#app').innerHTML = getImportHTML();
-    initImportPage();
-  }
-}
-
-function getImportHTML() {
-  return `
-    <div class="import-container">
-      <div class="c">
-        <h3>Importer des documents</h3>
-        <p style="color: var(--mu); font-size: 14px; margin-bottom: 12px;">
-          Glissez-déposez vos fichiers PDF, images ou documents ici, ou cliquez pour sélectionner.
-        </p>
-        
-        <div class="file-upload-area" id="uploadArea">
-          <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" multiple>
-          <div class="file-upload-icon">📄</div>
-          <div class="file-upload-label">Sélectionner des fichiers</div>
-          <div style="font-size: 12px; color: var(--mu);">PDF, Images, Word</div>
-        </div>
-        
-        <div class="progress-bar" id="uploadProgress" style="display: none;">
-          <div class="progress-fill" id="progressFill" style="width: 0%"></div>
-        </div>
-      </div>
-
-      <div class="c" id="fileListContainer" style="display: none;">
-        <h3>Fichiers importés</h3>
-        <div class="file-list" id="fileList"></div>
-      </div>
-
-      <div class="c" id="extractedDataContainer" style="display: none;">
-        <h3>Données extraites</h3>
-        <div class="extracted-data" id="extractedData"></div>
-      </div>
-
-      <div class="c" id="clientSection" style="display: none;">
-        <h3>Informations client</h3>
-        <div id="clientInfo"></div>
-      </div>
-
-      <div class="c" id="itemsSection" style="display: none;">
-        <h3>Prestations et fournitures</h3>
-        
-        <div class="search-container">
-          <div class="search-icon">🔍</div>
-          <input type="text" id="itemSearch" class="search-input" placeholder="Rechercher dans vos tarifs...">
-          <div class="results-dropdown" id="searchResults"></div>
-        </div>
-        
-        <div class="items-grid" id="itemsGrid"></div>
-      </div>
-
-      <div class="c" id="transferSection" style="display: none;">
-        <h3>Transférer vers la nouvelle mise en page</h3>
-        <p style="color: var(--mu); font-size: 14px; margin-bottom: 12px;">
-          Sélectionnez ce que vous souhaitez transférer :
-        </p>
-        
-        <div class="transfer-options" id="transferOptions">
-          <div class="transfer-section">
-            <h4>Informations client</h4>
-            <div class="transfer-grid">
-              <label class="transfer-option">
-                <input type="checkbox" id="transferClient" checked>
-                <span>Transférer les informations client</span>
-              </label>
-              <label class="transfer-option">
-                <input type="checkbox" id="transferClientAddress" checked>
-                <span>Transférer l'adresse de facturation</span>
-              </label>
-            </div>
-          </div>
-          
-          <div class="transfer-section">
-            <h4>Prestations et fournitures</h4>
-            <div class="transfer-grid">
-              <label class="transfer-option">
-                <input type="checkbox" id="transferAllItems" checked>
-                <span>Tout transférer</span>
-              </label>
-              <label class="transfer-option">
-                <input type="checkbox" id="transferServices" checked>
-                <span>Uniquement les prestations</span>
-              </label>
-              <label class="transfer-option">
-                <input type="checkbox" id="transferSupplies" checked>
-                <span>Uniquement les fournitures</span>
-              </label>
-              <label class="transfer-option">
-                <input type="checkbox" id="transferWithPrices" checked>
-                <span>Enregistrer avec les prix dans la base</span>
-              </label>
-            </div>
-          </div>
-          
-          <div class="transfer-section">
-            <h4>Numéros de documents</h4>
-            <div class="transfer-grid">
-              <label class="transfer-option">
-                <input type="checkbox" id="transferDocNumbers" checked>
-                <span>Relever les numéros de devis/facture</span>
-              </label>
-            </div>
-          </div>
-        </div>
-        
-        <button class="validation-button" id="validateTransfer" onclick="validateTransfer()">
-          <div class="validation-icon">✓</div>
-          <span>Valider le transfert</span>
-        </button>
-      </div>
+    <div class="c" id="transferSection" style="display:none;"><h3>Transférer vers la nouvelle mise en page</h3><p style="color:var(--mu);font-size:14px;margin-bottom:12px">Choisissez ce qui doit être transféré :</p><div class="transfer-section"><h4>Éléments à transférer</h4><div class="transfer-scope"><label class="scope-option selected"><input type="radio" name="transferScope" value="client" checked><span class="scope-check">✓</span><span>Client seul</span></label><label class="scope-option"><input type="radio" name="transferScope" value="services"><span class="scope-check">✓</span><span>Prestations</span></label><label class="scope-option"><input type="radio" name="transferScope" value="supplies"><span class="scope-check">✓</span><span>Fournitures</span></label><label class="scope-option"><input type="radio" name="transferScope" value="all"><span class="scope-check">✓</span><span>Tout</span></label></div><label class="transfer-option" style="margin-top:10px"><input type="checkbox" id="transferWithPrices" checked><span>Enregistrer les prix dans « Mes tarifs »</span></label><label class="transfer-option" style="margin-top:8px"><input type="checkbox" id="transferDocNumbers" checked><span>Relever les numéros de devis et factures</span></label></div><button class="validation-button" id="validateTransfer" onclick="validateTransfer()"><div class="validation-icon">✓</div><span>Valider le transfert</span></button></div>
 
       <div class="c" id="previewContainer" style="display: none;">
         <h3>Aperçu du document</h3>
@@ -1418,124 +1187,40 @@ function initImportPage() {
   initItemSearch();
 }
 
-function handleFiles(files) {
-  currentFiles = Array.from(files);
-  
-  // Show progress bar
-  const progressBar = $('#uploadProgress');
-  const progressFill = $('#progressFill');
-  progressBar.style.display = 'block';
-  
-  // Process files one by one
-  let processed = 0;
-  
-  currentFiles.forEach((file, index) => {
-    const reader = new FileReader();
-    
-    reader.onload = (e) => {
-      processed++;
-      const progress = (processed / currentFiles.length) * 100;
-      progressFill.style.width = `${progress}%`;
-      
-      // Extract data from file
-      extractDataFromFile(file, e.target.result, index);
-      
-      if (processed === currentFiles.length) {
-        setTimeout(() => {
-          progressBar.style.display = 'none';
-          showFileList();
-        }, 500);
-      }
-    };
-    
-    if (file.name.endsWith('.pdf')) {
-      reader.readAsDataURL(file);
-    } else if (file.name.match(/\.(jpg|jpeg|png)$/i)) {
-      reader.readAsDataURL(file);
-    } else {
-      reader.readAsText(file);
-    }
-  });
+async function handleFiles(files){
+ currentFiles=Array.from(files);const pb=$('#uploadProgress'),pf=$('#progressFill');pb.style.display='block';pf.style.width='0%';
+ let done=0;for(const file of currentFiles){try{await extractDataFromFile(file)}catch(e){const id=nw();extractedData[id]={id,name:file.name,size:file.size,type:getFileType(file.name),content:'',status:'error',extracted:{client:null,documentNumber:null,date:null,items:[],total:0,addresses:[],selectedBillingAddress:0,warnings:[e.message||'Extraction impossible']}}}done++;pf.style.width=(done/currentFiles.length*100)+'%'}pb.style.display='none';showFileList();
 }
-
-function extractDataFromFile(file, content, index) {
-  // This is a simplified extraction - in production, you would use a more sophisticated parser
-  // For now, we'll simulate extraction based on file name and content
-  
-  const fileData = {
-    id: nw(),
-    name: file.name,
-    size: file.size,
-    type: file.type || getFileType(file.name),
-    content: content,
-    status: 'processing',
-    extracted: {
-      client: null,
-      documentNumber: null,
-      date: null,
-      items: [],
-      total: 0,
-      addresses: []
-    }
-  };
-  
-  // Simulate extraction based on file name
-  const nameLower = file.name.toLowerCase();
-  
-  // Extract document number
-  const numberMatch = file.name.match(/(dev|fac|devis|facture)[\s-]*([a-z0-9\-]+)/i);
-  if (numberMatch) {
-    fileData.extracted.documentNumber = numberMatch[2].toUpperCase();
-  }
-  
-  // Extract client name from filename
-  const clientMatch = file.name.match(/(pour|client|a\s*)[\s_\-]*(.+?)(?:\.|$)/i);
-  if (clientMatch) {
-    fileData.extracted.client = { name: clientMatch[2].replace(/[\-_]/g, ' ').trim() };
-  }
-  
-  // Extract date from filename
-  const dateMatch = file.name.match(/(\d{2}[\/\-]\d{2}[\/\-]\d{4})|(\d{4}[\/\-]\d{2}[\/\-]\d{2})/);
-  if (dateMatch) {
-    fileData.extracted.date = dateMatch[0];
-  }
-  
-  // Simulate some items based on file type
-  if (nameLower.includes('plomberie') || nameLower.includes('chauffage')) {
-    fileData.extracted.items = [
-      { type: 'service', name: 'Main d\'œuvre plomberie', quantity: 1, unitPrice: 45.00, total: 45.00 },
-      { type: 'supply', name: 'Tuyau cuivre', quantity: 2, unitPrice: 15.50, total: 31.00 },
-      { type: 'service', name: 'Déplacement', quantity: 1, unitPrice: 30.00, total: 30.00 }
-    ];
-    fileData.extracted.total = fileData.extracted.items.reduce((sum, item) => sum + item.total, 0);
-  } else {
-    // Default items
-    fileData.extracted.items = [
-      { type: 'service', name: 'Prestation standard', quantity: 1, unitPrice: 50.00, total: 50.00 }
-    ];
-    fileData.extracted.total = 50.00;
-  }
-  
-  // Add sample addresses if client exists
-  if (fileData.extracted.client) {
-    fileData.extracted.addresses = [
-      { type: 'facturation', street: '123 Rue de la République', city: 'Paris', postalCode: '75001' },
-      { type: 'chantier', street: '456 Avenue des Champs', city: 'Lyon', postalCode: '69002' }
-    ];
-  }
-  
-  fileData.status = 'completed';
-  extractedData[fileData.id] = fileData;
-  
-  // Update file list
-  updateFileList();
+async function extractDataFromFile(file){
+ if(file.size>50*1024*1024)throw new Error('Fichier supérieur à 50 Mo');
+ const type=file.type||getFileType(file.name);let text='',preview='';
+ if(type==='pdf'||/\.pdf$/i.test(file.name)){const b=await file.arrayBuffer();text=await extractPdfText(b);preview=URL.createObjectURL(new Blob([b],{type:'application/pdf'}))}
+ else if(/\.docx$/i.test(file.name)){const b=await file.arrayBuffer();if(window.mammoth){const x=await window.mammoth.extractRawText({arrayBuffer:b});text=x.value||''}preview=await readDataURL(file)}
+ else if(/\.(txt|csv)$/i.test(file.name)){text=await readText(file);preview=text}
+ else if(type.startsWith('image/'))preview=await readDataURL(file);
+ else{text=await readText(file);preview=text}
+ const extracted=parseDocumentText(file.name,text),id=nw();extractedData[id]={id,name:file.name,size:file.size,type,content:preview||text,status:'completed',extracted};
 }
-
+function readText(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(r.error||new Error('Lecture impossible'));r.readAsText(file)})}
+function readDataURL(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(r.error||new Error('Lecture impossible'));r.readAsDataURL(file)})}
+async function extractPdfText(buffer){let pdfjs;try{pdfjs=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs')}catch(e){return ''}const pdf=await pdfjs.getDocument({data:buffer}).promise,parts=[];for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i),tc=await page.getTextContent();parts.push(tc.items.map(x=>x.str||'').join(' '))}return parts.join('\n')}
+function parseDocumentText(filename,text){
+ const raw=(text||'').replace(/\u0000/g,' ').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n').trim();
+ const nm=raw.match(/((?:DEVIS?|DEV|FACTURE|FAC)[\s-]*[A-Z0-9]+(?:[\s-]+[A-Z0-9]+)*)/i)||filename.match(/((?:DEVIS?|DEV|FACTURE|FAC)[\s-]*[A-Z0-9]+(?:[\s-]+[A-Z0-9]+)*)/i);
+ const documentNumber=nm?nm[1].replace(/\s+/g,'-').toUpperCase():null,documentType=/(facture|invoice|fac[\s-]?\d)/i.test(filename+' '+raw)?'facture':'devis';
+ const d=raw.match(/\b(\d{2})[\/-](\d{2})[\/-](\d{4})\b|\b(\d{4})[\/-](\d{2})[\/-](\d{2})\b/),date=d?(d[4]?d[4]+'-'+d[5]+'-'+d[6]:d[3]+'-'+d[2]+'-'+d[1]):td();
+ const email=(raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)||[])[0]||'',phone=(raw.match(/(?:\+33\s?[1-9]|0[1-9])(?:[ .-]?\d{2}){4}/)||[])[0]||'';
+ let name='';const nm2=raw.match(/(?:client|nom du client|raison sociale|factur[ée] [àa]|pour|destinataire)\s*[:\-]?\s*([^\n]{2,80})/i);if(nm2)name=nm2[1].trim();if(!name)name=filename.replace(/\.[^.]+$/,'').replace(/^(devis|facture|fac|dev)[\s_-]*/i,'').replace(/[._-]+/g,' ').trim();
+ const addresses=[],ar=/(\d{1,5}\s+(?:rue|avenue|av\.?|boulevard|bd\.?|chemin|route|impasse|all[ée]e)\s+[^\n,;]{2,80})[,;]?\s*(\d{5})\s+([^\n,;]+)/gi;let m;while((m=ar.exec(raw)))addresses.push({type:/chantier|travaux|site/i.test(m[0])?'chantier':'facturation',street:m[1].trim(),postalCode:m[2],city:m[3].trim()});
+ const items=[];raw.split(/\n+/).map(x=>x.trim()).filter(Boolean).forEach(line=>{const vals=[...line.matchAll(/(\d[\d ]*[,.]\d{2})\s*€?/g)].map(x=>parseFloat(x[1].replace(/ /g,'').replace(',','.')));if(!vals.length||/^(total|sous-total|tva|remise|acompte|reste à payer)/i.test(line))return;const desc=line.replace(/\d[\d ]*[,.]\d{2}\s*€?/g,'').trim();if(desc.length<3)return;const service=/(pose|installation|réparation|dépannage|main d.?œuvre|déplacement|intervention|diagnostic|heure|forfait)/i.test(desc);items.push({type:service?'service':'supply',name:desc,quantity:1,unitPrice:vals.length>1?vals[vals.length-2]:vals[0],total:vals[vals.length-1]})});
+ const totalM=raw.match(/(?:total(?: ttc)?|montant total)\s*[:=]?\s*(\d[\d ]*[,.]\d{2})/i),warnings=[];if(!raw&&/^image\//i.test(filename))warnings.push('Image ouverte. L’extraction automatique du texte nécessite un moteur OCR.');
+ return {client:name?{name,email,phone}:null,documentNumber,date,documentType,items,total:totalM?parseFloat(totalM[1].replace(/ /g,'').replace(',','.')):items.reduce((s,x)=>s+x.total,0),addresses,selectedBillingAddress:0,warnings};
+}
 function getFileType(filename) {
-  if (filename.endsWith('.pdf')) return 'pdf';
-  if (filename.endsWith('.jpg') || filename.endsWith('.jpeg')) return 'image/jpeg';
-  if (filename.endsWith('.png')) return 'image/png';
-  if (filename.endsWith('.doc') || filename.endsWith('.docx')) return 'document';
+  if (/\.pdf$/i.test(filename)) return 'pdf';
+  if (/\.(jpg|jpeg)$/i.test(filename)) return 'image/jpeg';
+  if (/\.png$/i.test(filename)) return 'image/png';
+  if (/\.(doc|docx)$/i.test(filename)) return 'document';
   return 'unknown';
 }
 
@@ -1956,164 +1641,19 @@ function highlightResult(element) {
   element.classList.add('highlight');
 }
 
-function validateTransfer() {
-  const transferClient = $('#transferClient').checked;
-  const transferClientAddress = $('#transferClientAddress').checked;
-  const transferAllItems = $('#transferAllItems').checked;
-  const transferServices = $('#transferServices').checked;
-  const transferSupplies = $('#transferSupplies').checked;
-  const transferWithPrices = $('#transferWithPrices').checked;
-  const transferDocNumbers = $('#transferDocNumbers').checked;
-  
-  // Get the first file for now (in production, handle multiple files)
-  const fileIds = Object.keys(extractedData);
-  if (fileIds.length === 0) {
-    toast('Aucun fichier à transférer');
-    return;
-  }
-  
-  const fileId = fileIds[0];
-  const fileData = extractedData[fileId];
-  
-  // Validate client
-  if (transferClient && fileData.extracted.client) {
-    const client = fileData.extracted.client;
-    let existingClient = S.clients.find(c => 
-      c.n && c.n.toLowerCase().includes(client.name.toLowerCase())
-    );
-    
-    if (!existingClient) {
-      // Create new client
-      existingClient = {
-        id: nw(),
-        n: client.name,
-        a: client.address || '',
-        c: client.city || '',
-        t: client.phone || '',
-        e: client.email || ''
-      };
-      S.clients.push(existingClient);
-      save('clients');
-      toast(`✅ Nouveau client: ${esc(client.name)}`);
-    }
-  }
-  
-  // Transfer items
-  if ((transferAllItems || transferServices || transferSupplies) && fileData.extracted.items) {
-    fileData.extracted.items.forEach(item => {
-      if (item.skipped) return;
-      
-      // Check item type
-      const isService = item.type === 'service';
-      const isSupply = item.type === 'supply';
-      
-      if (!transferAllItems && !((isService && transferServices) || (isSupply && transferSupplies))) {
-        return;
-      }
-      
-      // Check if item exists
-      const existingItem = S.cat.find(c => 
-        c.d && c.d.toLowerCase() === item.name.toLowerCase()
-      );
-      
-      if (existingItem) {
-        toast(`⚠️ ${esc(item.name)} existe déjà`);
-        return;
-      }
-      
-      // Add to database
-      S.cat.push({
-        d: item.name,
-        t: item.type,
-        p: transferWithPrices ? item.unitPrice : 0
-      });
-      
-      toast(`✅ ${esc(item.name)} ajouté`);
-    });
-    
-    save('cat');
-  }
-  
-  // Transfer document numbers
-  if (transferDocNumbers && fileData.extracted.documentNumber) {
-    toast(`📋 Numéro de document: ${esc(fileData.extracted.documentNumber)}`);
-  }
-  
-  // Create a new document with the extracted data
-  createDocumentFromImport(fileData);
-  
-  toast('✅ Transfert terminé avec succès !');
-  
-  // Reset
-  resetImport();
+function selectedTransferScope(){return document.querySelector('input[name="transferScope"]:checked')?.value||'client'}
+document.addEventListener('change',e=>{if(e.target.name==='transferScope')document.querySelectorAll('.scope-option').forEach(x=>x.classList.toggle('selected',x.querySelector('input')===e.target))});
+function validateTransfer(){
+ const scope=selectedTransferScope(),withPrices=$('#transferWithPrices')?.checked!==false,transferDocNumbers=$('#transferDocNumbers')?.checked!==false,ids=Object.keys(extractedData);
+ if(!ids.length){toast('Aucun fichier à transférer');return}
+ ids.forEach(id=>transferFile(extractedData[id],scope,withPrices,transferDocNumbers));toast('✓ Transfert terminé');setTimeout(resetImport,700);
 }
-
-function createDocumentFromImport(fileData) {
-  const year = new Date().getFullYear();
-  const docType = fileData.extracted.documentNumber && fileData.extracted.documentNumber.startsWith('FAC') ? 'f' : 'd';
-  const docKey = docType + year;
-  const seqNumber = (S.seq[docKey] || 0) + 1;
-  
-  // Create new document
-  const newDoc = {
-    id: nw(),
-    t: docType,
-    num: fileData.extracted.documentNumber || (docType === 'd' ? `DEV-${year}-${String(seqNumber).padStart(3, '0')}` : `FAC-${year}-${String(seqNumber).padStart(3, '0')}`),
-    date: fileData.extracted.date || td(),
-    val: S.cfg.val,
-    cn: fileData.extracted.client ? fileData.extracted.client.name : '',
-    ca: fileData.extracted.client ? (fileData.extracted.addresses && fileData.extracted.addresses[fileData.extracted.selectedBillingAddress || 0] ? fileData.extracted.addresses[fileData.extracted.selectedBillingAddress || 0].street : '') : '',
-    cc: fileData.extracted.client ? (fileData.extracted.addresses && fileData.extracted.addresses[fileData.extracted.selectedBillingAddress || 0] ? fileData.extracted.addresses[fileData.extracted.selectedBillingAddress || 0].city : '') : '',
-    ct: fileData.extracted.client ? fileData.extracted.client.phone : '',
-    ce: fileData.extracted.client ? fileData.extracted.client.email : '',
-    cid: '',
-    sn: '',
-    sa: '',
-    sc: '',
-    o: `Importé depuis document: ${esc(fileData.name)}`,
-    F: [],
-    M: [],
-    acc: S.cfg.acc,
-    ap: false,
-    paid: false,
-    pd: '',
-    cost: '',
-    st: 'att',
-    tva: S.cfg.tva ? n(S.cfg.tvr) : 0,
-    rm: ''
-  };
-  
-  // Add items to document
-  if (fileData.extracted.items) {
-    fileData.extracted.items.forEach(item => {
-      if (item.skipped) return;
-      
-      const targetArray = item.type === 'service' ? newDoc.M : newDoc.F;
-      targetArray.push({
-        d: item.name,
-        q: item.quantity,
-        p: item.unitPrice
-      });
-    });
-  }
-  
-  // Find client ID
-  const client = S.clients.find(c => 
-    c.n && c.n.toLowerCase().includes(newDoc.cn.toLowerCase())
-  );
-  if (client) {
-    newDoc.cid = client.id;
-  }
-  
-  // Save and navigate
-  S.docs.unshift(newDoc);
-  save('docs');
-  save('seq');
-  
-  // Navigate to the new document
-  go(docType, newDoc.id);
+function transferFile(fileData,scope,withPrices,transferDocNumbers){
+ const data=fileData.extracted,norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();let client=null;
+ if((scope==='client'||scope==='all')&&data.client?.name){client=S.clients.find(c=>norm(c.n)===norm(data.client.name));if(!client){client={id:nw(),n:data.client.name,a:'',c:'',t:data.client.phone||'',e:data.client.email||'',addresses:[]};S.clients.push(client)}if(!client.t&&data.client.phone)client.t=data.client.phone;if(!client.e&&data.client.email)client.e=data.client.email;save('clients')}
+ if(scope!=='client'){(data.items||[]).forEach(item=>{const ok=scope==='all'||(scope==='services'&&item.type==='service')||(scope==='supplies'&&item.type==='supply');if(!ok||item.skipped)return;const old=S.cat.find(x=>norm(x.d)===norm(item.name));if(old){if(withPrices&&!n(old.p))old.p=n(item.unitPrice);return}S.cat.push({d:item.name,t:item.type,p:withPrices?n(item.unitPrice):0})});save('cat')}
+ if(transferDocNumbers&&data.documentNumber&&!S.docs.some(d=>norm(d.num)===norm(data.documentNumber))){const type=data.documentType==='facture'?'f':'d',year=new Date().getFullYear(),key=type+year,seq=(S.seq[key]||0)+1,bill=data.addresses?.[data.selectedBillingAddress||0],doc={id:nw(),t:type,num:data.documentNumber,date:data.date||td(),val:S.cfg.val||30,cn:client?.n||data.client?.name||'',ca:bill?.street||client?.a||'',cc:[bill?.postalCode,bill?.city].filter(Boolean).join(' ')||client?.c||'',ct:client?.t||data.client?.phone||'',ce:client?.e||data.client?.email||'',cid:client?.id||'',sn:'',sa:'',sc:'',o:'Importé depuis document : '+fileData.name,F:[],M:[],acc:S.cfg.acc||40,ap:false,paid:false,pd:'',cost:'',st:'att',tva:0,rm:''};(data.items||[]).forEach(item=>{if(!item.skipped)(item.type==='service'?doc.M:doc.F).push({d:item.name,q:item.quantity||1,p:n(item.unitPrice)})});S.docs.unshift(doc);S.seq[key]=seq;save('docs');save('seq')}else if(transferDocNumbers&&data.documentNumber)toast('⚠️ Numéro déjà enregistré : '+data.documentNumber);
 }
-
 function resetImport() {
   currentFiles = [];
   extractedData = {};
@@ -2179,7 +1719,7 @@ function init() {
   }
   
   // Set version
-  V = {v: 'i'};
+  V = {v: 'i6'};
   
   // Render
   render();
