@@ -42,3 +42,10 @@ Glisse un devis, une facture ou un rapport vers la gauche → « Supprimer ». �
 
 ## Ms Devis 6.0 — Bridge PC
 La V6 utilise une application locale optionnelle sur le PC. La page `bridge/` sert de point de téléchargement et d'instructions. Le PC exécute le bridge, tandis que l'iPhone reste uniquement l'interface utilisateur. Aucune clé API ou identifiant n'est stocké dans le dépôt.
+
+## Import intelligent → mise en page Ms Plomberie
+1. Onglet d'import : choisir PDF, image (OCR) ou Word (.docx).
+2. Cliquer **Transférer et afficher dans ma mise en page** : client, prestations et fournitures sont extraits, enregistrés, puis un devis/facture est créé et son **aperçu** s'ouvre (moteur `js/pdfpages.js`). **Télécharger le PDF** ou le partage sont disponibles depuis l'aperçu.
+3. Si des données manquent (client, numéro, date, lignes), un avertissement s'affiche ; le document est tout de même généré (numéro et date automatiques).
+
+Limites : l'extraction repose sur le texte lu (OCR moins fiable) ; les rapports importés sont reconnus comme devis/factures seulement, les rapports d'intervention restent à saisir dans l'onglet Rapports. Déploiement : site statique (GitHub Pages / Vercel), aucune configuration supplémentaire.

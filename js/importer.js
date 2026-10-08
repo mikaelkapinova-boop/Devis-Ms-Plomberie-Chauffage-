@@ -15,7 +15,7 @@ function getImportHTML() {
         </div>
         
           <button class="validation-button" id="transferNowButton" type="button" disabled style="margin-top:16px;opacity:.45;cursor:not-allowed;">
-            <div class="validation-icon">✓</div><span>Transférer vers la nouvelle mise en page</span>
+            <div class="validation-icon">✓</div><span>Transférer et afficher dans ma mise en page</span>
           </button>
         <div class="progress-bar" id="uploadProgress" style="display: none;">
           <div class="progress-fill" id="progressFill" style="width: 0%"></div>
@@ -114,9 +114,9 @@ function initImportPage() {
   if(transferNowButton) transferNowButton.addEventListener('click',()=>{
     const ids=Object.keys(extractedData);
     if(!ids.length){toast('Sélectionnez d’abord un document');return;}
-    const last=extractedData[ids[ids.length-1]];
-    processFile(last.id);
-    $('#transferSection')?.scrollIntoView({behavior:'smooth',block:'center'});
+    const all=document.querySelector('input[name="transferScope"][value="all"]');
+    if(all){all.checked=true;all.dispatchEvent(new Event('change',{bubbles:true}))}
+    validateTransfer();
   });
   
   // Initialize item search
@@ -703,14 +703,18 @@ function highlightResult(element) {
 
 function selectedTransferScope(){return document.querySelector('input[name="transferScope"]:checked')?.value||'client'}
 document.addEventListener('change',e=>{if(e.target.name==='transferScope')document.querySelectorAll('.scope-option').forEach(x=>x.classList.toggle('selected',x.querySelector('input')===e.target))});
-function validateTransfer(){const scope=selectedTransferScope(),withPrices=$('#transferWithPrices')?.checked!==false,transferDocNumbers=$('#transferDocNumbers')?.checked!==false,ids=Object.keys(extractedData);if(!ids.length){toast('Aucun fichier à transférer');return}ids.forEach(id=>transferFile(extractedData[id],scope,withPrices,transferDocNumbers));toast('✓ Transfert terminé');setTimeout(()=>render(),500)}
+function importWarnings(data){const w=[];if(!data.client?.name)w.push('client non détecté');if(!data.documentNumber)w.push('numéro du document absent (un numéro sera attribué)');if(!data.date)w.push('date absente (date du jour utilisée)');if(!(data.items||[]).some(i=>!i.skipped))w.push('aucune ligne de prestation ou fourniture détectée');return w}
+function validateTransfer(){const scope=selectedTransferScope(),withPrices=$('#transferWithPrices')?.checked!==false,transferDocNumbers=$('#transferDocNumbers')?.checked!==false,ids=Object.keys(extractedData);if(!ids.length){toast('Aucun fichier à transférer');return}
+let last=null;ids.forEach(id=>{const w=scope==='all'?importWarnings(extractedData[id].extracted||{}):[];if(w.length)toast('⚠️ '+(extractedData[id].name||'Document')+' : '+w.join(', '));last=transferFile(extractedData[id],scope,withPrices,transferDocNumbers)||last});
+if(scope==='all'&&last){toast('✓ Document créé dans votre mise en page — aperçu en cours');setTimeout(()=>{go('e',last.id);pvo()},400);return}
+toast('✓ Transfert terminé');setTimeout(()=>render(),500)}
 function transferFile(fileData,scope,withPrices,transferDocNumbers){
- const data=fileData.extracted||{},norm=s=>String(s||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim();
+ const data=fileData.extracted||{},norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
  let client=null;
  if((scope==='client'||scope==='all')&&data.client?.name){
    client=S.clients.find(c=>{
      const a=norm(c.n),b=norm(data.client.name);
-     return a&&b&&(a===b||(data.client.email&&norm(c.e)===norm(data.client.email))||(data.client.phone&&String(c.t||'').replace(/\\D/g,'')===String(data.client.phone).replace(/\\D/g,'')));
+     return a&&b&&(a===b||(data.client.email&&norm(c.e)===norm(data.client.email))||(data.client.phone&&String(c.t||'').replace(/\D/g,'')===String(data.client.phone).replace(/\D/g,'')));
    });
    if(!client){client={id:nw(),n:data.client.name,a:'',c:'',t:data.client.phone||'',e:data.client.email||'',addresses:[]};S.clients.push(client)}
    if(!Array.isArray(client.addresses))client.addresses=[];
@@ -736,7 +740,7 @@ function transferFile(fileData,scope,withPrices,transferDocNumbers){
  if(scope==='all'){
    const type=data.documentType==='facture'?'f':'d',year=(data.date||td()).slice(0,4)||new Date().getFullYear(),key=type+year,seq=(S.seq[key]||0)+1;
    const docNumber=data.documentNumber||((type==='d'?'DEV-':'FAC-')+year+'-'+String(seq).padStart(3,'0'));
-   if(data.documentNumber&&transferDocNumbers&&S.docs.some(d=>norm(d.num)===norm(data.documentNumber))){toast('⚠️ Numéro déjà enregistré : '+data.documentNumber);return}
+   if(data.documentNumber&&transferDocNumbers&&S.docs.some(d=>norm(d.num)===norm(data.documentNumber))){{const ex=S.docs.find(d=>norm(d.num)===norm(data.documentNumber));toast('⚠️ Numéro déjà enregistré : '+data.documentNumber);return ex}}
    const bill=data.addresses?.[data.selectedBillingAddress||0];
    const doc={id:nw(),t:type,num:docNumber,date:data.date||td(),val:S.cfg.val||30,
      cn:client?.n||data.client?.name||'',ca:bill?.street||data.client?.address||client?.a||'',cc:[bill?.postalCode,bill?.city].filter(Boolean).join(' ')||[data.client?.postalCode,data.client?.city].filter(Boolean).join(' ')||client?.c||'',
@@ -749,7 +753,9 @@ function transferFile(fileData,scope,withPrices,transferDocNumbers){
    });
    S.docs.unshift(doc);S.seq[key]=seq;save('docs');save('seq');
    if(!data.documentNumber)toast('ℹ️ Aucun numéro source détecté : numéro '+docNumber+' attribué par Ms Devis');
+   return doc;
  }
+ return null;
 }
 function resetImport() {
   currentFiles = [];
