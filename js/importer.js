@@ -104,7 +104,7 @@ function imParse(text,filename){
   const cliRe=/^(?:client|destinataire|factur[ée]\s*[àa]|adress[ée]\s*[àa]|[àa] l.attention de|nom du client|ma[iî]tre d.ouvrage)\s*[:\-]?\s*(.*)$/i;
   let ci=-1;for(let k=0;k<flat.length;k++){const m=flat[k].match(cliRe);if(m&&!own(flat[k])){ci=k;if(m[1].trim()&&!/^(adresse|t[ée]l)/i.test(m[1]))cn=m[1].trim();else{for(let j=k+1;j<Math.min(k+4,flat.length);j++){if(flat[j]&&!own(flat[j])&&!/^(adresse|t[ée]l|e-?mail|\d)/i.test(flat[j])){cn=flat[j];ci=j;break}}}break}}
   if(!cn){const k=flat.findIndex((l,i)=>/^(m\.|mr|monsieur|mme|madame|mlle)\b/i.test(l)&&!own(l)&&i>0);if(k>-1){cn=flat[k];ci=k}}
-  cn=cn.split(/\s{2,}|\t|\s+(?:adresse|t[ée]l|e-?mail)\b/i)[0].replace(/^(?:nom|client)\s*[:\-]\s*/i,'').trim();
+  cn=cn.split(/\s{2,}|\t|\s+(?:nom|adresse|t[ée]l|e-?mail)\s*[:\-]?/i)[0].replace(/^(?:nom|client)\s*[:\-]\s*/i,'').trim();
   if(cn.length>60||/\d{5}/.test(cn)||/^(devis|facture|rapport)/i.test(cn))cn='';
   const zone=(ci>-1?flat.slice(ci,ci+8):flat.slice(0,30)).filter(l=>!own(l)).join('\n');
   const zoneAll=flat.filter(l=>!own(l)).join('\n');
@@ -124,6 +124,7 @@ function imParse(text,filename){
   let rm=0;m=all.match(/remise[^\n\d]{0,20}(\d{1,2}(?:[.,]\d+)?)\s*%/i);if(m)rm=imNum(m[1]);
   /* lignes */
   const F=[],M=[];let sec='';
+  const maxGross=totHT&&rm<100?totHT/(1-rm/100):null;
   for(const ln of lines){const f=imNorm(ln.replace(/\t/g,' '));
     if(/^\W*\d?\W*(main[\s-]*d.?oeuvre|prestations?|travaux|services?|pose|interventions?)\b.{0,25}$/.test(f)&&!/\d[.,]\d{2}/.test(f)){sec='M';continue}
     if(/^\W*\d?\W*(fournitures?|mat[ée]riels?|mat[ée]riaux|pi[èe]ces?|[ée]quipements?)\b.{0,25}$/.test(f)&&!/\d[.,]\d{2}/.test(f)){sec='F';continue}
@@ -131,6 +132,7 @@ function imParse(text,filename){
     if(IM_SKIP.test(f)||/siret|iban|@|www\./.test(f)||own(ln))continue;
     if(ln.trim()===cn||IM_CITY.test(ln)&&!/[€]/.test(ln)&&!/\d[.,]\d{2}/.test(ln))continue;
     const it=imParseLine(ln);if(!it)continue;
+    if(maxGross&&it.q*it.p>maxGross+Math.max(.05,maxGross*.005)){W.push('Une ligne a été ignorée car son montant dépasse le total HT du document : vérifiez cette ligne.');continue}
     if(sec&&!IM_UNIT_M.test(ln))it.k=sec;(it.k==='M'?M:F).push({d:it.d,q:it.q,p:it.p});
   }
   const items=[...M,...F],sum=items.reduce((s,x)=>s+x.q*x.p,0);
