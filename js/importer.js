@@ -1,807 +1,237 @@
-function getImportHTML() {
-  return `
-    <div class="import-container">
-      <div class="c">
-        <h3>Importer des documents</h3>
-        <p style="color: var(--mu); font-size: 14px; margin-bottom: 12px;">
-          Glissez-déposez vos fichiers PDF, images ou documents ici, ou cliquez pour sélectionner.
-        </p>
-        
-        <div class="file-upload-area" id="uploadArea">
-          <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" multiple>
-          <div class="file-upload-icon">📄</div>
-          <div class="file-upload-label">Sélectionner des fichiers</div>
-          <div style="font-size: 12px; color: var(--mu);">PDF, Images, Word</div>
-        </div>
-        
-          <button class="validation-button" id="transferNowButton" type="button" disabled style="margin-top:16px;opacity:.45;cursor:not-allowed;">
-            <div class="validation-icon">✓</div><span>Transférer vers la nouvelle mise en page</span>
-          </button>
-        <div class="progress-bar" id="uploadProgress" style="display: none;">
-          <div class="progress-fill" id="progressFill" style="width: 0%"></div>
-        </div>
-      </div>
+/* Import intelligent — Ms Plomberie & Chauffage
+   Fichier (PDF, scan, photo, Word, texte) → texte → extraction des champs →
+   vérification modifiable → création du devis / de la facture / du rapport
+   dans la mise en page de l'application, puis aperçu et PDF. */
+'use strict';
+const IM={res:[],i:0,busy:false};
+const imEsc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const imNorm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const imScripts={};
+function imLoad(src,test){if(test())return Promise.resolve(true);if(imScripts[src])return imScripts[src];return imScripts[src]=new Promise(ok=>{const s=document.createElement('script');s.src=src;s.onload=()=>ok(test());s.onerror=()=>ok(false);document.head.appendChild(s)})}
+const imPdfJs=async()=>{await imLoad('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',()=>!!window.pdfjsLib);if(!window.pdfjsLib)return null;pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';return pdfjsLib};
+const imOcrLib=()=>imLoad('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',()=>!!window.Tesseract);
+const imMammoth=()=>imLoad('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js',()=>!!window.mammoth);
 
-      <div class="c" id="fileListContainer" style="display: none;">
-        <h3>Fichiers importés</h3>
-        <div class="file-list" id="fileList"></div>
-      </div>
-
-      <div class="c" id="extractedDataContainer" style="display: none;">
-        <h3>Données extraites</h3>
-        <div class="extracted-data" id="extractedData"></div>
-      </div>
-
-      <div class="c" id="clientSection" style="display: none;">
-        <h3>Informations client</h3>
-        <div id="clientInfo"></div>
-      </div>
-
-      <div class="c" id="itemsSection" style="display: none;">
-        <h3>Prestations et fournitures</h3>
-        
-        <div class="search-container">
-          <div class="search-icon">🔍</div>
-          <input type="text" id="itemSearch" class="search-input" placeholder="Rechercher dans vos tarifs...">
-          <div class="results-dropdown" id="searchResults"></div>
-        </div>
-        
-        <div class="items-grid" id="itemsGrid"></div>
-      </div>
-
-      <div class="c" id="transferSection" style="display: none;">
-        <h3>Valider le transfert</h3>
-        <p style="color: var(--mu); font-size: 14px; margin-bottom: 12px;">Choisissez exactement ce qui doit être enregistré dans l’application :</p>
-        <div class="transfer-scope" id="transferOptions">
-          <label class="scope-option selected"><input type="radio" name="transferScope" value="client" checked><span class="scope-check">✓</span><span>Client uniquement</span></label>
-          <label class="scope-option"><input type="radio" name="transferScope" value="services"><span class="scope-check">✓</span><span>Prestations</span></label>
-          <label class="scope-option"><input type="radio" name="transferScope" value="supplies"><span class="scope-check">✓</span><span>Fournitures</span></label>
-          <label class="scope-option"><input type="radio" name="transferScope" value="all"><span class="scope-check">✓</span><span>Tout le document</span></label>
-        </div>
-        <label class="transfer-option" style="margin-top:10px;"><input type="checkbox" id="transferWithPrices" checked><span>Conserver les prix dans « Mes tarifs »</span></label>
-        <label class="transfer-option" style="margin-top:8px;"><input type="checkbox" id="transferDocNumbers" checked><span>Détecter et enregistrer le numéro du devis / facture</span></label>
-        <div id="importWarnings" class="import-warning" style="display:none;"></div>
-        <button class="validation-button" id="validateTransfer" type="button" onclick="validateTransfer()"><div class="validation-icon">✓</div><span>Valider le transfert</span></button>
-      </div>
-
-      <div class="c" id="previewContainer" style="display: none;">
-        <h3>Aperçu du document</h3>
-        <div class="preview-container" id="previewContent"></div>
-      </div>
-    </div>
-  `;
+/* ---------- Lecture des fichiers → texte ---------- */
+async function imOcr(src,label){
+  if(!await imOcrLib())throw new Error('OCR indisponible (connexion requise pour lire les scans)');
+  imStatus('Lecture du scan'+(label?' '+label:'')+'…');
+  const o=await Tesseract.recognize(src,'fra+eng');return o?.data?.text||'';
 }
-
-function initImportPage() {
-  // Initialize drag and drop
-  const uploadArea = $('#uploadArea');
-  const fileInput = $('#fileInput');
-  
-  // Drag and drop events
-  uploadArea.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    uploadArea.classList.add('dragover');
-  });
-  
-  uploadArea.addEventListener('dragleave', () => {
-    uploadArea.classList.remove('dragover');
-  });
-  
-  uploadArea.addEventListener('drop', (e) => {
-    e.preventDefault();
-    uploadArea.classList.remove('dragover');
-    if (e.dataTransfer.files.length > 0) {
-      handleFiles(e.dataTransfer.files);
-    }
-  });
-  
-  // Click to select files
-  uploadArea.addEventListener('click', (e) => {
-    if (e.target === fileInput) return;
-    fileInput.click();
-  });
-  fileInput.addEventListener('click', e => e.stopPropagation());
-  
-  // File input change
-  fileInput.addEventListener('change', (e) => {
-    if (e.target.files.length > 0) {
-      const btn=$('#transferNowButton');
-      if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
-      handleFiles(e.target.files);
-    }
-  });
-  const transferNowButton=$('#transferNowButton');
-  if(transferNowButton) transferNowButton.addEventListener('click',()=>{
-    const ids=Object.keys(extractedData);
-    if(!ids.length){toast('Sélectionnez d’abord un document');return;}
-    const last=extractedData[ids[ids.length-1]];
-    processFile(last.id);
-    $('#transferSection')?.scrollIntoView({behavior:'smooth',block:'center'});
-  });
-  
-  // Initialize item search
-  initItemSearch();
-}
-
-async function handleFiles(files){
- currentFiles=Array.from(files);const pb=$('#uploadProgress'),pf=$('#progressFill');pb.style.display='block';pf.style.width='0%';let done=0;
- for(const file of currentFiles){try{await extractDataFromFile(file)}catch(e){const id=nw();extractedData[id]={id,name:file.name,size:file.size,type:getFileType(file.name),content:'',status:'error',extracted:{client:null,documentNumber:null,date:null,items:[],total:0,addresses:[],selectedBillingAddress:0,warnings:[e.message||'Extraction impossible']}}}done++;pf.style.width=(done/currentFiles.length*100)+'%'}pb.style.display='none';showFileList();const ids=Object.keys(extractedData);if(ids.length){const last=extractedData[ids[ids.length-1]];if(last&&last.status!=='error'){processFile(last.id);setTimeout(()=>$('#transferSection')?.scrollIntoView({behavior:'smooth',block:'center'}),250)}}
-}
-async function extractDataFromFile(file){
- if(file.size>50*1024*1024)throw new Error('Fichier supérieur à 50 Mo');const type=file.type||getFileType(file.name);let text='',preview='';
- if(type==='pdf'||/\.pdf$/i.test(file.name)){const b=await file.arrayBuffer();text=await extractPdfText(b);preview=URL.createObjectURL(new Blob([b],{type:'application/pdf'}))}
- else if(/\.docx$/i.test(file.name)){const b=await file.arrayBuffer();if(window.mammoth){const x=await window.mammoth.extractRawText({arrayBuffer:b});text=x.value||''}preview=await readDataURL(file)}
- else if(/\.(txt|csv)$/i.test(file.name)){text=await readText(file);preview=text}else if(type.startsWith('image/')){preview=await readDataURL(file);if(window.Tesseract){try{const o=await Tesseract.recognize(file,'fra+eng');text=o?.data?.text||''}catch(e){text=''}}}else{text=await readText(file);preview=text}
- const extracted=parseDocumentText(file.name,text),id=nw();extractedData[id]={id,name:file.name,size:file.size,type,content:preview||text,status:'completed',extracted};
-}
-function readText(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(r.error||new Error('Lecture impossible'));r.readAsText(file)})}
-function readDataURL(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(r.error||new Error('Lecture impossible'));r.readAsDataURL(file)})}
-async function extractPdfText(buffer){
-  try{
-    let pdfjs=window.pdfjsLib;
-    if(!pdfjs){try{pdfjs=(await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs'))}catch(e){return ''}}
-    const pdf=await pdfjs.getDocument({data:buffer}).promise, pages=[];
-    for(let pn=1;pn<=pdf.numPages;pn++){
-      const page=await pdf.getPage(pn),tc=await page.getTextContent(),items=(tc.items||[]).filter(x=>String(x.str||'').trim());
-      const rows=[];
-      for(const it of items){
-        const x=Number(it.transform?.[4]||0),y=Number(it.transform?.[5]||0);
-        let row=rows.find(r=>Math.abs(r.y-y)<3);
-        if(!row){row={y,items:[]};rows.push(row)}
-        row.items.push({x,text:String(it.str||'').trim()});
-      }
-      rows.sort((a,b)=>b.y-a.y);
-      pages.push(rows.map(row=>{
-        row.items.sort((a,b)=>a.x-b.x);
-        const vals=row.items.slice(), moneyIdx=[];
-        for(let i=0;i<vals.length;i++){
-          if(/^\d[\d ]*[.,]\d{2}$/.test(vals[i].text) && vals[i+1] && vals[i+1].text==='€') moneyIdx.push(i);
-        }
-        if(moneyIdx.length){
-          const used=new Set();
-          for(let mi=moneyIdx.length-1;mi>=0;mi--){
-            const i=moneyIdx[mi],amount=vals[i].text,prev=vals[i-1];
-            vals[i]={x:vals[i].x,text:'[[EUR:'+amount+']]'};used.add(i+1);
-            if(prev && mi===0 && /^\d+(?:[.,]\d+)?$/.test(prev.text)){
-              vals[i-1]={x:prev.x,text:'[[QTY:'+prev.text+']]'};used.add(i-1);
-            }
-          }
-          for(let i=vals.length-1;i>=0;i--) if(used.has(i) && vals[i].text==='€') vals.splice(i,1);
-        }
-        const minX=vals[0]?.x||0,maxX=vals.reduce((m,v)=>Math.max(m,v.x),0),split=minX+(maxX-minX)*.52;
-        const left=vals.filter(v=>v.x<=split).map(v=>v.text).join(' ').trim();
-        const right=vals.filter(v=>v.x>split).map(v=>v.text).join(' ').trim();
-        return right?left+' ||| '+right:left;
-      }).filter(Boolean).join('\n'));
-    }
-    return pages.join('\n');
-  }catch(e){return ''}
-}
-function parseDocumentText(filename,text){
-  const raw=String(text||'').replace(/\u0000/g,' ').replace(/\r/g,'').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n').trim();
-  const lines=raw.split(/\n+/).map(x=>x.trim()).filter(Boolean);
-  const norm=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[’']/g,"'").replace(/\s+/g,' ').trim();
-  const money=x=>{const n=parseFloat(String(x||'').replace(/\s/g,'').replace('€','').replace(',','.'));return Number.isFinite(n)?n:0};
-  const eur=line=>{const a=[];for(const m of String(line).matchAll(/(\d[\d ]*[.,]\d{2})\s*€/g))a.push({value:money(m[1]),index:m.index});return a};
-  const own={name:/ms\s+plomberie|mikael\s+salillari/i,mail:/mikael\.salillari@hotmail\.fr/i,phone:/07\s*49\s*24\s*85\s*59/i,address:/285\s+rue\s+jeanne\s+d.?arc/i};
-  const isOwn=x=>Object.values(own).some(r=>r.test(String(x||'')));
-  const clean=x=>String(x||'').replace(/^(?:client|nom du client|destinataire|adresse|adresse client|adresse de facturation|t[eé]l[eé]phone|t[eé]l|email|e-mail|mail|objet|chantier|r[ée]f[ée]rence)\s*[:：-]?\s*/i,'').replace(/\s+/g,' ').trim();
-  const dateM=raw.match(/\b(\d{2})[\/-](\d{2})[\/-](\d{4})\b|\b(\d{4})[\/-](\d{2})[\/-](\d{2})\b/);
-  const date=dateM?(dateM[4]?dateM[4]+'-'+dateM[5]+'-'+dateM[6]:dateM[3]+'-'+dateM[2]+'-'+dateM[1]):null;
-  const n1=[...raw.matchAll(/\b(?:DEVIS|DEV|FACTURE|FAC)\s*[-_: ]\s*([A-Z0-9][A-Z0-9_-]{2,})/ig)].map(m=>m[0]);
-  const n2=String(filename||'').match(/\b(?:DEVIS|DEV|FACTURE|FAC)[\s_-]*(?=[A-Z0-9_-]*\d)[A-Z0-9]+(?:[\s_-]+[A-Z0-9]+)*/i)?.[0]||'';
-  const rawNum=n1.find(x=>/\d/.test(x))||n2;
-  const documentNumber=rawNum?rawNum.replace(/[:_ ]+/g,'-').replace(/-+/g,'-').toUpperCase():null;
-  const documentType=/(facture|invoice|\bfac[\s_-]?\d)/i.test(filename+' '+raw)?'facture':'devis';
-  let clientName='',clientEmail='',clientPhone='',clientAddress='',clientPostal='',clientCity='',issuerName='',issuerEmail='',issuerPhone='',issuerAddress='';
-  let issuerPostal='',issuerCity='',chantier='',object='',period='',reference='',clientExplicit=false;
-  const confidence={clientName:0,clientAddress:0,clientPhone:0,clientEmail:0,items:0};
-  const warnings=[];
-  const setName=(v,c)=>{v=clean(v);if(v&&!isOwn(v)&&!/^(devis|facture|objet|chantier|r[ée]f[ée]rence|siret|tva)$/i.test(v)&&!clientName){clientName=v;confidence.clientName=c;clientExplicit=c>=.9}};
-  const setAddress=(v,p='',city='',c=.8)=>{v=String(v||'').trim();if(!v||isOwn(v))return;clientAddress=v;clientPostal=String(p||'').trim();clientCity=String(city||'').trim();confidence.clientAddress=Math.max(confidence.clientAddress,c)};
-  for(let i=0;i<lines.length;i++){
-    const line=lines[i],next=lines[i+1]||'',pair=line.split('|||').map(x=>x.trim());
-    let m=line.match(/^(?:client|nom du client|destinataire)\s*[:：-]\s*(.+)$/i);
-    if(m){setName(m[1],.99);continue}
-    if(/^(?:client|nom du client|destinataire)\s*[:：-]?\s*$/i.test(line)){setName(next,.99);continue}
-    m=line.match(/^(?:adresse client|adresse de facturation)\s*[:：-]\s*(.+)$/i);
-    if(m){const a=m[1].match(/^(.+?)\s*,?\s*(\d{5})\s+(.+)$/);a?setAddress(a[1],a[2],a[3],.98):setAddress(m[1],'','',.92);continue}
-    m=line.match(/^adresse\s*[:：-]\s*(.+)$/i);
-    if(m&&!isOwn(m[1])){const a=m[1].match(/^(.+?)\s*,?\s*(\d{5})\s+(.+)$/);a?setAddress(a[1],a[2],a[3],.9):setAddress(m[1],'','',.82)}
-    m=line.match(/^(?:code postal|cp)\s*[:：-]\s*(\d{5})$/i);if(m&&!clientPostal)clientPostal=m[1];
-    m=line.match(/^(?:ville|city)\s*[:：-]\s*(.+)$/i);if(m&&!clientCity)clientCity=clean(m[1]);
-    m=line.match(/^(?:t[eé]l[eé]phone|t[eé]l|portable|mobile)\s*[:：-]\s*((?:\+33\s?[1-9]|0[1-9])(?:[ .-]?\d{2}){4})/i);if(m&&!own.phone.test(m[1])&&!clientPhone){clientPhone=m[1];confidence.clientPhone=.98}
-    m=line.match(/^(?:email|e-mail|mail|courriel)\s*[:：-]\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);if(m&&!own.mail.test(m[1])&&!clientEmail){clientEmail=m[1];confidence.clientEmail=.98}
-    m=line.match(/^(?:objet)\s*[:：-]\s*(.+)$/i);if(m)object=clean(m[1]);
-    m=line.match(/^(?:p[ée]riode pr[ée]vue|validit[ée]|date de prestation)\s*[:：-]\s*(.+)$/i);if(m)period=clean(m[1]);
-    m=line.match(/^(?:r[ée]f[ée]rence|r[ée]f\.?)\s*[:：-]\s*(.+)$/i);if(m)reference=clean(m[1]);
-    m=line.match(/^(?:chantier|site des travaux|lieu des travaux)\s*[:：-]\s*(.+)$/i);if(m)chantier=clean(m[1]);
-    if(pair.length>1){
-      const l=pair[0],r=pair[1];
-      if(/^(?:client|nom du client|destinataire)\b/i.test(l))setName(r,.99);
-      else if(/^(?:devis|facture)\b/i.test(l)&&!clientName&&!/^(?:n[°o]?|num[ée]ro|date)\b/i.test(r)&&!/^\d+[\/-]\d+[\/-]\d{4}$/.test(r)){setName(r,.9)}
-      else if(/^(?:adresse client|adresse de facturation)\b/i.test(l)){const a=r.match(/^(.+?)\s*,?\s*(\d{5})\s+(.+)$/);a?setAddress(a[1],a[2],a[3],.98):setAddress(r,'','',.92)}
-      else if(/^(?:objet)\b/i.test(l)&&!object)object=r;
-      else if(/^(?:chantier|site des travaux)\b/i.test(l)&&!chantier)chantier=r;
-      else if(/^(?:r[ée]f[ée]rence|r[ée]f\.?)\b/i.test(l)&&!reference)reference=r;
-    }
+async function imPdfText(file){
+  const lib=await imPdfJs();if(!lib)throw new Error('Lecteur PDF indisponible (connexion requise)');
+  const pdf=await lib.getDocument({data:await file.arrayBuffer()}).promise,out=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    const page=await pdf.getPage(p),tc=await page.getTextContent(),rows=[];
+    for(const it of tc.items){const t=String(it.str||'');if(!t.trim())continue;const x=it.transform[4],y=it.transform[5],w=it.width||0;let r=rows.find(r=>Math.abs(r.y-y)<3);if(!r)rows.push(r={y,c:[]});r.c.push({x,w,t})}
+    rows.sort((a,b)=>b.y-a.y);
+    out.push(rows.map(r=>{r.c.sort((a,b)=>a.x-b.x);let s='',end=null;for(const c of r.c){if(end!==null)s+=(c.x-end>14?'\t':(c.x-end>1?' ':''));s+=c.t;end=c.x+c.w}return s.trim()}).join('\n'));
   }
-  for(const line of lines){
-    let m=line.match(/(?:nom du client|client|destinataire)\s*[:：-]\s*(.+?)(?=\s+(?:adresse|t[eé]l[eé]phone|t[eé]l|email|e-mail|mail)\s*[:：-]|$)/i);if(m&&!clientName)setName(m[1],.94);
-    m=line.match(/(?:adresse de facturation|adresse client)\s*[:：-]\s*(\d{1,5}\s+(?:rue|avenue|av\.?|boulevard|bd\.?|chemin|route|impasse|all[ée]e|place)\s+.+?)(?=\s+(?:code postal|cp|ville|t[eé]l[eé]phone|t[eé]l|email|e-mail|mail)\s*[:：-]|$)/i);if(m&&!isOwn(m[1]))setAddress(m[1],clientPostal,clientCity,.94);
+  let text=out.join('\n');
+  if(text.replace(/\s/g,'').length<40){ /* PDF scanné : OCR page par page */
+    text='';for(let p=1;p<=Math.min(pdf.numPages,8);p++){const page=await pdf.getPage(p),vp=page.getViewport({scale:2}),cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;text+=await imOcr(cv,p+'/'+pdf.numPages)+'\n'}
   }
-  const addresses=[],pushAddr=(street,postal,city,type='facturation',c=.8)=>{street=String(street||'').trim();if(!street||isOwn(street))return;const key=norm(street)+'|'+postal+'|'+norm(city);if(!addresses.some(a=>norm(a.street)+'|'+a.postalCode+'|'+norm(a.city)===key))addresses.push({type,street,postalCode:String(postal||''),city:String(city||''),confidence:c})};
-  if(clientAddress)pushAddr(clientAddress,clientPostal,clientCity,'facturation',confidence.clientAddress||.8);
-  for(const line of lines){const m=line.match(/(?:adresse(?: de facturation| client)?\s*[:：-]\s*)?(\d{1,5}\s+(?:rue|avenue|av\.?|boulevard|bd\.?|chemin|route|impasse|all[ée]e|place)\s+[A-Za-zÀ-ÿ0-9'’ .-]{2,100}?)[,;]?\s*(\d{5})\s+([A-Za-zÀ-ÿ'’ .-]{2,60})$/i);if(m&&!isOwn(m[0]))pushAddr(m[1],m[2],m[3],/chantier|travaux|site/i.test(line)?'chantier':'facturation',.82)}
-  const ownLines=lines.filter(x=>isOwn(x));
-  if(ownLines.length){issuerName='Ms Plomberie & Chauffage';const em=raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig)||[];issuerEmail=em.find(x=>own.mail.test(x))||'';const ph=raw.match(/(?:\+33\s?[1-9]|0[1-9])(?:[ .-]?\d{2}){4}/g)||[];issuerPhone=ph.find(x=>own.phone.test(x))||'';const am=raw.match(/(?:\d{1,5}\s+)?(?:rue|avenue|av\.?|boulevard|bd\.?|chemin|route|impasse|all[ée]e|place)\s+[A-Za-zÀ-ÿ0-9'’ .-]+/i);if(am&&own.address.test(am[0]))issuerAddress=am[0].trim()}
-  let section='',items=[];
-  for(const line of lines){
-    const f=norm(line);
-    if(/^1\.\s*main-d.*oeuvre/i.test(f)){section='service';continue}
-    if(/^2\.\s*fournitures/i.test(f)){section='supply';continue}
-    if(/^3\.\s*synthese/i.test(f)||/^4\.\s*conditions/i.test(f)){section='';continue}
-    if(!section)continue;
-    const e=eur(line);if(!e.length||/^(sous-total|co[uû]t d'achat|famille|ref\.?|designation|description|page)/i.test(f))continue;
-    const before=line.slice(0,e[0].index).trim();
-    const qM=before.match(/\[\[QTY:(\d+(?:[.,]\d+)?)\]\]/)||before.match(/(?:^|\s)(\d+(?:[.,]\d+)?)\s*(?:unit[ée]s?|pcs?|pi[èe]ces?)?\s*$/i);
-    const q=qM?money(qM[1]):1,desc=(qM?before.slice(0,qM.index):before).replace(/^(?:\d{1,3}(?:[.,]\d+)?|—|-)\s*/,'').trim();
-    if(!desc||desc.length<3)continue;
-    if(section==='service'&&e.length>=2)items.push({type:'service',name:desc,quantity:q,unitPrice:e[0].value,total:e[e.length-1].value,confidence:.9});
-    if(section==='supply'){const purchaseTotal=e[e.length-1].value;items.push({type:'supply',name:desc,quantity:q,purchaseTotal,unitPrice:q?purchaseTotal/q:0,saleUnitPrice:q?purchaseTotal/q*1.30:0,confidence:.88})}
-  }
-  const search=norm(raw),amount=re=>{const m=search.match(re);return m?money(m[1]):0};
-  const totalHT=amount(/total\s+ht[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i)||amount(/total\s+net(?:\s+du\s+devis)?[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
-  const totalTTC=amount(/total\s+ttc[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
-  const tvaAmount=amount(/tva(?:\s+\d+(?:[.,]\d+)?\s*%)?[^\d]*(\d[\d ]*[.,]\d{2})\s*€/i);
-  const lineTotal=items.reduce((s,x)=>s+(x.type==='service'?x.total:x.purchaseTotal||0),0);
-  const total=totalHT||totalTTC||lineTotal;
-  if(!clientName)warnings.push('Client non identifié avec certitude. Le nom du fichier n’est jamais utilisé comme nom client.');
-  if(clientName&&confidence.clientName<.9)warnings.push('Nom du client inféré : vérification recommandée.');
-  if(clientAddress&&!clientPostal&&!clientCity)warnings.push('Adresse client détectée mais code postal/ville non confirmés.');
-  if(!items.length&&/(devis|facture)/i.test(documentType))warnings.push('Aucune ligne tarifaire structurée détectée.');
-  if(totalHT&&items.length&&Math.abs(lineTotal-totalHT)>.02)warnings.push('Le total des lignes ne correspond pas au total HT détecté.');
-  if(totalHT&&totalTTC&&tvaAmount&&Math.abs(totalHT+tvaAmount-totalTTC)>.02)warnings.push('HT + TVA ne correspond pas au TTC détecté.');
-  return {
-    client:clientName?{name:clientName,email:clientEmail,phone:clientPhone,address:clientAddress,postalCode:clientPostal,city:clientCity}:null,
-    issuer:issuerName?{name:issuerName,email:issuerEmail,phone:issuerPhone,address:issuerAddress,postalCode:issuerPostal,city:issuerCity}:null,
-    documentNumber,date,documentType,items,total,totalHT,totalTTC,tvaAmount,
-    laborTotal:items.filter(x=>x.type==='service').reduce((s,x)=>s+x.total,0),
-    supplyPurchaseTotal:items.filter(x=>x.type==='supply').reduce((s,x)=>s+(x.purchaseTotal||0),0),
-    supplySaleTotal:items.filter(x=>x.type==='supply').reduce((s,x)=>s+(x.saleUnitPrice||0)*x.quantity,0),
-    addresses,selectedBillingAddress:0,chantier,object,period,reference,
-    confidence:{...confidence,items:items.length?items.reduce((s,x)=>s+(x.confidence||.8),0)/items.length:0},
-    warnings,source:{filename:String(filename||''),textLength:raw.length}
-  };
+  return text;
 }
-function getFileType(filename) {
-  if (filename.endsWith('.pdf')) return 'pdf';
-  if (filename.endsWith('.jpg') || filename.endsWith('.jpeg')) return 'image/jpeg';
-  if (filename.endsWith('.png')) return 'image/png';
-  if (filename.endsWith('.doc') || filename.endsWith('.docx')) return 'document';
-  return 'unknown';
-}
-
-function showFileList() {
-  $('#fileListContainer').style.display = 'block';
-  updateFileList();
-}
-
-function updateFileList() {
-  const fileList = $('#fileList');
-  fileList.innerHTML = '';
-  
-  Object.values(extractedData).forEach(fileData => {
-    const fileItem = document.createElement('div');
-    fileItem.className = 'file-item';
-    fileItem.innerHTML = `
-      <div class="file-icon">${getFileIcon(fileData.type)}</div>
-      <div class="file-info">
-        <div class="file-name">${esc(fileData.name)}</div>
-        <div class="file-size">${formatFileSize(fileData.size)}</div>
-      </div>
-      <div class="file-status ${fileData.status}">${getStatusText(fileData.status)}</div>
-      <div class="file-actions">
-        <button onclick="viewFile('${fileData.id}')" title="Voir">👁️</button>
-        <button onclick="processFile('${fileData.id}')" title="Traiter">⚙️</button>
-        <button onclick="deleteFile('${fileData.id}')" title="Supprimer" class="delete">🗑️</button>
-      </div>
-    `;
-    fileList.appendChild(fileItem);
+async function imDocxText(file){
+  if(!await imMammoth())throw new Error('Lecteur Word indisponible (connexion requise)');
+  const r=await mammoth.convertToHtml({arrayBuffer:await file.arrayBuffer()}),d=new DOMParser().parseFromString(r.value,'text/html'),lines=[];
+  d.body.childNodes.forEach(nd=>{
+    if(nd.nodeName==='TABLE')nd.querySelectorAll('tr').forEach(tr=>lines.push([...tr.children].map(c=>c.textContent.trim()).join('\t')));
+    else if(nd.nodeName==='UL'||nd.nodeName==='OL')nd.querySelectorAll('li').forEach(li=>lines.push(li.textContent.trim()));
+    else lines.push(nd.textContent.trim());
   });
-  
-  // If we have files, show the next section
-  if (Object.keys(extractedData).length > 0) {
-    $('#extractedDataContainer').style.display = 'block';
-    showExtractedData();
+  return lines.filter(Boolean).join('\n');
+}
+async function imExtractText(file){
+  const nm=file.name.toLowerCase();
+  if(/\.pdf$/.test(nm)||file.type==='application/pdf')return imPdfText(file);
+  if(/\.docx$/.test(nm))return imDocxText(file);
+  if(/\.doc$/.test(nm))throw new Error('Format .doc non lisible : enregistrez-le en .docx ou PDF');
+  if(/\.(png|jpe?g|webp|bmp|gif)$/.test(nm)||file.type.startsWith('image/'))return imOcr(file);
+  if(/\.(txt|csv)$/.test(nm)||file.type.startsWith('text/'))return file.text();
+  throw new Error('Format non pris en charge');
+}
+
+/* ---------- Extraction intelligente ---------- */
+const imNum=s=>{s=String(s).replace(/[€\s\u00a0]/g,'');if(!s)return NaN;const c=s.lastIndexOf(','),d=s.lastIndexOf('.');
+  if(c>-1&&d>-1)s=c>d?s.replace(/\./g,'').replace(',','.'):s.replace(/,/g,'');else if(c>-1)s=s.replace(',','.');else if(d>-1&&/\.\d{3}$/.test(s)&&s.split('.').length>1&&!/\.\d{3}\./.test(s)&&s.length>5)s=s.replace(/\./g,'');
+  return parseFloat(s)};
+const IM_MONTHS={janvier:1,fevrier:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,septembre:9,octobre:10,novembre:11,decembre:12};
+function imDate(s){s=imNorm(s);let m=s.match(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4}|\d{2})\b/);if(m){const y=m[3].length===2?'20'+m[3]:m[3];return y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0')}
+  m=s.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);if(m)return m[0];
+  m=s.match(/\b(\d{1,2})(?:er)?\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})\b/);if(m)return m[3]+'-'+String(IM_MONTHS[m[2]]).padStart(2,'0')+'-'+m[1].padStart(2,'0');return''}
+const IM_STREET=/(\d{1,4}\s*(?:bis|ter)?[, ]+\s*(?:rue|avenue|av\.?|boulevard|bd\.?|chemin|route|impasse|all[ée]e|place|quai|cours|r[ée]sidence|lotissement|square|passage|villa|cit[ée])\s+[^,\n\t]{2,60})/i;
+const IM_CITY=/\b(\d{5})\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’ \-]{1,40})/;
+const IM_UNIT_M=/\b(h|heures?|hr)\b/i;
+const IM_LABOR=/main[\s-]*d.?\s*oeuvre|pose\b|d[ée]pose|installation|intervention|d[ée]placement|forfait|mise en service|recherche|d[ée]pannage|remplacement|raccordement|nettoyage|diagnostic|r[ée]paration|vidange|d[ée]sembouage|entretien|contr[ôo]le|d[ée]bouchage|main d/i;
+const IM_SKIP=/^(total|sous[\s-]?total|net |tva|t\.v\.a|remise|acompte|reste|montant|base|d[ée]signation|description|libell[ée]|quantit|qt[ée]|prix|p\.?u\.?|page|siret|iban|bic|rib|conditions|r[èe]glement|paiement|validit[ée]|bon pour|date|devis|facture|signature|mention|ape|naf|n[°o] ?tva|code|t[ée]l\b|t[ée]l[ée]phone|e-?mail|adresse|client|objet|chantier|mobile|fax)/i;
+function imOwn(){const C=window.S?.cfg||{};const v=[C.co,C.nm,C.tel,C.mail,C.em,C.email,C.adr,C.siret].filter(x=>x&&String(x).length>3).map(imNorm);
+  return t=>{const n=imNorm(t),d=n.replace(/\D/g,'');return /ms\s+plomberie|mikael\s+salillari|285\s+rue\s+jeanne/.test(n)||v.some(x=>n.includes(x)||(x.replace(/\D/g,'').length>=9&&d.includes(x.replace(/\D/g,''))))}}
+function imParseLine(line){
+  const cells=line.split('\t').map(x=>x.trim()).filter(Boolean);let txt=cells.join('  ');
+  txt=txt.replace(/(\d)\s*%/g,'$1%');
+  const numRe=/(?<![\w\/.,-])-?\d{1,3}(?:[ \u00a0.]\d{3})*(?:[.,]\d{1,3})?(?![\w\/%])|(?<![\w\/.,-])-?\d+(?:[.,]\d{1,3})?(?![\w\/%])/g,found=[];
+  let m;while((m=numRe.exec(txt))){const after=txt.slice(m.index+m[0].length,m.index+m[0].length+3);found.push({s:m.index,e:m.index+m[0].length,v:imNum(m[0]),dec:/[.,]\d{2}$/.test(m[0]),eur:/^\s*€/.test(after)||/€\s*$/.test(txt.slice(Math.max(0,m.index-2),m.index))})}
+  /* ne garder que les nombres de fin de ligne (colonnes qté / PU / total) */
+  const tail=[];for(let k=found.length-1;k>=0;k--){const gap=tail.length?txt.slice(found[k].e,tail[0].s):txt.slice(found[k].e);if(/^[\s€\u00a0xX×a-zA-Z.]{0,6}$/.test(gap)&&(tail.length<4))tail.unshift(found[k]);else break}
+  if(!tail.length)return null;
+  let desc=txt.slice(0,tail[0].s).replace(/[|·•\t]+/g,' ').replace(/\s{2,}/g,' ').replace(/^[\s\-–—*•\d.)]+(?=[A-Za-zÀ-ÿ])/,'').trim();
+  const afterNums=txt.slice(tail[tail.length-1].e).trim(),unitM=IM_UNIT_M.test(afterNums)||IM_UNIT_M.test(txt.slice(tail[0].e,tail[0].e+4));
+  if(desc.length<3||!/[A-Za-zÀ-ÿ]{3}/.test(desc))return null;
+  const v=tail.map(x=>x.v).filter(x=>Number.isFinite(x));let q=1,p=0,total=null;
+  if(v.length>=3){const[a,b,c]=v.slice(-3);if(Math.abs(a*b-c)<=.02+c*.01){q=a;p=b;total=c}else if(Math.abs(b*c-a)<=.02+a*.01){q=b;p=c;total=a}else{q=a;p=b;total=c}}
+  else if(v.length===2){const[a,b]=v,aInt=Number.isInteger(a)&&!tail[tail.length-2].dec;if(aInt&&a>0&&a<1000&&(!tail[tail.length-2].eur)){q=a;p=b/a;total=b}else{p=a;total=b;q=a&&Math.abs(b/a-Math.round(b/a))<.001?Math.round(b/a):1;if(q!==1)p=a;else p=b}}
+  else{if(!tail[0].dec&&!tail[0].eur)return null;p=v[0];total=p}
+  if(!(p>=0)||p>1e6)return null;
+  return{d:desc.replace(/\s*[xX×]$/,'').trim(),q:Math.round(q*100)/100,p:Math.round(p*100)/100,k:(unitM||IM_LABOR.test(desc))?'M':'F'};
+}
+function imParse(text,filename){
+  const raw=String(text||'').replace(/\r/g,'').replace(/[\u00a0\u202f]/g,' '),lines=raw.split('\n').map(l=>l.replace(/[ ]{2,}/g,'\t').replace(/\t+/g,'\t').trim()).filter(Boolean);
+  const own=imOwn(),flat=lines.map(l=>l.replace(/\t/g,' ')),W=[];
+  const head=flat.slice(0,25).join('\n'),all=flat.join('\n'),nAll=imNorm(all),nHead=imNorm(head);
+  /* type */
+  const score={f:(nAll.match(/factur/g)||[]).length+(nHead.match(/factur/g)||[]).length*3,d:(nAll.match(/devis/g)||[]).length+(nHead.match(/devis/g)||[]).length*3,x:(nAll.match(/rapport|compte[- ]rendu|constat|sinistre/g)||[]).length+(nHead.match(/rapport|compte[- ]rendu/g)||[]).length*3};
+  const fn=imNorm(filename);if(/factur|\bfac[\s_-]?\d/.test(fn))score.f+=4;if(/devis|\bdev[\s_-]?\d/.test(fn))score.d+=4;if(/rapport|constat/.test(fn))score.x+=4;
+  let t=score.x>score.f&&score.x>score.d?'x':score.f>score.d?'f':'d';
+  /* numéro */
+  let num='';for(const re of[/(?:devis|facture|rapport|avoir)\s*(?:n[°ºo]?|num[ée]ro|ref\.?|r[ée]f[ée]rence)?\s*[:#]?\s*([A-Z]{0,5}[-_/]?\d[\w\-_/]{2,})/i,/\bn[°ºo]\s*(?:de\s+\w+\s*)?[:#]?\s*([A-Z0-9][\w\-/]{2,})/i,/\b((?:DEV|FAC|FA|RAP)[-_]?\d{2,}[\w\-_/]*)/i]){const m=all.match(re);if(m&&/\d/.test(m[1])){num=m[1].toUpperCase();break}}
+  if(!num){const m=String(filename).match(/((?:DEV|FAC|RAP)[-_]?[\w-]*\d[\w-]*)/i);if(m)num=m[1].toUpperCase()}
+  /* date */
+  let date='';const dl=flat.find(l=>/\b(date|[ée]mis|[ée]tabli|fait le|le )\b/i.test(l)&&imDate(l));date=dl?imDate(dl):imDate(head)||imDate(all);
+  /* coordonnées client */
+  let cn='',ca='',cc='',ct='',ce='',sn='',o='';
+  const cliRe=/^(?:client|destinataire|factur[ée]\s*[àa]|adress[ée]\s*[àa]|[àa] l.attention de|nom du client|ma[iî]tre d.ouvrage)\s*[:\-]?\s*(.*)$/i;
+  let ci=-1;for(let k=0;k<flat.length;k++){const m=flat[k].match(cliRe);if(m&&!own(flat[k])){ci=k;if(m[1].trim()&&!/^(adresse|t[ée]l)/i.test(m[1]))cn=m[1].trim();else{for(let j=k+1;j<Math.min(k+4,flat.length);j++){if(flat[j]&&!own(flat[j])&&!/^(adresse|t[ée]l|e-?mail|\d)/i.test(flat[j])){cn=flat[j];ci=j;break}}}break}}
+  if(!cn){const k=flat.findIndex((l,i)=>/^(m\.|mr|monsieur|mme|madame|mlle)\b/i.test(l)&&!own(l)&&i>0);if(k>-1){cn=flat[k];ci=k}}
+  cn=cn.split(/\s{2,}|\t|\s+(?:adresse|t[ée]l|e-?mail)\b/i)[0].replace(/^(?:nom|client)\s*[:\-]\s*/i,'').trim();
+  if(cn.length>60||/\d{5}/.test(cn)||/^(devis|facture|rapport)/i.test(cn))cn='';
+  const zone=(ci>-1?flat.slice(ci,ci+8):flat.slice(0,30)).filter(l=>!own(l)).join('\n');
+  const zoneAll=flat.filter(l=>!own(l)).join('\n');
+  const em=(zone.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)||zoneAll.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)||[''])[0];ce=em;
+  const ph=(zone.match(/(?:\+33\s?[1-9]|0[1-9])(?:[ .\-]?\d{2}){4}/)||zoneAll.match(/(?:\+33\s?[1-9]|0[1-9])(?:[ .\-]?\d{2}){4}/)||[''])[0];ct=ph;
+  const st=zone.match(IM_STREET)||(ci>-1?null:zoneAll.match(IM_STREET));if(st)ca=st[1].replace(IM_CITY,'').replace(/[,\s]+$/,'').trim();
+  const labAdr=zone.match(/adresse(?: de facturation| du client)?\s*[:\-]\s*([^\n]+)/i);if(!ca&&labAdr)ca=labAdr[1].replace(IM_CITY,'').replace(/[,\s]+$/,'').trim();
+  const cm=(st?zone.slice(zone.indexOf(st[0])):zone).match(IM_CITY)||zone.match(IM_CITY);if(cm)cc=cm[1]+' '+cm[2].trim().replace(/\s+(t[ée]l|e-?mail).*$/i,'');
+  if(!cn&&ci<0)W.push('Client non reconnu : saisissez-le ci-dessous.');
+  /* chantier / objet */
+  let m=all.match(/(?:objet|intitul[ée]|travaux)\s*[:\-]\s*([^\n]{3,120})/i);if(m)o=m[1].trim();
+  m=all.match(/(?:chantier|lieu (?:des travaux|d.intervention)|adresse (?:du chantier|des travaux|d.intervention))\s*[:\-]\s*([^\n]{3,120})/i);if(m)sn=m[1].trim();
+  /* totaux */
+  const lastAmt=re=>{for(const l of flat){if(!re.test(imNorm(l)))continue;const a=[...l.matchAll(/-?\d[\d .]*[.,]\d{2}/g)].map(x=>imNum(x[0])).filter(Number.isFinite);if(a.length)return a[a.length-1]}return null};
+  const totHT=lastAmt(/total\s*(?:net\s*)?h\.?t|montant\s*h\.?t|total\s*net\s*(?:a payer)?\s*h?t?\b/),totTTC=lastAmt(/total\s*t\.?t\.?c|net\s*a\s*payer|montant\s*t\.?t\.?c/),totTVA=lastAmt(/^\W*(?:total\s*)?t\.?v\.?a\b/);
+  let tva=0;m=all.match(/t\.?v\.?a[^\n\d]{0,25}(\d{1,2}(?:[.,]\d+)?)\s*%/i);if(m)tva=imNum(m[1]);else if(/tva non applicable|art(?:icle)?\.?\s*293\s*b/i.test(all))tva=0;else if(totHT&&totTTC&&totTTC>totHT)tva=Math.round((totTTC/totHT-1)*1000)/10;
+  let rm=0;m=all.match(/remise[^\n\d]{0,20}(\d{1,2}(?:[.,]\d+)?)\s*%/i);if(m)rm=imNum(m[1]);
+  /* lignes */
+  const F=[],M=[];let sec='';
+  for(const ln of lines){const f=imNorm(ln.replace(/\t/g,' '));
+    if(/^\W*\d?\W*(main[\s-]*d.?oeuvre|prestations?|travaux|services?|pose|interventions?)\b.{0,25}$/.test(f)&&!/\d[.,]\d{2}/.test(f)){sec='M';continue}
+    if(/^\W*\d?\W*(fournitures?|mat[ée]riels?|mat[ée]riaux|pi[èe]ces?|[ée]quipements?)\b.{0,25}$/.test(f)&&!/\d[.,]\d{2}/.test(f)){sec='F';continue}
+    if(/^\W*\d?\W*(synth[èe]se|conditions|r[èe]glement|total|r[ée]capitulatif)/.test(f)){sec='';if(/^\W*total/.test(f))continue}
+    if(IM_SKIP.test(f)||/siret|iban|@|www\./.test(f)||own(ln))continue;
+    if(ln.trim()===cn||IM_CITY.test(ln)&&!/[€]/.test(ln)&&!/\d[.,]\d{2}/.test(ln))continue;
+    const it=imParseLine(ln);if(!it)continue;
+    if(sec&&!IM_UNIT_M.test(ln))it.k=sec;(it.k==='M'?M:F).push({d:it.d,q:it.q,p:it.p});
   }
-}
-
-function getFileIcon(type) {
-  if (type === 'pdf') return '📄';
-  if (type === 'image/jpeg' || type === 'image/png') return '🖼️';
-  if (type === 'document') return '📝';
-  return '📁';
-}
-
-function formatFileSize(bytes) {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-}
-
-function getStatusText(status) {
-  const texts = {
-    'processing': 'Traitement...',
-    'completed': 'Terminé',
-    'error': 'Erreur'
-  };
-  return texts[status] || status;
-}
-
-function viewFile(fileId) {
-  const fileData = extractedData[fileId];
-  if (!fileData) return;
-  
-  // Show preview
-  $('#previewContainer').style.display = 'block';
-  const previewContent = $('#previewContent');
-  
-  if (fileData.type.startsWith('image/')) {
-    previewContent.innerHTML = `<img src="${fileData.content}" style="max-width: 100%; border-radius: 8px;">`;
-  } else if (fileData.type === 'pdf') {
-    previewContent.innerHTML = `
-      <iframe src="${fileData.content}" style="width: 100%; height: 400px; border: none; border-radius: 8px;"></iframe>
-      <div style="margin-top: 8px; font-size: 12px; color: var(--mu);">
-        <strong>Nom:</strong> ${esc(fileData.name)}<br>
-        <strong>Taille:</strong> ${formatFileSize(fileData.size)}<br>
-        <strong>Type:</strong> ${fileData.type}
-      </div>
-    `;
-  } else {
-    previewContent.innerHTML = `
-      <pre style="white-space: pre-wrap; word-wrap: break-word; background: var(--in); padding: 12px; border-radius: 8px; font-size: 12px;">${esc(fileData.content.substring(0, 1000))}</pre>
-    `;
+  const items=[...M,...F],sum=items.reduce((s,x)=>s+x.q*x.p,0);
+  if(t!=='x'&&!items.length)W.push('Aucune ligne de prestation ou de fourniture reconnue : ajoutez-les ci-dessous.');
+  const net=sum*(1-rm/100);
+  if(t!=='x'&&totHT&&items.length&&Math.abs(net-totHT)>Math.max(.05,totHT*.005))W.push('Le total des lignes ('+net.toFixed(2)+' €) diffère du total HT du document ('+totHT.toFixed(2)+' €) : vérifiez les lignes.');
+  if(!num)W.push('Numéro du document absent : un numéro sera attribué automatiquement.');
+  if(!date)W.push('Date absente : la date du jour sera utilisée.');
+  if(cn&&!ca)W.push('Adresse du client non reconnue.');
+  /* rapport */
+  const R={ty:'Autre',ass:'',mo:'',co:'',org:'',tr:'',pr:''};
+  if(t==='x'||score.x>0){
+    const nt=imNorm(all);R.ty=/degat des eaux|infiltration|sinistre/.test(nt)?'Dégât des eaux':/fuite/.test(nt)?'Recherche de fuite':/chauffage|chaudiere|radiateur/.test(nt)?'Panne de chauffage':/diagnostic/.test(nt)?'Diagnostic plomberie':'Autre';
+    const heads=[['mo',/motif|circonstances|contexte|objet de l.intervention|demande/],['co',/constat|observations?|description|d[ée]sordres/],['org',/origine|cause/],['tr',/travaux (?:r[ée]alis|effectu)|mesures|intervention r[ée]alis|r[ée]alis[ée]/],['pr',/pr[ée]conisation|recommandation|suite [àa] donner|travaux [àa] pr[ée]voir/]];
+    let cur=null;const buf={mo:[],co:[],org:[],tr:[],pr:[],_:[]};
+    for(const l of flat){const nl=imNorm(l).replace(/^[\W\d]+/,'').trim();const h=heads.find(([k,re])=>nl.length<70&&re.test(nl.split(/[:\-]/)[0]));
+      if(h){cur=h[0];const rest=l.split(/[:：]/).slice(1).join(':').trim();if(rest)buf[cur].push(rest);continue}
+      if(/^(client|adresse|t[ée]l|e-?mail|siret|date)\b/i.test(l)||own(l))continue;(cur?buf[cur]:buf._).push(l)}
+    for(const k of['mo','co','org','tr','pr'])R[k]=buf[k].join('\n');
+    if(!heads.some(([k])=>R[k]))R.co=buf._.filter(l=>l!==cn&&!/^(rapport|compte)/i.test(l)).join('\n');
+    m=all.match(/assurance\s*[:\-]\s*([^\n]{2,60})/i);if(m)R.ass=m[1].trim();
+    m=all.match(/(?:n[°º]?\s*(?:de\s*)?sinistre|sinistre\s*n[°º]?)\s*[:\-]?\s*([\w\-/]{3,})/i);if(m)sn=m[1];
+    if(t==='x'&&!Object.values(R).slice(2).some(Boolean))W.push('Peu de texte exploitable pour le rapport : complétez les rubriques.');
   }
+  return{t,num,date,cn,ca,cc,ct,ce,sn,o,F,M,tva,rm,totHT,totTTC,totTVA,R,W,textLen:raw.trim().length,raw:raw.trim()};
 }
 
-function processFile(fileId) {
-  const fileData = extractedData[fileId];
-  if (!fileData) return;
-  const transferCta=$('#transferNowButton');
-  if(transferCta){transferCta.disabled=false;transferCta.style.opacity='1';transferCta.style.cursor='pointer';}
-  
-  // Show client section
-  $('#clientSection').style.display = 'block';
-  showClientInfo(fileData);
-  
-  // Show items section
-  $('#itemsSection').style.display = 'block';
-  showItems(fileData);
-  
-  // Show transfer section
-  $('#transferSection').style.display = 'block';
-  
-  // Scroll to client section
-  $('#clientSection').scrollIntoView({ behavior: 'smooth' });
+/* ---------- Interface ---------- */
+function getImportHTML(){return `<div class="c"><h3>Importer un devis, une facture ou un rapport</h3>
+<p class="mu" style="margin:0 0 12px;font-size:14px">Choisissez vos fichiers (PDF, scan, photo, Word .docx, texte). L'application lit le contenu, reconnaît le client, les lignes et les totaux, puis refait le document dans votre mise en page.</p>
+<label class="b cu" style="display:block;text-align:center;margin:0;cursor:pointer" id="uploadArea">📄 Choisir des fichiers à importer<input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.txt,.csv,application/pdf,image/*" multiple hidden></label>
+<p id="imst" class="mu" style="margin:10px 0 0;font-size:13px"></p></div><div id="imres"></div>`}
+function imStatus(t){const e=document.getElementById('imst');if(e)e.textContent=t||''}
+function initImportPage(){
+  const inp=document.getElementById('fileInput'),area=document.getElementById('uploadArea');if(!inp)return;
+  inp.addEventListener('change',e=>{imHandle(e.target.files);e.target.value=''});
+  ['dragover','drop'].forEach(ev=>area.addEventListener(ev,e=>{e.preventDefault();if(ev==='drop'&&e.dataTransfer.files.length)imHandle(e.dataTransfer.files)}));
+  imRender();
 }
-
-function showExtractedData() {
-  const extractedDataContainer = $('#extractedData');
-  extractedDataContainer.innerHTML = '';
-  
-  Object.values(extractedData).forEach(fileData => {
-    const fileDiv = document.createElement('div');
-    fileDiv.style.marginBottom = '16px';
-    fileDiv.style.padding = '12px';
-    fileDiv.style.background = 'var(--in)';
-    fileDiv.style.borderRadius = '10px';
-    
-    let html = `<div style="font-weight: 600; margin-bottom: 8px;">📄 ${esc(fileData.name)}</div>`;
-    
-    if (fileData.extracted.documentNumber) {
-      html += `<div><strong>N° Document:</strong> ${esc(fileData.extracted.documentNumber)}</div>`;
-    }
-    
-    if (fileData.extracted.date) {
-      html += `<div><strong>Date:</strong> ${esc(fileData.extracted.date)}</div>`;
-    }
-    
-    if (fileData.extracted.client) {
-      html += `<div><strong>Client:</strong> ${esc(fileData.extracted.client.name)}</div>`;
-    }
-    
-    if (fileData.extracted.total > 0) {
-      html += `<div><strong>Total:</strong> ${E(fileData.extracted.total)}</div>`;
-    }
-    
-    fileDiv.innerHTML = html;
-    extractedDataContainer.appendChild(fileDiv);
-  });
+async function imHandle(files){
+  files=[...files];if(!files.length||IM.busy)return;IM.busy=true;
+  for(let k=0;k<files.length;k++){const f=files[k];imStatus('Analyse de '+f.name+' ('+(k+1)+'/'+files.length+')…');
+    try{if(f.size>30*1024*1024)throw new Error('Fichier supérieur à 30 Mo');const text=await imExtractText(f),r=imParse(text,f.name);r.name=f.name;
+      if(r.textLen<20)r.W.unshift('Presque aucun texte lu dans ce fichier : essayez une photo plus nette ou un PDF.');IM.res.push(r);IM.i=IM.res.length-1}
+    catch(e){IM.res.push({name:f.name,err:e.message||'Lecture impossible'});IM.i=IM.res.length-1}
+    imRender()}
+  IM.busy=false;imStatus('');imRender();document.getElementById('imres')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
+function imTotals(r){const s=[...r.M,...r.F].reduce((a,x)=>a+(parseFloat(x.q)||0)*(parseFloat(x.p)||0),0),rm=s*(parseFloat(r.rm)||0)/100,ht=s-rm,tv=ht*(parseFloat(r.tva)||0)/100;return{ht,tv,ttc:ht+tv}}
+const imE=v=>(typeof E==='function'?E(v):v.toFixed(2)+' €');
+function imLine(r,k,i){const x=r[k][i];return `<div style="display:grid;grid-template-columns:1fr 54px 76px 30px;gap:6px;margin-bottom:6px;align-items:center"><input value="${imEsc(x.d)}" placeholder="Désignation" oninput="imSetL('${k}',${i},'d',this.value)"><input type="number" step="any" value="${x.q}" oninput="imSetL('${k}',${i},'q',this.value)" aria-label="Quantité"><input type="number" step="any" value="${x.p}" oninput="imSetL('${k}',${i},'p',this.value)" aria-label="Prix unitaire HT"><button class="b gh sm" style="padding:0;min-height:36px" onclick="imDelL('${k}',${i})" aria-label="Retirer">✕</button></div>`}
+function imRender(){
+  const box=document.getElementById('imres');if(!box)return;
+  if(!IM.res.length){box.innerHTML='';return}
+  const r=IM.res[IM.i],tabs=IM.res.length>1?`<div class="c"><h3>Fichiers (${IM.res.length})</h3>${IM.res.map((x,i)=>`<button class="r" style="${i===IM.i?'outline:2px solid var(--cu)':''}" onclick="IM.i=${i};imRender()"><div><b>${imEsc(x.name)}</b><br><small class="mu">${x.err?'Erreur':({d:'Devis',f:'Facture',x:'Rapport'})[x.t]+(x.done?' · créé':'')}</small></div></button>`).join('')}</div>`:'';
+  if(r.err){box.innerHTML=tabs+`<div class="c"><h3>${imEsc(r.name)}</h3><p class="rd">${imEsc(r.err)}</p><button class="b gh sm" onclick="imDrop()">Retirer</button></div>`;return}
+  const T=imTotals(r),inp=(l,k,ty='text')=>`<label>${l}<input type="${ty}" value="${imEsc(r[k])}" oninput="imSet('${k}',this.value)"></label>`,ta=(l,k)=>`<label>${l}<textarea rows="3" oninput="imSetR('${k}',this.value)">${imEsc(r.R[k])}</textarea></label>`;
+  const warn=r.W.length?`<div class="c" style="border:1px solid #e0b36a"><h3>⚠️ À vérifier</h3>${r.W.map(w=>`<p style="margin:0 0 6px;font-size:14px">• ${imEsc(w)}</p>`).join('')}<small class="mu">Vous pouvez quand même créer le document : complétez ce qui manque ensuite.</small></div>`:`<div class="c"><p class="ok" style="margin:0">✓ Données reconnues sans anomalie.</p></div>`;
+  const lines=r.t==='x'?`<div class="c"><h3>Rapport d'intervention</h3><label>Type<select onchange="imSetR('ty',this.value)">${['Dégât des eaux','Recherche de fuite','Panne de chauffage','Diagnostic plomberie','Autre'].map(o=>`<option ${o===r.R.ty?'selected':''}>${o}</option>`).join('')}</select></label>${inp('Assurance','ass')}${inp('N° de sinistre','sn')}${ta('Motif / circonstances','mo')}${ta('Constatations','co')}${ta('Origine / cause probable','org')}${ta('Travaux réalisés','tr')}${ta('Préconisations','pr')}</div>`
+  :`<div class="c"><h3>Main d'œuvre / prestations</h3>${r.M.map((_,i)=>imLine(r,'M',i)).join('')||'<p class="mu" style="margin:0 0 8px">Aucune ligne</p>'}<button class="b gh sm" onclick="imAddL('M')">＋ Ajouter une prestation</button><small class="mu" style="display:block;margin-top:6px">Désignation · Qté · Prix unitaire HT</small></div>
+<div class="c"><h3>Fournitures</h3>${r.F.map((_,i)=>imLine(r,'F',i)).join('')||'<p class="mu" style="margin:0 0 8px">Aucune ligne</p>'}<button class="b gh sm" onclick="imAddL('F')">＋ Ajouter une fourniture</button></div>
+<div class="c"><div class="g3">${inp('TVA %','tva','number')}${inp('Remise %','rm','number')}<label>Total TTC<input value="${imE(T.ttc)}" disabled></label></div><small class="mu">Total HT ${imE(T.ht)}${r.totHT?' · document source : '+imE(r.totHT):''}</small></div>`;
+  box.innerHTML=tabs+`<div class="c"><h3>${imEsc(r.name)}</h3><label>Type de document<select onchange="imSet('t',this.value)"><option value="d" ${r.t==='d'?'selected':''}>Devis</option><option value="f" ${r.t==='f'?'selected':''}>Facture</option><option value="x" ${r.t==='x'?'selected':''}>Rapport d'intervention</option></select></label><div class="g2">${inp('Numéro','num')}${inp('Date','date','date')}</div></div>${warn}
+<div class="c"><h3>Client</h3>${inp('Nom','cn')}${inp('Adresse','ca')}<div class="g2">${inp('Code postal Ville','cc')}${inp('Téléphone','ct','tel')}</div>${inp('E-mail','ce','email')}${r.t==='x'?'':inp('Chantier (adresse)','sn')+inp('Objet','o')}</div>${lines}
+<label class="r" style="gap:10px;justify-content:flex-start;cursor:pointer"><input type="checkbox" id="imSave" ${r.noSave?'':'checked'} style="width:auto;margin:0" onchange="IM.res[IM.i].noSave=!this.checked"><span style="font-size:14px">Enregistrer aussi le client${r.t==='x'?'':' et les prix dans « Mes tarifs »'}</span></label>
+<button class="b cu" style="width:100%;margin-bottom:8px" onclick="imCreate()"><span>✓ Créer dans ma mise en page${r.done?' (déjà créé : recréer)':''}</span></button>
+<button class="b gh" style="width:100%;margin-bottom:8px" onclick="imSaveOnly()"><span>Enregistrer client et tarifs seulement</span></button>
+<details class="c"><summary class="mu">Texte lu dans le fichier</summary><pre style="white-space:pre-wrap;font-size:12px;max-height:240px;overflow:auto">${imEsc(r.raw)}</pre></details>`;
+}
+const imCur=()=>IM.res[IM.i];
+function imSet(k,v){imCur()[k]=v;if(k==='t')imRender()}
+function imSetR(k,v){imCur().R[k]=v}
+function imSetL(k,i,f,v){imCur()[k][i][f]=v}
+function imAddL(k){imCur()[k].push({d:'',q:1,p:''});imRender()}
+function imDelL(k,i){imCur()[k].splice(i,1);imRender()}
+function imDrop(){IM.res.splice(IM.i,1);IM.i=Math.max(0,IM.i-1);imRender()}
 
-function showClientInfo(fileData) {
-  const clientInfo = $('#clientInfo');
-  const client = fileData.extracted.client;
-  
-  if (!client) {
-    clientInfo.innerHTML = '<p style="color: var(--mu);">Aucun client identifié dans ce document.</p>';
-    return;
+/* ---------- Enregistrement ---------- */
+function imClient(r){
+  if(!r.cn)return null;const nn=imNorm(r.cn).trim(),dg=s=>String(s||'').replace(/\D/g,'');
+  let c=S.clients.find(c=>imNorm(c.n).trim()===nn||(r.ce&&imNorm(c.e)===imNorm(r.ce))||(dg(r.ct).length>=9&&dg(c.t)===dg(r.ct)));
+  if(!c){c={id:nw(),n:r.cn,a:r.ca||'',c:r.cc||'',t:r.ct||'',e:r.ce||'',addresses:[]};S.clients.push(c)}
+  else{if(!c.a&&r.ca)c.a=r.ca;if(!c.c&&r.cc)c.c=r.cc;if(!c.t&&r.ct)c.t=r.ct;if(!c.e&&r.ce)c.e=r.ce}
+  save('clients');return c;
+}
+function imCatalog(r){for(const k of['M','F'])for(const l of r[k]){const d=String(l.d||'').trim();if(!d)continue;const p=parseFloat(l.p)||0,c=S.cat.find(c=>imNorm(c.d).trim()===imNorm(d).trim());if(!c)S.cat.push({d,t:k,p});else if(!(parseFloat(c.p)>0)&&p)c.p=p}save('cat')}
+function imSaveOnly(){const r=imCur();if(!r.cn&&!r.M.length&&!r.F.length)return toast('Rien à enregistrer');const c=imClient(r);if(r.t!=='x')imCatalog(r);toast('✓ '+(c?'Client':'')+(c&&r.t!=='x'?' et ':'')+(r.t!=='x'?'tarifs':'')+' enregistrés')}
+function imCreate(){
+  const r=imCur(),y=(r.date||td()).slice(0,4),save_=!r.noSave,c=r.cn&&save_?imClient(r):null;
+  const unique=(num,list)=>num&&!list.some(d=>imNorm(d.num)===imNorm(num));
+  if(r.t==='x'){
+    let num=r.num;if(!unique(num,S.rep)){const k='r'+y,q=S.seq[k]=(S.seq[k]||0)+1;num='RAP-'+y+'-'+String(q).padStart(3,'0');save('seq')}
+    const rep={id:nw(),num,date:r.date||td(),ty:r.R.ty,cn:r.cn,ca:r.ca,cc:r.cc,ct:r.ct,ass:r.R.ass,sn:r.sn,mo:r.R.mo,co:r.R.co,org:r.R.org,tr:r.R.tr,pr:r.R.pr};
+    S.rep.unshift(rep);save('rep');r.done=true;toast('✓ Rapport créé — aperçu');setTimeout(()=>{go('xe',rep.id);pvo()},300);return;
   }
-  
-  // Check if client exists in database
-  const existingClient = S.clients.find(c => 
-    c.n && c.n.toLowerCase().includes(client.name.toLowerCase())
-  );
-  
-  let html = '';
-  
-  if (!existingClient) {
-    // New client
-    html = `
-      <div class="client-card new-client">
-        <div class="client-header">
-          <div class="client-name">${esc(client.name)}</div>
-          <div class="new-client-badge">Nouveau client</div>
-        </div>
-        <div class="client-info">
-          <div class="client-info-item">
-            <div class="client-info-label">Adresse</div>
-            <div class="client-info-value">${esc(client.address || 'Non spécifiée')}</div>
-          </div>
-          <div class="client-info-item">
-            <div class="client-info-label">Téléphone</div>
-            <div class="client-info-value">${esc(client.phone || 'Non spécifié')}</div>
-          </div>
-          <div class="client-info-item">
-            <div class="client-info-label">Email</div>
-            <div class="client-info-value">${esc(client.email || 'Non spécifié')}</div>
-          </div>
-        </div>
-        
-        <button class="b cu sm" onclick="confirmNewClient('${fileData.id}')" style="margin-top: 12px;">
-          <span>Valider le client</span>
-        </button>
-      </div>
-    `;
-  } else {
-    // Existing client
-    html = `
-      <div class="client-card">
-        <div class="client-header">
-          <div class="client-name">${esc(existingClient.n)}</div>
-          <div class="bd ok">Client existant</div>
-        </div>
-        <div class="client-info">
-          <div class="client-info-item">
-            <div class="client-info-label">Adresse</div>
-            <div class="client-info-value">${esc(existingClient.a || 'Non spécifiée')}</div>
-          </div>
-          <div class="client-info-item">
-            <div class="client-info-label">Ville</div>
-            <div class="client-info-value">${esc(existingClient.c || 'Non spécifiée')}</div>
-          </div>
-          <div class="client-info-item">
-            <div class="client-info-label">Téléphone</div>
-            <div class="client-info-value">${esc(existingClient.t || 'Non spécifié')}</div>
-          </div>
-          <div class="client-info-item">
-            <div class="client-info-label">Email</div>
-            <div class="client-info-value">${esc(existingClient.e || 'Non spécifié')}</div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-  
-  // Add addresses if available
-  if (fileData.extracted.addresses && fileData.extracted.addresses.length > 0) {
-    html += `
-      <div style="margin-top: 16px;">
-        <h4 style="margin: 0 0 8px 0; color: var(--ink);">Adresses disponibles</h4>
-        <div class="address-list">
-          ${fileData.extracted.addresses.map((addr, idx) => `
-            <div class="address-item">
-              <input type="radio" name="billingAddress_${fileData.id}" id="addr_${fileData.id}_${idx}" 
-                     ${idx === 0 ? 'checked' : ''} onchange="selectBillingAddress('${fileData.id}', ${idx})">
-              <div class="address-content">
-                <div class="address-line">${esc(addr.street)}</div>
-                <div class="address-line">${esc(addr.postalCode)} ${esc(addr.city)}</div>
-                <div class="address-type">${esc(addr.type)}</div>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `;
-  }
-  
-  clientInfo.innerHTML = html;
+  const key=r.t+y;let num=r.num;
+  if(!unique(num,S.docs)){const q=S.seq[key]=(S.seq[key]||0)+1;num=(r.t==='d'?'DEV-':'FAC-')+y+'-'+String(q).padStart(3,'0');save('seq');if(r.num)toast('ℹ️ Numéro '+r.num+' déjà utilisé : '+num+' attribué')}
+  const cl=l=>({d:String(l.d||'').trim(),q:parseFloat(l.q)||1,p:parseFloat(l.p)||0}),mk=L=>L.filter(l=>String(l.d||'').trim()).map(cl);
+  const doc={id:nw(),t:r.t,num,date:r.date||td(),val:S.cfg.val||30,cn:r.cn,ca:r.ca,cc:r.cc,ct:r.ct,ce:r.ce,cid:c?.id||'',sn:r.sn||'',sa:'',sc:'',o:r.o||'',F:mk(r.F),M:mk(r.M),acc:S.cfg.acc||40,ap:false,paid:false,pd:'',cost:'',st:'att',tva:parseFloat(r.tva)||0,rm:parseFloat(r.rm)||0};
+  if(!doc.F.length)doc.F.push({d:'',q:1,p:''});if(!doc.M.length)doc.M.push({d:'',q:1,p:''});
+  S.docs.unshift(doc);save('docs');if(save_)imCatalog(r);r.done=true;
+  toast('✓ '+(r.t==='d'?'Devis':'Facture')+' créé(e) dans votre mise en page — aperçu');
+  setTimeout(()=>{go('e',doc.id);pvo()},300);
 }
-
-function confirmNewClient(fileId) {
-  const fileData = extractedData[fileId];
-  if (!fileData || !fileData.extracted.client) return;
-  
-  const client = fileData.extracted.client;
-  
-  // Create new client
-  const newClient = {
-    id: nw(),
-    n: client.name,
-    a: client.address || '',
-    c: client.city || '',
-    t: client.phone || '',
-    e: client.email || ''
-  };
-  
-  S.clients.push(newClient);
-  save('clients');
-  
-  toast('Client ajouté avec succès !');
-  
-  // Update display
-  showClientInfo(fileData);
-}
-
-function selectBillingAddress(fileId, index) {
-  const fileData = extractedData[fileId];
-  if (!fileData || !fileData.extracted.addresses) return;
-  
-  // Mark selected address
-  fileData.extracted.selectedBillingAddress = index;
-  
-  toast(`Adresse de facturation sélectionnée: ${fileData.extracted.addresses[index].street}`);
-}
-
-function showItems(fileData) {
-  const itemsGrid = $('#itemsGrid');
-  itemsGrid.innerHTML = '';
-  
-  if (!fileData.extracted.items || fileData.extracted.items.length === 0) {
-    itemsGrid.innerHTML = '<p style="color: var(--mu);">Aucun élément identifié dans ce document.</p>';
-    return;
-  }
-  
-  fileData.extracted.items.forEach((item, index) => {
-    const itemCard = document.createElement('div');
-    itemCard.className = 'item-card';
-    
-    const itemType = item.type === 'service' ? 'Prestation' : 'Fourniture';
-    const typeClass = item.type === 'service' ? 'service' : 'supply';
-    
-    itemCard.innerHTML = `
-      <div class="item-header">
-        <div class="item-type">${itemType}</div>
-        <input type="checkbox" id="item_${fileData.id}_${index}" 
-               onchange="toggleItemSelection('${fileData.id}', ${index}, this.checked)"
-               ${selectedItems[fileData.id] && selectedItems[fileData.id][index] ? 'checked' : ''}>
-      </div>
-      <div class="item-name">${esc(item.name)}</div>
-      <div class="item-details">
-        <div><strong>Quantité:</strong> ${esc(item.quantity)}</div>
-        <div><strong>Prix unitaire:</strong> ${E(item.unitPrice)}</div>
-        <div class="item-price"><strong>Total:</strong> ${E(item.total)}</div>
-      </div>
-      <div class="item-actions">
-        <button class="add" onclick="addItemToDatabase('${fileData.id}', ${index})">Ajouter à mes tarifs</button>
-        <button class="skip" onclick="skipItem('${fileData.id}', ${index})">Ignorer</button>
-      </div>
-    `;
-    
-    itemsGrid.appendChild(itemCard);
-  });
-}
-
-function toggleItemSelection(fileId, index, checked) {
-  if (!selectedItems[fileId]) {
-    selectedItems[fileId] = {};
-  }
-  selectedItems[fileId][index] = checked;
-}
-
-function addItemToDatabase(fileId, index) {
-  const fileData = extractedData[fileId];
-  if (!fileData || !fileData.extracted.items || !fileData.extracted.items[index]) return;
-  
-  const item = fileData.extracted.items[index];
-  
-  // Check if item already exists
-  const existingItem = S.cat.find(c => 
-    c.d && c.d.toLowerCase() === item.name.toLowerCase()
-  );
-  
-  if (existingItem) {
-    toast(`⚠️ ${esc(item.name)} existe déjà dans vos tarifs`);
-    return;
-  }
-  
-  // Add to database
-  S.cat.push({
-    d: item.name,
-    t: item.type,
-    p: item.unitPrice
-  });
-  
-  save('cat');
-  toast(`✅ ${esc(item.name)} ajouté à vos tarifs`);
-  
-  // Update search results
-  initItemSearch();
-}
-
-function skipItem(fileId, index) {
-  const fileData = extractedData[fileId];
-  if (!fileData || !fileData.extracted.items || !fileData.extracted.items[index]) return;
-  
-  // Mark as skipped
-  fileData.extracted.items[index].skipped = true;
-  
-  toast(`⏭️ ${esc(fileData.extracted.items[index].name)} ignoré`);
-}
-
-function initItemSearch() {
-  const searchInput = $('#itemSearch');
-  const searchResults = $('#searchResults');
-  
-  searchInput.addEventListener('input', () => {
-    const query = searchInput.value.toLowerCase();
-    
-    if (query.length < 2) {
-      searchResults.classList.remove('show');
-      return;
-    }
-    
-    const results = S.cat.filter(item => 
-      item.d && item.d.toLowerCase().includes(query)
-    );
-    
-    if (results.length === 0) {
-      searchResults.classList.remove('show');
-      return;
-    }
-    
-    searchResults.innerHTML = results.map((item, index) => `
-      <div class="result-item" onclick="selectSearchResult('${esc(item.d)}', '${item.t}', ${item.p})" onmouseenter="highlightResult(this)">
-        <div><strong>${esc(item.d)}</strong></div>
-        <div style="font-size: 12px; color: var(--mu);">${item.t === 'service' ? 'Prestation' : 'Fourniture'} - ${E(item.p)}</div>
-      </div>
-    `).join('');
-    
-    searchResults.classList.add('show');
-  });
-  
-  // Close dropdown when clicking outside
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.search-container')) {
-      searchResults.classList.remove('show');
-    }
-  });
-}
-
-function selectSearchResult(name, type, price) {
-  const searchInput = $('#itemSearch');
-  const searchResults = $('#searchResults');
-  
-  searchInput.value = name;
-  searchResults.classList.remove('show');
-  
-  toast(`🔍 ${esc(name)} sélectionné`);
-  
-  // Here you could add the selected item to the current document
-}
-
-function highlightResult(element) {
-  // Remove highlight from all
-  document.querySelectorAll('.result-item').forEach(el => {
-    el.classList.remove('highlight');
-  });
-  
-  // Add highlight to this one
-  element.classList.add('highlight');
-}
-
-function selectedTransferScope(){return document.querySelector('input[name="transferScope"]:checked')?.value||'client'}
-document.addEventListener('change',e=>{if(e.target.name==='transferScope')document.querySelectorAll('.scope-option').forEach(x=>x.classList.toggle('selected',x.querySelector('input')===e.target))});
-function validateTransfer(){const scope=selectedTransferScope(),withPrices=$('#transferWithPrices')?.checked!==false,transferDocNumbers=$('#transferDocNumbers')?.checked!==false,ids=Object.keys(extractedData);if(!ids.length){toast('Aucun fichier à transférer');return}ids.forEach(id=>transferFile(extractedData[id],scope,withPrices,transferDocNumbers));toast('✓ Transfert terminé');setTimeout(()=>render(),500)}
-function transferFile(fileData,scope,withPrices,transferDocNumbers){
- const data=fileData.extracted||{},norm=s=>String(s||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim();
- let client=null;
- if((scope==='client'||scope==='all')&&data.client?.name){
-   client=S.clients.find(c=>{
-     const a=norm(c.n),b=norm(data.client.name);
-     return a&&b&&(a===b||(data.client.email&&norm(c.e)===norm(data.client.email))||(data.client.phone&&String(c.t||'').replace(/\\D/g,'')===String(data.client.phone).replace(/\\D/g,'')));
-   });
-   if(!client){client={id:nw(),n:data.client.name,a:'',c:'',t:data.client.phone||'',e:data.client.email||'',addresses:[]};S.clients.push(client)}
-   if(!Array.isArray(client.addresses))client.addresses=[];
-   (data.addresses||[]).forEach(addr=>{if(addr?.street&&!client.addresses.some(a=>norm(a.street)===norm(addr.street)&&String(a.postalCode)===String(addr.postalCode)))client.addresses.push({...addr})});
-   if(!client.t&&data.client.phone)client.t=data.client.phone;
-   if(!client.e&&data.client.email)client.e=data.client.email;
-   const bill=data.addresses?.[data.selectedBillingAddress||0];
-   if(!client.a&&(data.client.address||bill?.street))client.a=data.client.address||bill.street;
-   if(!client.c&&(data.client.postalCode||data.client.city||bill))client.c=[data.client.postalCode||bill?.postalCode,data.client.city||bill?.city].filter(Boolean).join(' ');
-   save('clients');
- }
- if(scope==='services'||scope==='supplies'||scope==='all'){
-   (data.items||[]).forEach(item=>{
-     const ok=scope==='all'||(scope==='services'&&item.type==='service')||(scope==='supplies'&&item.type==='supply');
-     if(!ok||item.skipped)return;
-     const old=S.cat.find(x=>norm(x.d)===norm(item.name));
-     const price=withPrices?n(item.type==='supply'?(item.saleUnitPrice||item.unitPrice):item.unitPrice):0;
-     if(old){if(withPrices&&!n(old.p))old.p=price;return}
-     S.cat.push({d:item.name,t:item.type,p:price});
-   });
-   save('cat');
- }
- if(scope==='all'){
-   const type=data.documentType==='facture'?'f':'d',year=(data.date||td()).slice(0,4)||new Date().getFullYear(),key=type+year,seq=(S.seq[key]||0)+1;
-   const docNumber=data.documentNumber||((type==='d'?'DEV-':'FAC-')+year+'-'+String(seq).padStart(3,'0'));
-   if(data.documentNumber&&transferDocNumbers&&S.docs.some(d=>norm(d.num)===norm(data.documentNumber))){toast('⚠️ Numéro déjà enregistré : '+data.documentNumber);return}
-   const bill=data.addresses?.[data.selectedBillingAddress||0];
-   const doc={id:nw(),t:type,num:docNumber,date:data.date||td(),val:S.cfg.val||30,
-     cn:client?.n||data.client?.name||'',ca:bill?.street||data.client?.address||client?.a||'',cc:[bill?.postalCode,bill?.city].filter(Boolean).join(' ')||[data.client?.postalCode,data.client?.city].filter(Boolean).join(' ')||client?.c||'',
-     ct:client?.t||data.client?.phone||'',ce:client?.e||data.client?.email||'',cid:client?.id||'',sn:data.chantier||'',sa:'',sc:'',o:data.object||'',F:[],M:[],
-     acc:S.cfg.acc||40,ap:false,paid:false,pd:'',cost:'',st:'att',tva:0,rm:'',ref:data.reference||''};
-   (data.items||[]).forEach(item=>{
-     if(item.skipped)return;
-     if(item.type==='service')doc.M.push({d:item.name,q:item.quantity||1,p:withPrices?n(item.unitPrice):0});
-     else if(item.type==='supply')doc.F.push({d:item.name,q:item.quantity||1,p:withPrices?n(item.saleUnitPrice||item.unitPrice):0});
-   });
-   S.docs.unshift(doc);S.seq[key]=seq;save('docs');save('seq');
-   if(!data.documentNumber)toast('ℹ️ Aucun numéro source détecté : numéro '+docNumber+' attribué par Ms Devis');
- }
-}
-function resetImport() {
-  currentFiles = [];
-  extractedData = {};
-  selectedItems = { services: [], supplies: [] };
-  
-  // Reset UI
-  $('#fileInput').value = '';
-  $('#uploadProgress').style.display = 'none';
-  $('#progressFill').style.width = '0%';
-  $('#fileListContainer').style.display = 'none';
-  $('#extractedDataContainer').style.display = 'none';
-  $('#clientSection').style.display = 'none';
-  $('#itemsSection').style.display = 'none';
-  $('#transferSection').style.display = 'none';
-  $('#previewContainer').style.display = 'none';
-  
-  // Re-render
-  render();
-}
-
-function deleteFile(fileId) {
-  if (extractedData[fileId]) {
-    delete extractedData[fileId];
-    updateFileList();
-    
-    // Check if we need to hide sections
-    if (Object.keys(extractedData).length === 0) {
-      $('#extractedDataContainer').style.display = 'none';
-      $('#clientSection').style.display = 'none';
-      $('#itemsSection').style.display = 'none';
-      $('#transferSection').style.display = 'none';
-    }
-    
-    toast('Fichier supprimé');
-  }
-}
-
-// Storage functions
-function save(k) {
-  try {
-    localStorage.setItem('ms_' + k, JSON.stringify(S[k]));
-    localStorage.setItem('ms_stamp', String(Date.now()));
-  } catch (e) {}
-}
-
-// Toast function
-function toast(m) {
-  const t = $('#ts');
-  t.textContent = m;
-  t.style.opacity = 1;
-  setTimeout(() => t.style.opacity = 0, 2400);
-}
-
-// Initialize
