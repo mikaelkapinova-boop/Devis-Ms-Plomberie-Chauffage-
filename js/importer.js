@@ -3,7 +3,7 @@
    vérification modifiable → création du devis / de la facture / du rapport
    dans la mise en page de l'application, puis aperçu et PDF. */
 'use strict';
-const IM={res:[],i:0,busy:false};
+const IM={res:[],i:0,busy:false,mode:'auto'};
 const imEsc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const imNorm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const imScripts={};
@@ -158,35 +158,137 @@ function imParse(text,filename){
   return{t,num,date,cn,ca,cc,ct,ce,sn,o,F,M,tva,rm,totHT,totTTC,totTVA,R,W,textLen:raw.trim().length,raw:raw.trim()};
 }
 
+function imCsvRows(text){
+  const source=String(text||'').replace(/^\uFEFF/,'');
+  const first=source.split(/\r?\n/).find(Boolean)||'';
+  let delim=';',best=-1,quoted=false,counts={';':0,',':0,'\t':0};
+  for(const ch of first){if(ch==='"')quoted=!quoted;else if(!quoted&&Object.prototype.hasOwnProperty.call(counts,ch))counts[ch]++}
+  for(const d of Object.keys(counts))if(counts[d]>best){best=counts[d];delim=d}
+  const rows=[],row=[];let cell='',inQuote=false;
+  for(let i=0;i<source.length;i++){
+    const ch=source[i];
+    if(ch==='"'){if(inQuote&&source[i+1]==='"'){cell+='"';i++}else inQuote=!inQuote}
+    else if(ch===delim&&!inQuote){row.push(cell.trim());cell=''}
+    else if((ch==='\n'||ch==='\r')&&!inQuote){if(ch==='\r'&&source[i+1]==='\n')i++;row.push(cell.trim());if(row.some(Boolean))rows.push([...row]);row.length=0;cell=''}
+    else cell+=ch;
+  }
+  row.push(cell.trim());if(row.some(Boolean))rows.push(row);
+  return rows;
+}
+const imHeaderKey=s=>imNorm(s).replace(/[^a-z0-9]/g,'');
+function imDataImport(text,name,mode){
+  const base={kind:'data',name,dataType:mode,entries:[],raw:String(text||'').trim()};
+  if(mode==='object'){
+    if(base.raw)base.entries=[{text:base.raw}];
+    else base.err='Aucun texte exploitable.';
+    return base;
+  }
+  const rows=imCsvRows(text),aliases=mode==='client'
+    ?{n:['nom','name','client','raison sociale','entreprise','fullname'],a:['adresse','address','rue'],c:['code postal ville','ville','city','postal code','code postal'],t:['telephone','tel','phone','mobile'],e:['email','e mail','courriel']}
+    :{d:['designation','description','article','produit','libelle','name','prestation'],q:['quantite','quantity','qty','qte'],p:['prix unitaire ht','prix unitaire','price','prix','pu','montant','total']};
+  const keys=Object.keys(aliases),header=rows[0]?.map(imHeaderKey)||[],indices={};
+  keys.forEach(k=>{indices[k]=header.findIndex(h=>aliases[k].some(a=>h===imHeaderKey(a)||h.startsWith(imHeaderKey(a))))});
+  const hasHeader=Object.values(indices).some(i=>i>=0),dataRows=hasHeader?rows.slice(1):rows;
+  if(mode==='client'){
+    if(!hasHeader){
+      const parsed=imParse(text,name);
+      if(parsed.cn)base.entries.push({n:parsed.cn,a:parsed.ca,c:parsed.cc,t:parsed.ct,e:parsed.ce});
+      else dataRows.forEach(row=>{const e={n:row[0]||'',a:row[1]||'',c:row[2]||'',t:row[3]||'',e:row[4]||''};if(e.n)base.entries.push(e)});
+    }else dataRows.forEach(row=>{const e={n:'',a:'',c:'',t:'',e:''};keys.forEach(k=>{if(indices[k]>=0)e[k]=row[indices[k]]||''});if(e.n)base.entries.push(e)});
+  }else{
+    dataRows.forEach(row=>{
+      let entry;
+      if(hasHeader){
+        entry={d:indices.d>=0?row[indices.d]||'':row[0]||'',q:indices.q>=0?imNum(row[indices.q])||1:1,p:indices.p>=0?imNum(row[indices.p]):NaN};
+      }else{
+        const parsed=imParseLine(row.join('\t'));
+        if(parsed)entry={d:parsed.d,q:parsed.q,p:parsed.p};
+        else{
+          const nums=row.map(imNum).filter(Number.isFinite),desc=row.find(c=>!Number.isFinite(imNum(c)))||'';
+          entry={d:desc,q:nums.length>1?nums[0]:1,p:nums.length?nums[nums.length-1]:NaN};
+        }
+      }
+      entry.d=String(entry.d||'').trim();
+      if(entry.d.length>=2)base.entries.push({d:entry.d,q:Number.isFinite(entry.q)?entry.q:1,p:Number.isFinite(entry.p)?entry.p:''});
+    });
+  }
+  if(!base.entries.length)base.err=mode==='client'?'Aucun client reconnu. Vérifiez les colonnes Nom, Adresse, Code postal/Ville, Téléphone et E-mail.':'Aucune ligne reconnue. Vérifiez les colonnes Désignation, Quantité et Prix.';
+  return base;
+}
+
 /* ---------- Interface ---------- */
-function getImportHTML(){return `<div class="c"><h3>Importer un devis, une facture ou un rapport</h3>
-<p class="mu" style="margin:0 0 12px;font-size:14px">Choisissez vos fichiers (PDF, scan, photo, Word .docx, texte). L'application lit le contenu, reconnaît le client, les lignes et les totaux, puis refait le document dans votre mise en page.</p>
+function getImportHTML(){return `<div class="c"><h3>Importer des données ou un document</h3>
+<p class="mu" style="margin:0 0 12px;font-size:14px">Importez un devis, une facture, un rapport, un client, des fournitures, de la main-d'œuvre ou un objet de devis. Vérifiez les données avant de les enregistrer.</p>
+<label>Type à importer<select id="imMode" onchange="imSetMode(this.value)"><option value="auto">Reconnaissance automatique (devis / facture / rapport)</option><option value="d">Devis</option><option value="f">Facture</option><option value="x">Rapport</option><option value="client">Clients (CSV / texte)</option><option value="F">Fournitures / matériels</option><option value="M">Main-d'œuvre / prestations</option><option value="object">Objet / travaux (modèle réutilisable)</option></select></label>
+<p class="mu" style="margin:0 0 12px;font-size:12px">Formats : PDF, scan/photo, Word .docx, texte et CSV. Les scans nécessitent une connexion. Les lignes importées restent modifiables avant validation.</p>
 <label class="b cu" style="display:block;text-align:center;margin:0;cursor:pointer" id="uploadArea">📄 Choisir des fichiers à importer<input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.txt,.csv,application/pdf,image/*" multiple hidden></label>
 <p id="imst" class="mu" style="margin:10px 0 0;font-size:13px"></p></div><div id="imres"></div>`}
 function imStatus(t){const e=document.getElementById('imst');if(e)e.textContent=t||''}
 function initImportPage(){
   const inp=document.getElementById('fileInput'),area=document.getElementById('uploadArea');if(!inp)return;
+  const mode=document.getElementById('imMode');if(mode)mode.value=IM.mode;
   inp.addEventListener('change',e=>{imHandle(e.target.files);e.target.value=''});
   ['dragover','drop'].forEach(ev=>area.addEventListener(ev,e=>{e.preventDefault();if(ev==='drop'&&e.dataTransfer.files.length)imHandle(e.dataTransfer.files)}));
   imRender();
 }
+function imSetMode(mode){IM.mode=mode}
 async function imHandle(files){
   files=[...files];if(!files.length||IM.busy)return;IM.busy=true;
   for(let k=0;k<files.length;k++){const f=files[k];imStatus('Analyse de '+f.name+' ('+(k+1)+'/'+files.length+')…');
-    try{if(f.size>30*1024*1024)throw new Error('Fichier supérieur à 30 Mo');const text=await imExtractText(f),r=imParse(text,f.name);r.name=f.name;
+    try{if(f.size>30*1024*1024)throw new Error('Fichier supérieur à 30 Mo');const text=await imExtractText(f);let r;
+      if(['client','F','M','object'].includes(IM.mode))r=imDataImport(text,f.name,IM.mode);
+      else{r=imParse(text,f.name);if(IM.mode!=='auto')r.t=IM.mode;r.kind='doc';}
+      r.name=f.name;
       if(r.textLen<20)r.W.unshift('Presque aucun texte lu dans ce fichier : essayez une photo plus nette ou un PDF.');IM.res.push(r);IM.i=IM.res.length-1}
-    catch(e){IM.res.push({name:f.name,err:e.message||'Lecture impossible'});IM.i=IM.res.length-1}
+    catch(e){IM.res.push({name:f.name,kind:'doc',err:e.message||'Lecture impossible'});IM.i=IM.res.length-1}
     imRender()}
   IM.busy=false;imStatus('');imRender();document.getElementById('imres')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function imTotals(r){const s=[...r.M,...r.F].reduce((a,x)=>a+(parseFloat(x.q)||0)*(parseFloat(x.p)||0),0),rm=s*(parseFloat(r.rm)||0)/100,ht=s-rm,tv=ht*(parseFloat(r.tva)||0)/100;return{ht,tv,ttc:ht+tv}}
 const imE=v=>(typeof E==='function'?E(v):v.toFixed(2)+' €');
 function imLine(r,k,i){const x=r[k][i];return `<div style="display:grid;grid-template-columns:1fr 54px 76px 30px;gap:6px;margin-bottom:6px;align-items:center"><input value="${imEsc(x.d)}" placeholder="Désignation" oninput="imSetL('${k}',${i},'d',this.value)"><input type="number" step="any" value="${x.q}" oninput="imSetL('${k}',${i},'q',this.value)" aria-label="Quantité"><input type="number" step="any" value="${x.p}" oninput="imSetL('${k}',${i},'p',this.value)" aria-label="Prix unitaire HT"><button class="b gh sm" style="padding:0;min-height:36px" onclick="imDelL('${k}',${i})" aria-label="Retirer">✕</button></div>`}
+function imSwipeContent(content,remove,select){
+  return `<div class="im-swipe" data-remove="${remove}"><button class="im-swipe-action" onclick="${remove}">Supprimer</button><div class="im-swipe-content" style="${select?'touch-action:pan-y':''}">${content}</div></div>`;
+}
+function imBindSwipes(root){
+  root.querySelectorAll('.im-swipe').forEach(el=>{
+    const content=el.querySelector('.im-swipe-content'),action=el.querySelector('.im-swipe-action');let startX=0,startY=0,offset=0,moved=false;
+    const reset=()=>{content.style.transform='';action.style.opacity='0';offset=0};
+    el.addEventListener('touchstart',e=>{if(e.target.closest('input,textarea,select'))return;startX=e.touches[0].clientX;startY=e.touches[0].clientY;moved=false},{passive:true});
+    el.addEventListener('touchmove',e=>{
+      if(e.target.closest('input,textarea,select')||!startX)return;
+      const dx=e.touches[0].clientX-startX,dy=e.touches[0].clientY-startY;
+      if(Math.abs(dy)>Math.abs(dx)||dx>=0)return;
+      moved=true;e.preventDefault();offset=Math.max(-104,Math.min(0,dx));content.style.transform=`translateX(${offset}px)`;action.style.opacity=String(Math.min(1,Math.abs(offset)/60));
+    },{passive:false});
+    el.addEventListener('touchend',()=>{
+      if(moved&&offset<-66){el.dataset.skipClick='1';action.click();return}
+      if(offset<-24){content.style.transform='translateX(-104px)';action.style.opacity='1'}else reset();
+      startX=0;
+    });
+    el.addEventListener('click',e=>{if(el.dataset.skipClick){e.preventDefault();e.stopImmediatePropagation();delete el.dataset.skipClick}},true);
+  });
+}
 function imRender(){
   const box=document.getElementById('imres');if(!box)return;
   if(!IM.res.length){box.innerHTML='';return}
-  const r=IM.res[IM.i],tabs=IM.res.length>1?`<div class="c"><h3>Fichiers (${IM.res.length})</h3>${IM.res.map((x,i)=>`<button class="r" style="${i===IM.i?'outline:2px solid var(--cu)':''}" onclick="IM.i=${i};imRender()"><div><b>${imEsc(x.name)}</b><br><small class="mu">${x.err?'Erreur':({d:'Devis',f:'Facture',x:'Rapport'})[x.t]+(x.done?' · créé':'')}</small></div></button>`).join('')}</div>`:'';
-  if(r.err){box.innerHTML=tabs+`<div class="c"><h3>${imEsc(r.name)}</h3><p class="rd">${imEsc(r.err)}</p><button class="b gh sm" onclick="imDrop()">Retirer</button></div>`;return}
+  const r=IM.res[IM.i],tabs=`<div class="c"><h3>Fichiers importés (${IM.res.length})</h3>${IM.res.map((x,i)=>imSwipeContent(`<button class="r" style="margin:0;${i===IM.i?'outline:2px solid var(--cu)':''}" onclick="IM.i=${i};imRender()"><div><b>${imEsc(x.name)}</b><br><small class="mu">${x.err?'Erreur':x.kind==='data'?({client:'Clients',F:'Fournitures',M:"Main-d'œuvre",object:'Objet'})[x.dataType]:({d:'Devis',f:'Facture',x:'Rapport'})[x.t]}${x.done?' · importé':' · glisser pour supprimer'}</small></div></button>`,`imDrop(${i})`)).join('')}</div>`;
+  imBindSwipes(box);
+  if(r.err){box.innerHTML=tabs+`<div class="c"><h3>${imEsc(r.name)}</h3><p class="rd">${imEsc(r.err)}</p><button class="b gh sm" onclick="imDrop(${IM.i})">Retirer</button></div>`;imBindSwipes(box);return}
+  if(r.kind==='data'){
+    const type=r.dataType;
+    const rows=r.entries.map((x,i)=>{
+      const fields=type==='client'
+        ?`<input aria-label="Nom" placeholder="Nom du client" value="${imEsc(x.n)}" oninput="imSetEntry(${i},'n',this.value)"><input placeholder="Adresse" value="${imEsc(x.a)}" oninput="imSetEntry(${i},'a',this.value)"><div class="g2"><input placeholder="Code postal, ville" value="${imEsc(x.c)}" oninput="imSetEntry(${i},'c',this.value)"><input placeholder="Téléphone" value="${imEsc(x.t)}" oninput="imSetEntry(${i},'t',this.value)"></div><input type="email" placeholder="E-mail" value="${imEsc(x.e)}" oninput="imSetEntry(${i},'e',this.value)">`
+        :type==='object'?`<textarea rows="4" aria-label="Objet / travaux" oninput="imSetEntry(${i},'text',this.value)">${imEsc(x.text)}</textarea>`
+        :`<div class="g2"><input placeholder="Désignation" value="${imEsc(x.d)}" oninput="imSetEntry(${i},'d',this.value)"><input type="number" step="any" placeholder="Prix HT" value="${imEsc(x.p)}" oninput="imSetEntry(${i},'p',this.value)"></div>${type==='F'||type==='M'?`<input type="number" step="any" placeholder="Quantité (aperçu)" value="${imEsc(x.q)}" oninput="imSetEntry(${i},'q',this.value)">`:''}`;
+      return imSwipeContent(`<div class="c" style="margin:0">${fields}</div>`,`imDropEntry(${i})`);
+    }).join('');
+    const labels={client:'Clients',F:'Fournitures / matériels',M:"Main-d'œuvre / prestations",object:'Objets / travaux'};
+    const typeLabel=labels[type]||'Données';
+    box.innerHTML=tabs+`<div class="c"><h3>${imEsc(r.name)} · ${typeLabel}</h3><p class="mu" style="font-size:13px">${r.entries.length} entrée(s) détectée(s). Corrigez ou retirez les lignes avant l'enregistrement.</p>${rows||'<p class="rd">'+imEsc(r.err||'Aucune entrée détectée.')+'</p>'}<button class="b cu" style="width:100%;margin-top:8px" onclick="imSaveData()"><span>✓ Importer ${r.entries.length} entrée(s)</span></button><details style="margin-top:10px"><summary class="mu">Texte lu dans le fichier</summary><pre style="white-space:pre-wrap;font-size:12px;max-height:240px;overflow:auto">${imEsc(r.raw)}</pre></details></div>`;
+    imBindSwipes(box);return;
+  }
   const T=imTotals(r),inp=(l,k,ty='text')=>`<label>${l}<input type="${ty}" value="${imEsc(r[k])}" oninput="imSet('${k}',this.value)"></label>`,ta=(l,k)=>`<label>${l}<textarea rows="3" oninput="imSetR('${k}',this.value)">${imEsc(r.R[k])}</textarea></label>`;
   const warn=r.W.length?`<div class="c" style="border:1px solid #e0b36a"><h3>⚠️ À vérifier</h3>${r.W.map(w=>`<p style="margin:0 0 6px;font-size:14px">• ${imEsc(w)}</p>`).join('')}<small class="mu">Vous pouvez quand même créer le document : complétez ce qui manque ensuite.</small></div>`:`<div class="c"><p class="ok" style="margin:0">✓ Données reconnues sans anomalie.</p></div>`;
   const lines=r.t==='x'?`<div class="c"><h3>Rapport d'intervention</h3><label>Type<select onchange="imSetR('ty',this.value)">${['Dégât des eaux','Recherche de fuite','Panne de chauffage','Diagnostic plomberie','Autre'].map(o=>`<option ${o===r.R.ty?'selected':''}>${o}</option>`).join('')}</select></label>${inp('Assurance','ass')}${inp('N° de sinistre','sn')}${ta('Motif / circonstances','mo')}${ta('Constatations','co')}${ta('Origine / cause probable','org')}${ta('Travaux réalisés','tr')}${ta('Préconisations','pr')}</div>`
@@ -204,9 +306,11 @@ const imCur=()=>IM.res[IM.i];
 function imSet(k,v){imCur()[k]=v;if(k==='t')imRender()}
 function imSetR(k,v){imCur().R[k]=v}
 function imSetL(k,i,f,v){imCur()[k][i][f]=v}
+function imSetEntry(i,k,v){imCur().entries[i][k]=v}
 function imAddL(k){imCur()[k].push({d:'',q:1,p:''});imRender()}
 function imDelL(k,i){imCur()[k].splice(i,1);imRender()}
-function imDrop(){IM.res.splice(IM.i,1);IM.i=Math.max(0,IM.i-1);imRender()}
+function imDrop(index=IM.i){if(index<IM.i)IM.i--;IM.res.splice(index,1);IM.i=Math.max(0,Math.min(IM.i,IM.res.length-1));imRender()}
+function imDropEntry(index){const r=imCur();r.entries.splice(index,1);if(!r.entries.length)imDrop();else imRender()}
 
 /* ---------- Enregistrement ---------- */
 function imClient(r){
