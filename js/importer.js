@@ -58,9 +58,12 @@ const imNum=s=>{s=String(s).replace(/[€\s\u00a0]/g,'');if(!s)return NaN;const 
   if(c>-1&&d>-1)s=c>d?s.replace(/\./g,'').replace(',','.'):s.replace(/,/g,'');else if(c>-1)s=s.replace(',','.');else if(d>-1&&/\.\d{3}$/.test(s)&&s.split('.').length>1&&!/\.\d{3}\./.test(s)&&s.length>5)s=s.replace(/\./g,'');
   return parseFloat(s)};
 const IM_MONTHS={janvier:1,fevrier:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,septembre:9,octobre:10,novembre:11,decembre:12};
-function imDate(s){s=imNorm(s);let m=s.match(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4}|\d{2})\b/);if(m){const y=m[3].length===2?'20'+m[3]:m[3];return y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0')}
-  m=s.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);if(m)return m[0];
-  m=s.match(/\b(\d{1,2})(?:er)?\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})\b/);if(m)return m[3]+'-'+String(IM_MONTHS[m[2]]).padStart(2,'0')+'-'+m[1].padStart(2,'0');return''}
+function imDate(s){
+  const valid=(y,m,d)=>{y=Number(y);m=Number(m);d=Number(d);const date=new Date(Date.UTC(y,m-1,d));return y>=1900&&y<=2200&&date.getUTCFullYear()===y&&date.getUTCMonth()===m-1&&date.getUTCDate()===d?`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`:''};
+  s=imNorm(s);let m=s.match(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4}|\d{2})\b/);if(m)return valid(m[3].length===2?'20'+m[3]:m[3],m[2],m[1]);
+  m=s.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);if(m)return valid(m[1],m[2],m[3]);
+  m=s.match(/\b(\d{1,2})(?:er)?\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})\b/);if(m)return valid(m[3],IM_MONTHS[m[2]],m[1]);return''
+}
 const IM_STREET=/(\d{1,4}\s*(?:bis|ter)?[, ]+\s*(?:rue|avenue|av\.?|boulevard|bd\.?|chemin|route|impasse|all[ée]e|place|quai|cours|r[ée]sidence|lotissement|square|passage|villa|cit[ée])\s+[^,\n\t]{2,60})/i;
 const IM_CITY=/\b(\d{5})\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’ \-]{1,40})/;
 const IM_UNIT_M=/\b(h|heures?|hr)\b/i;
@@ -189,8 +192,8 @@ function imDataImport(text,name,mode){
     cards.forEach(card=>{
       const lines=card.split(/\r?\n/),props={};
       for(const line of lines){const m=line.trim().match(/^([a-z-]+)(?:;[^:]*)?:(.*)$/i);if(m)(props[m[1].toUpperCase()]||=[]).push(unescape(m[2]))}
-      const adr=(props.ADR||[])[0]?.split(';')||[],entry={
-        n:(props.FN||[])[0]||((props.N||[])[0]||'').split(';').filter(Boolean).reverse().join(' ').trim(),
+      const adr=(props.ADR||[])[0]?.split(';')||[],name=(props.N||[])[0]?.split(';')||[],entry={
+        n:(props.FN||[])[0]||[name[1],name[2],name[0]].filter(Boolean).join(' ').trim(),
         a:adr[2]||'',c:[adr[5],adr[3]].filter(Boolean).join(' '),t:(props.TEL||[])[0]||'',e:(props.EMAIL||[])[0]||''
       };
       if(entry.n)base.entries.push(entry);
@@ -210,7 +213,14 @@ function imDataImport(text,name,mode){
       if(parsed.cn)base.entries.push({n:parsed.cn,a:parsed.ca,c:parsed.cc,t:parsed.ct,e:parsed.ce});
       else dataRows.forEach(row=>{const e={n:row[0]||'',a:row[1]||'',c:row[2]||'',t:row[3]||'',e:row[4]||''};if(e.n)base.entries.push(e)});
     }else if(!hasHeader)dataRows.forEach(row=>{const e={n:row[0]||'',a:row[1]||'',c:row[2]||'',t:row[3]||'',e:row[4]||''};if(e.n)base.entries.push(e)});
-    else dataRows.forEach(row=>{const e={n:'',a:'',c:'',t:'',e:''};keys.forEach(k=>{if(indices[k]>=0)e[k]=row[indices[k]]||''});if(e.n)base.entries.push(e)});
+    else dataRows.forEach(row=>{
+      const e={n:'',a:'',c:'',t:'',e:''};keys.forEach(k=>{if(indices[k]>=0)e[k]=row[indices[k]]||''});
+      if(mode==='client'){
+        const postal=header.findIndex(h=>['codepostal','cp','postalcode','zip','zipcode'].includes(h)),city=header.findIndex(h=>['ville','city','commune'].includes(h));
+        if(postal>=0||city>=0)e.c=[postal>=0?row[postal]:'',city>=0?row[city]:''].filter(Boolean).join(' ');
+      }
+      if(e.n)base.entries.push(e);
+    });
   }else{
     dataRows.forEach(row=>{
       let entry;
