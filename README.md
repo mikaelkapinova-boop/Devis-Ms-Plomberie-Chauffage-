@@ -44,9 +44,9 @@ Glisse un devis, une facture ou un rapport vers la gauche → « Supprimer ». �
 La V6 utilise une application locale optionnelle sur le PC. La page `bridge/` sert de point de téléchargement et d'instructions. Le PC exécute le bridge, tandis que l'iPhone reste uniquement l'interface utilisateur. Aucune clé API ou identifiant n'est stocké dans le dépôt.
 
 ## Import intelligent (v6.1)
-Menu **Importer** : choisir un ou plusieurs fichiers (PDF, scan/photo avec OCR, Word `.docx`, texte).
-1. L'extracteur (`js/importer.js`) lit le texte, reconnaît le type (devis / facture / rapport), le numéro, la date, le client, l'adresse, les lignes (main d'œuvre / fournitures), la TVA, la remise et les totaux, quelle que soit la présentation d'origine.
-2. Un écran de vérification affiche tout de façon modifiable, avec des avertissements (client absent, total qui ne colle pas, etc.).
-3. **Créer dans ma mise en page** crée le devis, la facture ou le rapport dans l'appli, enregistre le client et les prix (Mes tarifs) puis ouvre l'aperçu (`js/pdfpages.js`) avec « Télécharger le PDF ».
+Menu **Importer** : choisir un ou plusieurs fichiers (PDF, scan/photo avec OCR, Word `.docx`, texte ou CSV). L’extraction et la reconnaissance sont locales et fonctionnent sans IA ; seules les bibliothèques de lecture de fichiers et l’OCR nécessitent une connexion. Sélectionner la reconnaissance automatique ou un type précis : devis, facture, rapport, clients (CSV/VCF), fournitures, main-d'œuvre ou objets/travaux réutilisables.
+1. L'extracteur (`js/importer.js`) reconnaît les données et propose un aperçu modifiable avant enregistrement. Pour éviter de confondre l’entreprise et le client, les coordonnées client d’un document ne sont extraites que depuis un bloc « Client / Destinataire » clairement identifié ; les coordonnées correspondant au profil de l’entreprise sont exclues.
+2. Les devis, factures et rapports sont recréés dans la mise en page de l'appli ; les clients et tarifs peuvent être importés seuls, sans créer de document. Les modèles « Objet / travaux » importés sont disponibles dans l'éditeur de devis.
+3. Les fichiers et lignes en attente peuvent être retirés, y compris par glissement vers la gauche sur mobile.
 
 Limites : l'OCR et les bibliothèques PDF/Word se chargent depuis Internet ; `.doc` ancien format non lu (enregistrer en `.docx`) ; la qualité d'un scan flou limite l'extraction, d'où l'écran de vérification.
