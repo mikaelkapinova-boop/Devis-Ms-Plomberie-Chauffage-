@@ -906,7 +906,13 @@ body.kb #bar {
     display: none
   }
 }
-.transfer-scope{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.scope-option{position:relative;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--in);border:1.5px solid var(--ln);border-radius:14px;cursor:pointer;font-size:14px;font-weight:600}.scope-option input{position:absolute;opacity:0}.scope-check{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--mu);display:grid;place-items:center;color:transparent;flex:none}.scope-option.selected{border-color:var(--cu);background:color-mix(in srgb,var(--cu) 9%,var(--in))}.scope-option.selected .scope-check{background:var(--cu);border-color:var(--cu);color:#fff}.import-warning{display:flex;gap:8px;padding:10px 12px;margin-top:10px;border-radius:12px;background:color-mix(in srgb,var(--cu) 10%,var(--in));font-size:13px}.file-actions button.square{width:36px;height:36px;border:1px solid var(--ln);border-radius:10px;background:var(--in)}@media(max-width:520px){.transfer-scope{grid-template-columns:1fr}}\n</style>
+.transfer-scope{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.scope-option{position:relative;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--in);border:1.5px solid var(--ln);border-radius:14px;cursor:pointer;font-size:14px;font-weight:600}.scope-option input{position:absolute;opacity:0}.scope-check{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--mu);display:grid;place-items:center;color:transparent;flex:none}.scope-option.selected{border-color:var(--cu);background:color-mix(in srgb,var(--cu) 9%,var(--in))}.scope-option.selected .scope-check{background:var(--cu);border-color:var(--cu);color:#fff}.import-warning{display:flex;gap:8px;padding:10px 12px;margin-top:10px;border-radius:12px;background:color-mix(in srgb,var(--cu) 10%,var(--in));font-size:13px}.file-actions button.square{width:36px;height:36px;border:1px solid var(--ln);border-radius:10px;background:var(--in)}@media(max-width:520px){.transfer-scope{grid-template-columns:1fr}}\n.b,button.b{background-color:var(--ink);color:var(--bg)!important}
+.b.cu,button.b.cu{background-color:var(--cu)!important;color:#fff!important}
+.b.rd,button.b.rd{background-color:var(--rd)!important;color:#fff!important}
+.b.gh,button.b.gh{background-color:var(--in)!important;color:var(--ink)!important;border:1px solid var(--ln)}
+.b:focus-visible,button.b:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+.b:disabled,button.b:disabled{opacity:.55;cursor:not-allowed}
+</style>
 </head>
 <body>
 <div id="splash"><img src="img/drop-hd.png" alt=""><b>Ms Plomberie &amp; Chauffage</b></div>
@@ -1014,7 +1020,7 @@ return `<datalist id="cat">${S.cat.map(c=>`<option value="${esc(c.d)}">`).join('
 <div class="c"><h3>Client</h3><label>Client enregistré<select id="clisel" onchange="pk(this.value)"><option value="">— Choisir —</option>${S.clients.map(c=>`<option value="${c.id}" ${c.id===d.cid?'selected':''}>${esc(c.n)}${c.c?' — '+esc(c.c):''}</option>`).join('')}</select></label><label>Nom<input value="${esc(d.cn)}" oninput="sd('cn',this.value)" onblur="cliCommit(1);render()"></label>${I('Adresse','ca')}<div class="g2">${I('Code postal Ville','cc')}${I('Tél.','ct','tel')}</div>${I('E-mail','ce','email')}<p class="mu" style="font-size:12px;margin:6px 0 0">Dès que le nom est saisi, le client est enregistré avec son adresse, son téléphone et son e-mail.</p>
 <h3 style="margin-top:16px">Adresse du chantier</h3>${I('Nom','sn')}${I('Adresse','sa')}${I('Code postal Ville','sc')}<button class="b gh sm" onclick="same()">Identique au client</button></div>
 	${feCard(d)}
-<div class="c"><h3>Objet</h3><textarea rows="3" oninput="sd('o',this.value)">${esc(d.o)}</textarea></div>
+<div class="c"><h3>Objet</h3>${Array.isArray(S.cfg.objets)&&S.cfg.objets.length?`<label>Objet enregistré<select onchange="objUse(this.value)"><option value="">Choisir un modèle…</option>${S.cfg.objets.map(o=>`<option value="${esc(o)}">${esc(o.slice(0,90))}</option>`).join('')}</select></label>`:''}<textarea id="objtext" rows="3" oninput="sd('o',this.value)">${esc(d.o)}</textarea></div>
 ${[['F','Fournitures & matériels'],['M',"Main-d'œuvre & interventions techniques"]].map(([k,h])=>`<div class="c"><h3>${h}</h3>${d[k].map((l,i)=>ln(k,l,i)).join('')}<button class="b gh sm" onclick="al('${k}')">＋ Ajouter une ligne</button>${catSel(k)}</div>`).join('')}
 <div class="c" id="tots">${totH(d)}</div>
 <div class="c"><h3>Suivi</h3>${f?'':`<label class="tg"><input type="checkbox" ${d.st==='ok'?'checked':''} onchange="sd('st',this.checked?'ok':'att')">Devis accepté</label>`}
@@ -1044,6 +1050,7 @@ function cliCommit(adopt,doc){const d=doc||cur();if(!d)return;const nom=(d.cn||'
 	else if((c.n||'').trim().toLowerCase()!==nom.toLowerCase()&&S.docs.some(x=>x.id!==d.id&&x.cid===c.id)){c={id:nw(),n:nom,a:'',c:'',t:'',e:''};S.clients.push(c);d.cid=c.id}
 	c.n=nom;if(d.ca)c.a=d.ca;if(d.cc)c.c=d.cc;if(d.ct)c.t=d.ct;if(d.ce)c.e=d.ce;save('clients');save('docs')}
 	function sd(k,v){cur()[k]=v;save('docs');if(['ca','cc','ct','ce'].includes(k))cliCommit(0);tt()}
+	function objUse(v){if(!v)return;sd('o',v);const e=$('#objtext');if(e)e.value=v}
 function tt(){const d=cur();if(!d)return;for(const k of['F','M'])d[k].forEach((l,i)=>{const e=$('#m'+k+i);if(e)e.textContent=E(n(l.q)*n(l.p))});const e=$('#tots');if(e)e.innerHTML=totH(d)}
 function sl(k,i,f,v){const l=cur()[k][i];l[f]=v;if(f==='d'){const c=S.cat.find(c=>c.d===v);if(c&&!n(l.p)){l.p=c.p;$('#p'+k+i).value=c.p}}save('docs');tt()}
 function al(k){cur()[k].push({d:'',q:1,p:''});save('docs');render()}

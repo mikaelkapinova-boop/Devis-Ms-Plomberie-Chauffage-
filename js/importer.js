@@ -49,7 +49,7 @@ async function imExtractText(file){
   if(/\.docx$/.test(nm))return imDocxText(file);
   if(/\.doc$/.test(nm))throw new Error('Format .doc non lisible : enregistrez-le en .docx ou PDF');
   if(/\.(png|jpe?g|webp|bmp|gif)$/.test(nm)||file.type.startsWith('image/'))return imOcr(file);
-  if(/\.(txt|csv)$/.test(nm)||file.type.startsWith('text/'))return file.text();
+  if(/\.(txt|csv|vcf)$/.test(nm)||file.type.startsWith('text/'))return file.text();
   throw new Error('Format non pris en charge');
 }
 
@@ -183,6 +183,21 @@ function imDataImport(text,name,mode){
     else base.err='Aucun texte exploitable.';
     return base;
   }
+  if(mode==='client'&&/\.vcf$/i.test(name)){
+    const unescape=v=>String(v||'').replace(/\\n/gi,' ').replace(/\\([,;])/g,'$1').trim();
+    const cards=base.raw.split(/BEGIN:VCARD/i).slice(1);
+    cards.forEach(card=>{
+      const lines=card.split(/\r?\n/),props={};
+      for(const line of lines){const m=line.trim().match(/^([a-z-]+)(?:;[^:]*)?:(.*)$/i);if(m)(props[m[1].toUpperCase()]||=[]).push(unescape(m[2]))}
+      const adr=(props.ADR||[])[0]?.split(';')||[],entry={
+        n:(props.FN||[])[0]||((props.N||[])[0]||'').split(';').filter(Boolean).reverse().join(' ').trim(),
+        a:adr[2]||'',c:[adr[5],adr[3]].filter(Boolean).join(' '),t:(props.TEL||[])[0]||'',e:(props.EMAIL||[])[0]||''
+      };
+      if(entry.n)base.entries.push(entry);
+    });
+    if(!base.entries.length)base.err='Aucun contact reconnu dans ce fichier VCF.';
+    return base;
+  }
   const rows=imCsvRows(text),aliases=mode==='client'
     ?{n:['nom','name','client','raison sociale','entreprise','fullname'],a:['adresse','address','rue'],c:['code postal ville','ville','city','postal code','code postal'],t:['telephone','tel','phone','mobile'],e:['email','e mail','courriel']}
     :{d:['designation','description','article','produit','libelle','name','prestation'],q:['quantite','quantity','qty','qte'],p:['prix unitaire ht','prix unitaire','price','prix','pu','montant','total']};
@@ -190,20 +205,25 @@ function imDataImport(text,name,mode){
   keys.forEach(k=>{indices[k]=header.findIndex(h=>aliases[k].some(a=>h===imHeaderKey(a)||h.startsWith(imHeaderKey(a))))});
   const hasHeader=Object.values(indices).some(i=>i>=0),dataRows=hasHeader?rows.slice(1):rows;
   if(mode==='client'){
-    if(!hasHeader){
+    if(!hasHeader&&dataRows.length===1){
       const parsed=imParse(text,name);
       if(parsed.cn)base.entries.push({n:parsed.cn,a:parsed.ca,c:parsed.cc,t:parsed.ct,e:parsed.ce});
       else dataRows.forEach(row=>{const e={n:row[0]||'',a:row[1]||'',c:row[2]||'',t:row[3]||'',e:row[4]||''};if(e.n)base.entries.push(e)});
-    }else dataRows.forEach(row=>{const e={n:'',a:'',c:'',t:'',e:''};keys.forEach(k=>{if(indices[k]>=0)e[k]=row[indices[k]]||''});if(e.n)base.entries.push(e)});
+    }else if(!hasHeader)dataRows.forEach(row=>{const e={n:row[0]||'',a:row[1]||'',c:row[2]||'',t:row[3]||'',e:row[4]||''};if(e.n)base.entries.push(e)});
+    else dataRows.forEach(row=>{const e={n:'',a:'',c:'',t:'',e:''};keys.forEach(k=>{if(indices[k]>=0)e[k]=row[indices[k]]||''});if(e.n)base.entries.push(e)});
   }else{
     dataRows.forEach(row=>{
       let entry;
       if(hasHeader){
         entry={d:indices.d>=0?row[indices.d]||'':row[0]||'',q:indices.q>=0?imNum(row[indices.q])||1:1,p:indices.p>=0?imNum(row[indices.p]):NaN};
       }else{
-        const parsed=imParseLine(row.join('\t'));
+        const quantity=row.length>2?imNum(row[1]):NaN,price=row.length>2?imNum(row[2]):row.length===2?imNum(row[1]):NaN;
+        if(row.length>1&&Number.isFinite(price)&&row.slice(0,-(row.length>2?2:1)).join(' ').trim()){
+          entry={d:row.slice(0,-(row.length>2?2:1)).join(' '),q:Number.isFinite(quantity)?quantity:1,p:price};
+        }
+        const parsed=entry?null:imParseLine(row.join('\t'));
         if(parsed)entry={d:parsed.d,q:parsed.q,p:parsed.p};
-        else{
+        else if(!entry){
           const nums=row.map(imNum).filter(Number.isFinite),desc=row.find(c=>!Number.isFinite(imNum(c)))||'';
           entry={d:desc,q:nums.length>1?nums[0]:1,p:nums.length?nums[nums.length-1]:NaN};
         }
@@ -221,7 +241,7 @@ function getImportHTML(){return `<div class="c"><h3>Importer des données ou un 
 <p class="mu" style="margin:0 0 12px;font-size:14px">Importez un devis, une facture, un rapport, un client, des fournitures, de la main-d'œuvre ou un objet de devis. Vérifiez les données avant de les enregistrer.</p>
 <label>Type à importer<select id="imMode" onchange="imSetMode(this.value)"><option value="auto">Reconnaissance automatique (devis / facture / rapport)</option><option value="d">Devis</option><option value="f">Facture</option><option value="x">Rapport</option><option value="client">Clients (CSV / texte)</option><option value="F">Fournitures / matériels</option><option value="M">Main-d'œuvre / prestations</option><option value="object">Objet / travaux (modèle réutilisable)</option></select></label>
 <p class="mu" style="margin:0 0 12px;font-size:12px">Formats : PDF, scan/photo, Word .docx, texte et CSV. Les scans nécessitent une connexion. Les lignes importées restent modifiables avant validation.</p>
-<label class="b cu" style="display:block;text-align:center;margin:0;cursor:pointer" id="uploadArea">📄 Choisir des fichiers à importer<input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.txt,.csv,application/pdf,image/*" multiple hidden></label>
+<label class="b cu" style="display:block;text-align:center;margin:0;cursor:pointer" id="uploadArea">📄 Choisir des fichiers à importer<input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.txt,.csv,.vcf,application/pdf,text/vcard,image/*" multiple hidden></label>
 <p id="imst" class="mu" style="margin:10px 0 0;font-size:13px"></p></div><div id="imres"></div>`}
 function imStatus(t){const e=document.getElementById('imst');if(e)e.textContent=t||''}
 function initImportPage(){
@@ -251,6 +271,11 @@ function imSwipeContent(content,remove,select){
   return `<div class="im-swipe" data-remove="${remove}"><button class="im-swipe-action" onclick="${remove}">Supprimer</button><div class="im-swipe-content" style="${select?'touch-action:pan-y':''}">${content}</div></div>`;
 }
 function imBindSwipes(root){
+  if(!document.getElementById('imSwipeStyle')){
+    const style=document.createElement('style');style.id='imSwipeStyle';
+    style.textContent='.im-swipe{position:relative;overflow:hidden;border-radius:14px;margin-bottom:8px}.im-swipe-content{position:relative;z-index:1;transition:transform .18s;touch-action:pan-y}.im-swipe-action{position:absolute;inset:0 0 0 auto;width:104px;border:0;border-radius:0 14px 14px 0;background:var(--rd);color:#fff;font-family:inherit;font-size:14px;font-weight:600;line-height:1.2;opacity:0;z-index:0}';
+    document.head.appendChild(style);
+  }
   root.querySelectorAll('.im-swipe').forEach(el=>{
     const content=el.querySelector('.im-swipe-content'),action=el.querySelector('.im-swipe-action');let startX=0,startY=0,offset=0,moved=false;
     const reset=()=>{content.style.transform='';action.style.opacity='0';offset=0};
@@ -262,7 +287,12 @@ function imBindSwipes(root){
       moved=true;e.preventDefault();offset=Math.max(-104,Math.min(0,dx));content.style.transform=`translateX(${offset}px)`;action.style.opacity=String(Math.min(1,Math.abs(offset)/60));
     },{passive:false});
     el.addEventListener('touchend',()=>{
-      if(moved&&offset<-66){el.dataset.skipClick='1';action.click();return}
+      if(moved&&offset<-66){
+        el.dataset.skipClick='1';
+        const remove=el.dataset.remove||'',index=Number((remove.match(/\((\d+)\)/)||[])[1]);
+        if(remove.startsWith('imDropEntry('))imDropEntry(index);else imDrop(index);
+        return;
+      }
       if(offset<-24){content.style.transform='translateX(-104px)';action.style.opacity='1'}else reset();
       startX=0;
     });
@@ -321,6 +351,26 @@ function imClient(r){
   save('clients');return c;
 }
 function imCatalog(r){for(const k of['M','F'])for(const l of r[k]){const d=String(l.d||'').trim();if(!d)continue;const p=parseFloat(l.p)||0,c=S.cat.find(c=>imNorm(c.d).trim()===imNorm(d).trim());if(!c)S.cat.push({d,t:k,p});else if(!(parseFloat(c.p)>0)&&p)c.p=p}save('cat')}
+function imSaveData(){
+  const r=imCur(),type=r.dataType,entries=r.entries.filter(x=>type==='client'?String(x.n||'').trim():type==='object'?String(x.text||'').trim():String(x.d||'').trim());
+  if(!entries.length)return toast('Aucune entrée à importer');
+  let added=0,updated=0;
+  if(type==='client'){
+    entries.forEach(x=>{const before=S.clients.length,c=imClient({cn:x.n,ca:x.a,cc:x.c,ct:x.t,ce:x.e});if(c){if(S.clients.length>before)added++;else updated++}});
+  }else if(type==='F'||type==='M'){
+    entries.forEach(x=>{
+      const d=String(x.d).trim(),p=parseFloat(x.p),c=S.cat.find(y=>(y.t||'F')===type&&imNorm(y.d).trim()===imNorm(d).trim());
+      if(!c){S.cat.push({d,t:type,p:Number.isFinite(p)?p:''});added++}
+      else{if(Number.isFinite(p)&&p!==Number(c.p)){c.p=p;updated++}}
+    });
+    save('cat');
+  }else{
+    const objects=Array.isArray(S.cfg.objets)?S.cfg.objets:[];
+    entries.forEach(x=>{const text=String(x.text).trim();if(!objects.some(o=>imNorm(o).trim()===imNorm(text).trim())){objects.push(text);added++}});
+    S.cfg.objets=objects;save('cfg');
+  }
+  r.done=true;imRender();toast(`✓ ${added} ajoutée(s)${updated?` · ${updated} mise(s) à jour`:''}`);
+}
 function imSaveOnly(){const r=imCur();if(!r.cn&&!r.M.length&&!r.F.length)return toast('Rien à enregistrer');const c=imClient(r);if(r.t!=='x')imCatalog(r);toast('✓ '+(c?'Client':'')+(c&&r.t!=='x'?' et ':'')+(r.t!=='x'?'tarifs':'')+' enregistrés')}
 function imCreate(){
   const r=imCur(),y=(r.date||td()).slice(0,4),save_=!r.noSave,c=r.cn&&save_?imClient(r):null;
