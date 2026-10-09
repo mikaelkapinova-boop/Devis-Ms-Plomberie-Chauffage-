@@ -5,7 +5,7 @@
 'use strict';
 const IM={res:[],i:0,busy:false};
 const imEsc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const imNorm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const imNorm=s=>String(s||'').replace(/[’‘ʼ]/g,"'").replace(/œ/g,'oe').replace(/æ/g,'ae').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const imScripts={};
 function imLoad(src,test){if(test())return Promise.resolve(true);if(imScripts[src])return imScripts[src];return imScripts[src]=new Promise(ok=>{const s=document.createElement('script');s.src=src;s.onload=()=>ok(test());s.onerror=()=>ok(false);document.head.appendChild(s)})}
 const imPdfJs=async()=>{await imLoad('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',()=>!!window.pdfjsLib);if(!window.pdfjsLib)return null;pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';return pdfjsLib};
@@ -68,8 +68,31 @@ const IM_LABOR=/main[\s-]*d.?\s*oeuvre|pose\b|d[ée]pose|installation|interventi
 const IM_SKIP=/^(total|sous[\s-]?total|net |tva|t\.v\.a|remise|acompte|reste|montant|base|d[ée]signation|description|libell[ée]|quantit|qt[ée]|prix|p\.?u\.?|page|siret|iban|bic|rib|conditions|r[èe]glement|paiement|validit[ée]|bon pour|date|devis|facture|signature|mention|ape|naf|n[°o] ?tva|code|t[ée]l\b|t[ée]l[ée]phone|e-?mail|adresse|client|objet|chantier|mobile|fax)/i;
 function imOwn(){const C=window.S?.cfg||{};const v=[C.co,C.nm,C.tel,C.mail,C.em,C.email,C.adr,C.siret].filter(x=>x&&String(x).length>3).map(imNorm);
   return t=>{const n=imNorm(t),d=n.replace(/\D/g,'');return /ms\s+plomberie|mikael\s+salillari|285\s+rue\s+jeanne/.test(n)||v.some(x=>n.includes(x)||(x.replace(/\D/g,'').length>=9&&d.includes(x.replace(/\D/g,''))))}}
+/* Quand un PDF est régénéré en image puis relu, les colonnes d'une ligne de
+   tableau se collent : « Chaudière11 850,00 €1 850,00 € ». On redécoupe la fin
+   de ligne en qté / prix unit. / montant, en testant chaque coupure possible
+   de la qté collée, puis on garde celle où qté × prix = montant. */
+function imSplitRow(line){
+  const cells=line.split('\t').map(x=>x.trim()).filter(Boolean);
+  if(cells.length>1)return cells.join('  ');
+  const txt=cells.join('  ');
+  const amt='(-?\\d[\\d ]*[.,]\\d{2}\\s*€)';
+  let m=txt.match(new RegExp('^(.*?[A-Za-zÀ-ÿ)][ \\t]*)(\\d{1,6})[ \\t]*'+amt+'[ \\t]*'+amt+'[ \\t]*$'));
+  if(m){
+    const[,desc,digits,b,c]=m,C=imNum(c);
+    /* la qté (0 à 3 chiffres) est collée devant le prix unit. ; on essaie chaque coupure */
+    for(let ql=0;ql<=3&&ql<digits.length;ql++){
+      const q=ql?+digits.slice(0,ql):1,rest=digits.slice(ql),P=imNum(rest+b);
+      if(Number.isFinite(P)&&Math.abs(q*P-C)<=Math.max(.02,C*.01)+.51)return desc+'\t'+q+'\t'+P+'\t'+C;
+    }
+  }
+  /* « Total HT :1 850,00 € » ou « Sous-total …500,00 € » : libellé collé au montant */
+  m=txt.match(/^((?:total|sous[\s-]?total|acompte|solde|reste|t\.?v\.?a|montant|net)\b[^0-9]{0,40}?):?[ \t]*(-?\d[\d ]*[.,]\d{2}\s*€)$/i);
+  if(m)return m[1]+'\t'+m[2];
+  return txt;
+}
 function imParseLine(line){
-  const cells=line.split('\t').map(x=>x.trim()).filter(Boolean);let txt=cells.join('  ');
+  const cells=imSplitRow(line).split('\t').map(x=>x.trim()).filter(Boolean);let txt=cells.join('  ');
   txt=txt.replace(/(\d)\s*%/g,'$1%');
   const numRe=/(?<![\w\/.,-])-?\d{1,3}(?:[ \u00a0.]\d{3})*(?:[.,]\d{1,3})?(?![\w\/%])|(?<![\w\/.,-])-?\d+(?:[.,]\d{1,3})?(?![\w\/%])/g,found=[];
   let m;while((m=numRe.exec(txt))){const after=txt.slice(m.index+m[0].length,m.index+m[0].length+3);found.push({s:m.index,e:m.index+m[0].length,v:imNum(m[0]),dec:/[.,]\d{2}$/.test(m[0]),eur:/^\s*€/.test(after)||/€\s*$/.test(txt.slice(Math.max(0,m.index-2),m.index))})}
@@ -77,13 +100,16 @@ function imParseLine(line){
   const tail=[];for(let k=found.length-1;k>=0;k--){const gap=tail.length?txt.slice(found[k].e,tail[0].s):txt.slice(found[k].e);if(/^[\s€\u00a0xX×a-zA-Z.]{0,6}$/.test(gap)&&(tail.length<4))tail.unshift(found[k]);else break}
   if(!tail.length)return null;
   let desc=txt.slice(0,tail[0].s).replace(/[|·•\t]+/g,' ').replace(/\s{2,}/g,' ').replace(/^[\s\-–—*•\d.)]+(?=[A-Za-zÀ-ÿ])/,'').trim();
+  /* retire une éventuelle quantité restée collée à la fin de la désignation (« douche1 ») */
+  const dm=desc.match(/^(.*?[A-Za-zÀ-ÿ)])(\d{1,3})$/);
+  if(dm&&tail.length>=2&&Math.abs(+dm[2]*tail[0].v-tail[1].v)<=Math.max(.02,tail[1].v*.01)+.51)desc=dm[1].trim();
   const afterNums=txt.slice(tail[tail.length-1].e).trim(),unitM=IM_UNIT_M.test(afterNums)||IM_UNIT_M.test(txt.slice(tail[0].e,tail[0].e+4));
   if(desc.length<3||!/[A-Za-zÀ-ÿ]{3}/.test(desc))return null;
   const v=tail.map(x=>x.v).filter(x=>Number.isFinite(x));let q=1,p=0,total=null;
   if(v.length>=3){const[a,b,c]=v.slice(-3);if(Math.abs(a*b-c)<=.02+c*.01){q=a;p=b;total=c}else if(Math.abs(b*c-a)<=.02+a*.01){q=b;p=c;total=a}else{q=a;p=b;total=c}}
   else if(v.length===2){const[a,b]=v,aInt=Number.isInteger(a)&&!tail[tail.length-2].dec;if(aInt&&a>0&&a<1000&&(!tail[tail.length-2].eur)){q=a;p=b/a;total=b}else{p=a;total=b;q=a&&Math.abs(b/a-Math.round(b/a))<.001?Math.round(b/a):1;if(q!==1)p=a;else p=b}}
   else{if(!tail[0].dec&&!tail[0].eur)return null;p=v[0];total=p}
-  if(!(p>=0)||p>1e6)return null;
+  if(!(p>=0)||p>1e6||q*p>1e6)return null;
   return{d:desc.replace(/\s*[xX×]$/,'').trim(),q:Math.round(q*100)/100,p:Math.round(p*100)/100,k:(unitM||IM_LABOR.test(desc))?'M':'F'};
 }
 function imParse(text,filename){
@@ -96,23 +122,28 @@ function imParse(text,filename){
   let t=score.x>score.f&&score.x>score.d?'x':score.f>score.d?'f':'d';
   /* numéro */
   let num='';for(const re of[/(?:devis|facture|rapport|avoir)\s*(?:n[°ºo]?|num[ée]ro|ref\.?|r[ée]f[ée]rence)?\s*[:#]?\s*([A-Z]{0,5}[-_/]?\d[\w\-_/]{2,})/i,/\bn[°ºo]\s*(?:de\s+\w+\s*)?[:#]?\s*([A-Z0-9][\w\-/]{2,})/i,/\b((?:DEV|FAC|FA|RAP)[-_]?\d{2,}[\w\-_/]*)/i]){const m=all.match(re);if(m&&/\d/.test(m[1])){num=m[1].toUpperCase();break}}
+  /* enlève ce que la relecture a pu coller derrière le numéro (date, DEVIS…) */
+  num=num.replace(/(?:DEVIS|FACTURE|RAPPORT|AVOIR).*$/,'').replace(/^(.*\d)\d{2}\/?\d{2}\/?\d{4}.*$/,'$1').replace(/(\d{2})[-_/]\d{2}[-_/]\d{4}.*$/,'$1');
   if(!num){const m=String(filename).match(/((?:DEV|FAC|RAP)[-_]?[\w-]*\d[\w-]*)/i);if(m)num=m[1].toUpperCase()}
   /* date */
   let date='';const dl=flat.find(l=>/\b(date|[ée]mis|[ée]tabli|fait le|le )\b/i.test(l)&&imDate(l));date=dl?imDate(dl):imDate(head)||imDate(all);
   /* coordonnées client */
   let cn='',ca='',cc='',ct='',ce='',sn='',o='';
   const cliRe=/^(?:client|destinataire|factur[ée]\s*[àa]|adress[ée]\s*[àa]|[àa] l.attention de|nom du client|ma[iî]tre d.ouvrage)\s*[:\-]?\s*(.*)$/i;
-  let ci=-1;for(let k=0;k<flat.length;k++){const m=flat[k].match(cliRe);if(m&&!own(flat[k])){ci=k;if(m[1].trim()&&!/^(adresse|t[ée]l)/i.test(m[1]))cn=m[1].trim();else{for(let j=k+1;j<Math.min(k+4,flat.length);j++){if(flat[j]&&!own(flat[j])&&!/^(adresse|t[ée]l|e-?mail|\d)/i.test(flat[j])){cn=flat[j];ci=j;break}}}break}}
+  let ci=-1;for(let k=0;k<flat.length;k++){const m=flat[k].match(cliRe);if(m&&!own(flat[k])){ci=k;if(m[1].trim()&&!/^(adresse|t[ée]l)/i.test(m[1]))cn=m[1].trim();else{for(let j=k+1;j<Math.min(k+4,flat.length);j++){if(flat[j]&&!own(flat[j])&&!/^(adresse|t[ée]l|e-?mail|\d)/i.test(flat[j])&&!/^(mode de r|validit|date|conditions)/i.test(flat[j])){cn=flat[j];ci=j;break}}}break}}
   if(!cn){const k=flat.findIndex((l,i)=>/^(m\.|mr|monsieur|mme|madame|mlle)\b/i.test(l)&&!own(l)&&i>0);if(k>-1){cn=flat[k];ci=k}}
   cn=cn.split(/\s{2,}|\t|\s+(?:adresse|t[ée]l|e-?mail)\b/i)[0].replace(/^(?:nom|client)\s*[:\-]\s*/i,'').trim();
+  /* Bloc client relu en une seule ligne : « Nom : XAdresse : YCode postal Ville : ZTél. : … » */
+  const cb=all.match(/nom\s*[:\-]\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’ .\-]{1,50}?)(?=\s*adresse\s*[:\-]|\s*code postal|\s*t[ée]l|\s*e-?mail|$)/i);
+  if(cb&&!own(cb[1])){const v=cb[1].trim();if(v.length<=60&&!/\d{5}/.test(v)){cn=v;if(ci<0)ci=flat.findIndex(l=>l.includes(cb[0].slice(0,Math.min(40,cb[0].length))))}}
   if(cn.length>60||/\d{5}/.test(cn)||/^(devis|facture|rapport)/i.test(cn))cn='';
   const zone=(ci>-1?flat.slice(ci,ci+8):flat.slice(0,30)).filter(l=>!own(l)).join('\n');
   const zoneAll=flat.filter(l=>!own(l)).join('\n');
   const em=(zone.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)||zoneAll.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)||[''])[0];ce=em;
   const ph=(zone.match(/(?:\+33\s?[1-9]|0[1-9])(?:[ .\-]?\d{2}){4}/)||zoneAll.match(/(?:\+33\s?[1-9]|0[1-9])(?:[ .\-]?\d{2}){4}/)||[''])[0];ct=ph;
   const st=zone.match(IM_STREET)||(ci>-1?null:zoneAll.match(IM_STREET));if(st)ca=st[1].replace(IM_CITY,'').replace(/[,\s]+$/,'').trim();
-  const labAdr=zone.match(/adresse(?: de facturation| du client)?\s*[:\-]\s*([^\n]+)/i);if(!ca&&labAdr)ca=labAdr[1].replace(IM_CITY,'').replace(/[,\s]+$/,'').trim();
-  const cm=(st?zone.slice(zone.indexOf(st[0])):zone).match(IM_CITY)||zone.match(IM_CITY);if(cm)cc=cm[1]+' '+cm[2].trim().replace(/\s+(t[ée]l|e-?mail).*$/i,'');
+  const labAdr=zone.match(/adresse(?: de facturation| du client)?\s*[:\-]\s*([^\n]+)/i)||all.match(/adresse\s*[:\-]\s*(\d{1,4}[^\n]{2,50}?)(?=\s*code postal|\s*t[ée]l|\s*e-?mail|$)/i);if(!ca&&labAdr)ca=labAdr[1].replace(IM_CITY,'').replace(/[,\s]+$/,'').trim();
+  const cm=(st?zone.slice(zone.indexOf(st[0])):zone).match(IM_CITY)||zone.match(IM_CITY)||all.match(/code postal(?:\s*ville)?\s*[:\-]\s*(\d{5})\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’ \-]{1,40}?)(?=\s*t[ée]l|\s*e-?mail|\s*$)/i);if(cm)cc=cm[1]+' '+cm[2].trim().replace(/\s+(t[ée]l|e-?mail).*$/i,'');
   if(!cn&&ci<0)W.push('Client non reconnu : saisissez-le ci-dessous.');
   /* chantier / objet */
   let m=all.match(/(?:objet|intitul[ée]|travaux)\s*[:\-]\s*([^\n]{3,120})/i);if(m)o=m[1].trim();
@@ -124,11 +155,12 @@ function imParse(text,filename){
   let rm=0;m=all.match(/remise[^\n\d]{0,20}(\d{1,2}(?:[.,]\d+)?)\s*%/i);if(m)rm=imNum(m[1]);
   /* lignes */
   const F=[],M=[];let sec='';
-  for(const ln of lines){const f=imNorm(ln.replace(/\t/g,' '));
-    if(/^\W*\d?\W*(main[\s-]*d.?oeuvre|prestations?|travaux|services?|pose|interventions?)\b.{0,25}$/.test(f)&&!/\d[.,]\d{2}/.test(f)){sec='M';continue}
+  for(const ln of lines){const f=imNorm(imSplitRow(ln).replace(/\t/g,' '));
+    if(/^\W*\d?\W*(main[\s-]*d.?oeuvre|prestations?|travaux|services?|interventions?)\b.{0,25}$/.test(f)&&!/\d[.,]\d{2}/.test(f)){sec='M';continue}
     if(/^\W*\d?\W*(fournitures?|mat[ée]riels?|mat[ée]riaux|pi[èe]ces?|[ée]quipements?)\b.{0,25}$/.test(f)&&!/\d[.,]\d{2}/.test(f)){sec='F';continue}
     if(/^\W*\d?\W*(synth[èe]se|conditions|r[èe]glement|total|r[ée]capitulatif)/.test(f)){sec='';if(/^\W*total/.test(f))continue}
     if(IM_SKIP.test(f)||/siret|iban|@|www\./.test(f)||own(ln))continue;
+    if(/^\W*(sous[\s-]?total|acompte|solde|reste a payer)\b/.test(f))continue;
     if(ln.trim()===cn||IM_CITY.test(ln)&&!/[€]/.test(ln)&&!/\d[.,]\d{2}/.test(ln))continue;
     const it=imParseLine(ln);if(!it)continue;
     if(sec&&!IM_UNIT_M.test(ln))it.k=sec;(it.k==='M'?M:F).push({d:it.d,q:it.q,p:it.p});
