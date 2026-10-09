@@ -290,7 +290,7 @@ function imDataImport(text,name,mode){
 function getImportHTML(){return `<div class="c"><h3>Importer des données ou un document</h3>
 <p class="mu" style="margin:0 0 12px;font-size:14px">Importez un devis, une facture, un rapport, un client, des fournitures, de la main-d'œuvre ou un objet de devis. Vérifiez les données avant de les enregistrer.</p>
 <label>Type à importer<select id="imMode" onchange="imSetMode(this.value)"><option value="auto">Reconnaissance automatique (devis / facture / rapport)</option><option value="d">Devis</option><option value="f">Facture</option><option value="x">Rapport</option><option value="client">Clients (CSV / texte)</option><option value="F">Fournitures / matériels</option><option value="M">Main-d'œuvre / prestations</option><option value="object">Objet / travaux (modèle réutilisable)</option></select></label>
-<p class="mu" style="margin:0 0 12px;font-size:12px">Formats : PDF, scan/photo, Word .docx, texte et CSV. Les scans nécessitent une connexion. Les lignes importées restent modifiables avant validation.</p>
+<p class="mu" style="margin:0 0 12px;font-size:12px">Le tri et l’extraction fonctionnent sans IA : les données ne sont pas envoyées à un service d’IA. Formats : PDF, scan/photo, Word .docx, texte et CSV. Seuls les lecteurs de fichiers et l’OCR des scans nécessitent une connexion.</p>
 <label class="b cu" style="display:block;text-align:center;margin:0;cursor:pointer" id="uploadArea">📄 Choisir des fichiers à importer<input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.txt,.csv,.vcf,application/pdf,text/vcard,image/*" multiple hidden></label>
 <p id="imst" class="mu" style="margin:10px 0 0;font-size:13px"></p></div><div id="imres"></div>`}
 function imStatus(t){const e=document.getElementById('imst');if(e)e.textContent=t||''}
@@ -362,11 +362,12 @@ function imRender(){
         ?`<input aria-label="Nom" placeholder="Nom du client" value="${imEsc(x.n)}" oninput="imSetEntry(${i},'n',this.value)"><input placeholder="Adresse" value="${imEsc(x.a)}" oninput="imSetEntry(${i},'a',this.value)"><div class="g2"><input placeholder="Code postal, ville" value="${imEsc(x.c)}" oninput="imSetEntry(${i},'c',this.value)"><input placeholder="Téléphone" value="${imEsc(x.t)}" oninput="imSetEntry(${i},'t',this.value)"></div><input type="email" placeholder="E-mail" value="${imEsc(x.e)}" oninput="imSetEntry(${i},'e',this.value)">`
         :type==='object'?`<textarea rows="4" aria-label="Objet / travaux" oninput="imSetEntry(${i},'text',this.value)">${imEsc(x.text)}</textarea>`
         :`<div class="g2"><input placeholder="Désignation" value="${imEsc(x.d)}" oninput="imSetEntry(${i},'d',this.value)"><input type="number" step="any" placeholder="Prix HT" value="${imEsc(x.p)}" oninput="imSetEntry(${i},'p',this.value)"></div>${type==='F'||type==='M'?`<input type="number" step="any" placeholder="Quantité (aperçu)" value="${imEsc(x.q)}" oninput="imSetEntry(${i},'q',this.value)">`:''}`;
-      return imSwipeContent(`<div class="c" style="margin:0">${fields}</div>`,`imDropEntry(${i})`);
+      const companyMatch=type==='client'&&imIsBusinessClient(x);
+      return imSwipeContent(`<div class="c" style="margin:0">${companyMatch?'<p class="rd" style="margin:0 0 8px;font-size:13px">Ces coordonnées correspondent au profil de votre entreprise et ne seront pas importées comme client.</p>':''}${fields}</div>`,`imDropEntry(${i})`);
     }).join('');
     const labels={client:'Clients',F:'Fournitures / matériels',M:"Main-d'œuvre / prestations",object:'Objets / travaux'};
     const typeLabel=labels[type]||'Données';
-    box.innerHTML=tabs+`<div class="c"><h3>${imEsc(r.name)} · ${typeLabel}</h3><p class="mu" style="font-size:13px">${r.entries.length} entrée(s) détectée(s). Corrigez ou retirez les lignes avant l'enregistrement.</p>${rows||'<p class="rd">'+imEsc(r.err||'Aucune entrée détectée.')+'</p>'}<button class="b cu" style="width:100%;margin-top:8px" onclick="imSaveData()"><span>✓ Importer ${r.entries.length} entrée(s)</span></button><details style="margin-top:10px"><summary class="mu">Texte lu dans le fichier</summary><pre style="white-space:pre-wrap;font-size:12px;max-height:240px;overflow:auto">${imEsc(r.raw)}</pre></details></div>`;
+    box.innerHTML=tabs+`<div class="c"><h3>${imEsc(r.name)} · ${typeLabel}</h3><p class="mu" style="font-size:13px">${r.entries.length} entrée(s) détectée(s). Corrigez ou retirez les lignes avant l'enregistrement. ${type==='client'?'Les informations correspondant au profil de votre entreprise sont automatiquement exclues.':''}</p>${rows||'<p class="rd">'+imEsc(r.err||'Aucune entrée détectée.')+'</p>'}<button class="b cu" style="width:100%;margin-top:8px" onclick="imSaveData()"><span>✓ Importer ${r.entries.length} entrée(s)</span></button><details style="margin-top:10px"><summary class="mu">Texte lu dans le fichier</summary><pre style="white-space:pre-wrap;font-size:12px;max-height:240px;overflow:auto">${imEsc(r.raw)}</pre></details></div>`;
     imBindSwipes(box);return;
   }
   const T=imTotals(r),inp=(l,k,ty='text')=>`<label>${l}<input type="${ty}" value="${imEsc(r[k])}" oninput="imSet('${k}',this.value)"></label>`,ta=(l,k)=>`<label>${l}<textarea rows="3" oninput="imSetR('${k}',this.value)">${imEsc(r.R[k])}</textarea></label>`;
@@ -387,6 +388,10 @@ function imSet(k,v){imCur()[k]=v;if(k==='t')imRender()}
 function imSetR(k,v){imCur().R[k]=v}
 function imSetL(k,i,f,v){imCur()[k][i][f]=v}
 function imSetEntry(i,k,v){imCur().entries[i][k]=v}
+function imIsBusinessClient(x){
+  return imIsOwn('company',x.n)||imIsOwn('name',x.n)||imIsOwn('address',x.a)||
+    imIsOwn('phone',x.t)||imIsOwn('email',x.e);
+}
 function imAddL(k){imCur()[k].push({d:'',q:1,p:''});imRender()}
 function imDelL(k,i){imCur()[k].splice(i,1);imRender()}
 function imDrop(index=IM.i){if(index<IM.i)IM.i--;IM.res.splice(index,1);IM.i=Math.max(0,Math.min(IM.i,IM.res.length-1));imRender()}
@@ -406,7 +411,10 @@ function imSaveData(){
   if(!entries.length)return toast('Aucune entrée à importer');
   let added=0,updated=0;
   if(type==='client'){
-    entries.forEach(x=>{const before=S.clients.length,c=imClient({cn:x.n,ca:x.a,cc:x.c,ct:x.t,ce:x.e});if(c){if(S.clients.length>before)added++;else updated++}});
+    const customers=entries.filter(x=>!imIsBusinessClient(x)),skipped=entries.length-customers.length;
+    customers.forEach(x=>{const before=S.clients.length,c=imClient({cn:x.n,ca:x.a,cc:x.c,ct:x.t,ce:x.e});if(c){if(S.clients.length>before)added++;else updated++}});
+    if(!customers.length){r.done=false;return toast('Aucun client importé : toutes les lignes correspondent au profil de votre entreprise.')}
+    r.done=true;imRender();toast(`✓ ${added} client(s) ajouté(s)${updated?` · ${updated} actualisé(s)`:''}${skipped?` · ${skipped} ligne(s) entreprise ignorée(s)`:''}`);return;
   }else if(type==='F'||type==='M'){
     entries.forEach(x=>{
       const d=String(x.d).trim(),p=parseFloat(x.p),c=S.cat.find(y=>(y.t||'F')===type&&imNorm(y.d).trim()===imNorm(d).trim());
