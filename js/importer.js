@@ -69,8 +69,26 @@ const IM_CITY=/\b(\d{5})\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’ \-]{1,40})/;
 const IM_UNIT_M=/\b(h|heures?|hr)\b/i;
 const IM_LABOR=/main[\s-]*d.?\s*oeuvre|pose\b|d[ée]pose|installation|intervention|d[ée]placement|forfait|mise en service|recherche|d[ée]pannage|remplacement|raccordement|nettoyage|diagnostic|r[ée]paration|vidange|d[ée]sembouage|entretien|contr[ôo]le|d[ée]bouchage|main d/i;
 const IM_SKIP=/^(total|sous[\s-]?total|net |tva|t\.v\.a|remise|acompte|reste|montant|base|d[ée]signation|description|libell[ée]|quantit|qt[ée]|prix|p\.?u\.?|page|siret|iban|bic|rib|conditions|r[èe]glement|paiement|validit[ée]|bon pour|date|devis|facture|signature|mention|ape|naf|n[°o] ?tva|code|t[ée]l\b|t[ée]l[ée]phone|e-?mail|adresse|client|objet|chantier|mobile|fax)/i;
-function imOwn(){const C=window.S?.cfg||{};const v=[C.co,C.nm,C.tel,C.mail,C.em,C.email,C.adr,C.siret].filter(x=>x&&String(x).length>3).map(imNorm);
-  return t=>{const n=imNorm(t),d=n.replace(/\D/g,'');return /ms\s+plomberie|mikael\s+salillari|285\s+rue\s+jeanne/.test(n)||v.some(x=>n.includes(x)||(x.replace(/\D/g,'').length>=9&&d.includes(x.replace(/\D/g,''))))}}
+function imOwnValues(){
+  const C=window.S?.cfg||{};
+  return{company:[C.co,'Ms Plomberie & Chauffage'],name:[C.nm,'Mikael SALILLARI'],phone:[C.tel],email:[C.ml,C.mail,C.em,C.email],address:[C.ad,"285 rue Jeanne d'Arc"],siret:[C.siret]}
+}
+function imIsOwn(field,value){
+  const raw=String(value||'').trim();if(!raw)return false;
+  const vals=imOwnValues()[field]||[],norm=imNorm(raw),digits=raw.replace(/\D/g,'');
+  return vals.some(x=>{
+    if(!x||String(x).trim().length<3)return false;
+    const expected=imNorm(x);
+    if(field==='phone'||field==='siret'){
+      const d=String(x).replace(/\D/g,'');return d.length>=9&&digits===d;
+    }
+    return norm===expected;
+  });
+}
+function imOwn(){
+  const vals=Object.values(imOwnValues()).flat().filter(x=>x&&String(x).length>3).map(imNorm);
+  return t=>{const n=imNorm(t),d=n.replace(/\D/g,'');return vals.some(x=>n.includes(x)||(x.replace(/\D/g,'').length>=9&&d.includes(x.replace(/\D/g,''))))}
+}
 function imParseLine(line){
   const cells=line.split('\t').map(x=>x.trim()).filter(Boolean);let txt=cells.join('  ');
   txt=txt.replace(/(\d)\s*%/g,'$1%');
@@ -105,18 +123,40 @@ function imParse(text,filename){
   /* coordonnées client */
   let cn='',ca='',cc='',ct='',ce='',sn='',o='';
   const cliRe=/^(?:client|destinataire|factur[ée]\s*[àa]|adress[ée]\s*[àa]|[àa] l.attention de|nom du client|ma[iî]tre d.ouvrage)\s*[:\-]?\s*(.*)$/i;
-  let ci=-1;for(let k=0;k<flat.length;k++){const m=flat[k].match(cliRe);if(m&&!own(flat[k])){ci=k;if(m[1].trim()&&!/^(adresse|t[ée]l)/i.test(m[1]))cn=m[1].trim();else{for(let j=k+1;j<Math.min(k+4,flat.length);j++){if(flat[j]&&!own(flat[j])&&!/^(adresse|t[ée]l|e-?mail|\d)/i.test(flat[j])){cn=flat[j];ci=j;break}}}break}}
-  if(!cn){const k=flat.findIndex((l,i)=>/^(m\.|mr|monsieur|mme|madame|mlle)\b/i.test(l)&&!own(l)&&i>0);if(k>-1){cn=flat[k];ci=k}}
+  let ci=-1,clientLabel=-1;
+  for(let k=0;k<flat.length;k++){
+    const m=flat[k].match(cliRe);if(!m||own(flat[k]))continue;
+    clientLabel=k;
+    const inline=m[1].trim();
+    if(inline&&!/^(adresse|t[ée]l|e-?mail)/i.test(inline)&&!own(inline))cn=inline;
+    else for(let j=k+1;j<Math.min(k+6,flat.length);j++){
+      const candidate=flat[j].replace(/^(?:nom(?:\s+du\s+client)?|client)\s*[:\-]\s*/i,'').trim();
+      if(!candidate||own(candidate)||/^(adresse|t[ée]l|e-?mail|mobile|chantier|objet|date|devis|facture|siret)\b/i.test(candidate))continue;
+      if(/^[\d\s+()./-]+$/.test(candidate))continue;
+      cn=candidate;ci=j;break;
+    }
+    if(ci<0)ci=k;
+    break;
+  }
   cn=cn.split(/\s{2,}|\t|\s+(?:adresse|t[ée]l|e-?mail)\b/i)[0].replace(/^(?:nom|client)\s*[:\-]\s*/i,'').trim();
-  if(cn.length>60||/\d{5}/.test(cn)||/^(devis|facture|rapport)/i.test(cn))cn='';
-  const zone=(ci>-1?flat.slice(ci,ci+8):flat.slice(0,30)).filter(l=>!own(l)).join('\n');
-  const zoneAll=flat.filter(l=>!own(l)).join('\n');
-  const em=(zone.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)||zoneAll.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)||[''])[0];ce=em;
-  const ph=(zone.match(/(?:\+33\s?[1-9]|0[1-9])(?:[ .\-]?\d{2}){4}/)||zoneAll.match(/(?:\+33\s?[1-9]|0[1-9])(?:[ .\-]?\d{2}){4}/)||[''])[0];ct=ph;
-  const st=zone.match(IM_STREET)||(ci>-1?null:zoneAll.match(IM_STREET));if(st)ca=st[1].replace(IM_CITY,'').replace(/[,\s]+$/,'').trim();
-  const labAdr=zone.match(/adresse(?: de facturation| du client)?\s*[:\-]\s*([^\n]+)/i);if(!ca&&labAdr)ca=labAdr[1].replace(IM_CITY,'').replace(/[,\s]+$/,'').trim();
-  const cm=(st?zone.slice(zone.indexOf(st[0])):zone).match(IM_CITY)||zone.match(IM_CITY);if(cm)cc=cm[1]+' '+cm[2].trim().replace(/\s+(t[ée]l|e-?mail).*$/i,'');
-  if(!cn&&ci<0)W.push('Client non reconnu : saisissez-le ci-dessous.');
+  if(cn.length>60||/\d{5}/.test(cn)||/^(devis|facture|rapport)/i.test(cn)||imIsOwn('company',cn)||imIsOwn('name',cn))cn='';
+  let zoneLines=[];
+  if(clientLabel>-1){
+    for(let k=clientLabel;k<Math.min(clientLabel+10,flat.length);k++){
+      const line=flat[k],norm=imNorm(line);
+      if(k>clientLabel&&/^(?:adresse du chantier|chantier|lieu des travaux|objet|travaux|total|devis|facture|rapport|conditions|r[ée]glement|nos coordonn[ée]es|coordonn[ée]es de l.entreprise|siret de l.entreprise)\b/.test(norm))break;
+      if(!own(line))zoneLines.push(line);
+    }
+  }
+  const zone=zoneLines.join('\n');
+  const emailMatch=zone.match(/[\w.+-]+@[\w-]+\.[\w.-]+/),em=emailMatch&&!imIsOwn('email',emailMatch[0])?emailMatch[0]:'';ce=em;
+  const phoneMatch=zone.match(/(?:\+33\s?[1-9]|0[1-9])(?:[ .\-]?\d{2}){4}/),ph=phoneMatch&&!imIsOwn('phone',phoneMatch[0])?phoneMatch[0]:'';ct=ph;
+  const st=zone.match(IM_STREET);if(st&&!imIsOwn('address',st[1]))ca=st[1].replace(IM_CITY,'').replace(/[,\s]+$/,'').trim();
+  const labAdr=zone.match(/adresse(?: de facturation| du client)?\s*[:\-]\s*([^\n]+)/i);
+  if(!ca&&labAdr&&!imIsOwn('address',labAdr[1]))ca=labAdr[1].replace(IM_CITY,'').replace(/[,\s]+$/,'').trim();
+  const cm=(st?zone.slice(zone.indexOf(st[0])):zone).match(IM_CITY);
+  if(cm&&!imIsOwn('address',cm[0]))cc=cm[1]+' '+cm[2].trim().replace(/\s+(t[ée]l|e-?mail).*$/i,'');
+  if(!cn)W.push(clientLabel<0?'Client non reconnu : aucun bloc « Client / Destinataire » clairement identifié. Saisissez-le ci-dessous pour éviter de reprendre les coordonnées de l’entreprise.':'Client incertain : vérifiez son nom et ses coordonnées avant de créer le document.');
   /* chantier / objet */
   let m=all.match(/(?:objet|intitul[ée]|travaux)\s*[:\-]\s*([^\n]{3,120})/i);if(m)o=m[1].trim();
   m=all.match(/(?:chantier|lieu (?:des travaux|d.intervention)|adresse (?:du chantier|des travaux|d.intervention))\s*[:\-]\s*([^\n]{3,120})/i);if(m)sn=m[1].trim();
