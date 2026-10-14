@@ -30,6 +30,8 @@ label{display:block;font-size:12px;color:var(--mu);margin:0 0 8px}label input,la
 .mu{color:var(--mu)}.cu{color:var(--cu)}.rd{color:var(--rd)}.ok{color:var(--ok)}
 .tr{display:flex;justify-content:space-between;gap:8px;padding:5px 0}.big{font-size:18px;border-top:1px solid var(--ln);margin-top:4px;padding-top:8px}
 .ln{display:grid;grid-template-columns:56px 1fr 1.1fr 40px 40px;gap:6px;align-items:center;padding:10px 0;border-top:1px solid var(--ln)}.ln .dg{grid-column:1/-1}.ln .b{padding:0;height:42px}.mt{text-align:right;font-size:14px}
+.ln .fl{position:relative;min-width:0}.ln .fl>small{position:absolute;top:4px;left:9px;font-size:9.5px;color:var(--mu);letter-spacing:.2px;pointer-events:none;text-transform:uppercase}.ln .fl input{width:100%;padding-top:16px}.ln .fl.mta{display:flex;align-items:center;justify-content:flex-end}.ln .fl.mta b{font-size:14px;text-align:right}
+.ln .act{display:contents}.ln .act .b{height:52px;min-height:52px;padding:0;font-size:17px;display:flex;align-items:center;justify-content:center}
 .bars{display:flex;gap:6px;align-items:flex-end;overflow-x:auto}.bc{flex:0 0 40px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px}.bc small{font-size:11px;color:var(--mu)}.b1{position:relative;width:26px;background:#b9783f55;border-radius:5px 5px 0 0}.b1 i{position:absolute;left:0;right:0;bottom:0;background:var(--sl)}
 input[type=range]{padding:0}
 #pv{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:30;background:#667;display:none;flex-direction:column}#pv.o{display:flex}.pvb{display:flex;gap:8px;justify-content:space-between;background:var(--sl);padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top,0px))}#pvw{flex:1;overflow:auto;padding:8px 0}#pvh{margin:0 auto;overflow:hidden;background:#fff}#pvs{width:794px;transform-origin:0 0}
@@ -75,10 +77,9 @@ button.b span,button.ib span{display:block;color:inherit;font-size:16px;font-wei
 #bar .b{flex:1 1 calc(50% - 4px);min-width:0;min-height:48px;height:auto;padding:10px 8px}
 .qa{display:grid;grid-template-columns:1fr;gap:8px}
 .qa .b{width:100%;min-height:56px}
-.ln{grid-template-columns:72px minmax(0,1fr) 92px}.ln>*{min-width:0}.mt{white-space:nowrap}
-.ln .b{height:auto!important;padding:10px 8px!important}
-.ln .act{grid-column:1 / -1;display:flex;gap:8px}
-.ln .act .b{flex:1}
+.ln{grid-template-columns:78px minmax(0,1fr) 96px 44px 44px}.ln>*{min-width:0}.mt{white-space:nowrap}
+.ln .act{display:contents}
+.ln .act .b{height:52px;min-height:52px;padding:0;font-size:17px}
 main{padding:14px max(12px,env(safe-area-inset-right,0px)) calc(var(--bar-h) + var(--off) + 24px) max(12px,env(safe-area-inset-left,0px))}
 .g2:not(.qa),.pho{grid-template-columns:repeat(2,minmax(0,1fr))}.g2>*,.pho>*{min-width:0}
 input,select{min-height:44px}.tg input{min-height:22px}
@@ -88,7 +89,7 @@ input[type=date]{min-width:0;max-width:100%;-webkit-appearance:none;appearance:n
 body.lk{overflow:hidden}body.kb #bar{display:none!important}
 @media(min-width:520px){#bar .b{flex:1 1 0}}
 @media(max-width:520px){.g2:not(.qa),.pho{grid-template-columns:1fr}.tr{flex-wrap:wrap}.tr>b{white-space:normal}#nv{width:min(88vw,320px)}}
-@media(max-width:380px){#hd .ib{padding:8px 10px}.ln{grid-template-columns:64px minmax(0,1fr) 78px}}
+@media(max-width:380px){#hd .ib{padding:8px 10px}.ln{grid-template-columns:66px minmax(0,1fr) 80px 40px 40px}}
 @media(max-width:340px){#hd .toplogo{display:none}}
 
 /* --- v3 --- */
@@ -1006,7 +1007,7 @@ if(t==='r')rbd()}
 function add(){const t=V.v;if(t==='c')return go('ce','new');if(t==='x')return nr();if(t==='p')return catAdd();if(t==='g')return plNew();nd(t)}
 function nd(t){const y=new Date().getFullYear(),k=t+y,q=S.seq[k]=(S.seq[k]||0)+1,d={id:nw(),t,num:(t==='d'?'DEV-':'FAC-')+y+'-'+String(q).padStart(3,'0'),date:td(),val:S.cfg.val,cn:'',ca:'',cc:'',ct:'',ce:'',cid:'',sn:'',sa:'',sc:'',o:'',F:[{d:'',q:1,p:''}],M:[{d:'',q:1,p:''}],acc:S.cfg.acc,ap:false,paid:false,pd:'',cost:'',st:'att',tva:S.cfg.tva?n(S.cfg.tvr):0,rm:''};S.docs.unshift(d);save('docs');save('seq');go('e',d.id)}
 function conv(){const d=cur(),y=new Date().getFullYear(),k='f'+y,q=S.seq[k]=(S.seq[k]||0)+1,f=JSON.parse(JSON.stringify(d));Object.assign(f,{id:nw(),t:'f',num:'FAC-'+y+'-'+String(q).padStart(3,'0'),date:td(),ref:d.num,paid:false,pd:''});d.st='fac';S.docs.unshift(f);save('docs');save('seq');go('e',f.id);toast('Facture créée depuis le devis')}
-const ln=(k,l,i)=>`<div class="ln"><input class="dg" list="cat" placeholder="Désignation" value="${esc(l.d)}" oninput="sl('${k}',${i},'d',this.value)"><input inputmode="decimal" placeholder="Qté" value="${esc(l.q)}" oninput="sl('${k}',${i},'q',this.value)"><input id="p${k}${i}" inputmode="decimal" placeholder="Prix €" value="${esc(l.p)}" oninput="sl('${k}',${i},'p',this.value)"><b class="mt" id="m${k}${i}">${E(n(l.q)*n(l.p))}</b><div class="act"><button class="b gh sm" onclick="fv('${k}',${i})"><span>Enregistrer le tarif</span></button><button class="b gh sm" onclick="rl('${k}',${i})"><span>Retirer la ligne</span></button></div></div>`;
+const ln=(k,l,i)=>`<div class="ln"><input class="dg" list="cat" placeholder="Désignation (nom du matériel ou de la prestation)" aria-label="Désignation" value="${esc(l.d)}" oninput="sl('${k}',${i},'d',this.value)"><span class="fl"><small>Qté</small><input inputmode="decimal" aria-label="Quantité" value="${esc(l.q)}" oninput="sl('${k}',${i},'q',this.value)"></span><span class="fl"><small>Prix unit. HT</small><input id="p${k}${i}" inputmode="decimal" aria-label="Prix unitaire HT" value="${esc(l.p)}" oninput="sl('${k}',${i},'p',this.value)"></span><span class="fl mta"><small>Montant</small><b class="mt" id="m${k}${i}">${E(n(l.q)*n(l.p))}</b></span><div class="act"><button class="b gh sm" title="Enregistrer dans mes tarifs" aria-label="Enregistrer dans mes tarifs" onclick="fv('${k}',${i})"><span>★</span></button><button class="b gh sm" title="Retirer la ligne" aria-label="Retirer la ligne" onclick="rl('${k}',${i})"><span>✕</span></button></div></div>`;
 const totH=d=>{const T=tot(d);return `<div class="tr"><span>Fournitures</span><b>${E(sum(d.F))}</b></div><div class="tr"><span>Main-d'œuvre</span><b>${E(sum(d.M))}</b></div>${T.m?`<div class="tr"><span>Remise (${esc(d.rm)} %)</span><b class="rd">− ${E(T.m)}</b></div>`:''}${n(d.tva)?`<div class="tr"><span>Total HT</span><b>${E(T.ht)}</b></div><div class="tr"><span>TVA ${esc(d.tva)} %</span><b>${E(T.tv)}</b></div><div class="tr big"><span>Total TTC</span><b>${E(T.t)}</b></div>`:`<div class="tr big"><span>Total net</span><b>${E(T.t)}</b></div><small class="mu">${esc(S.cfg.mt)}</small>`}<div class="tr"><span>Acompte (${esc(d.acc)} %)</span><b>${E(T.a)}</b></div>${d.ap?`<div class="tr"><span>Acompte reçu</span><b class="ok">− ${E(T.a)}</b></div>`:''}<div class="tr big"><span>Reste à payer</span><b class="${d.paid?'ok':'rd'}">${E(T.r)}</b></div>${d.paid?'<span class="bd st">PAYÉ</span>':''}`};
 function edit(){const d=cur(),f=d.t==='f',I=(l,k,ty='text',x='')=>`<label>${l}<input type="${ty}" ${x} value="${esc(d[k])}" oninput="sd('${k}',this.value)"></label>`;
 return `<datalist id="cat">${S.cat.map(c=>`<option value="${esc(c.d)}">`).join('')}</datalist>
@@ -1015,7 +1016,7 @@ return `<datalist id="cat">${S.cat.map(c=>`<option value="${esc(c.d)}">`).join('
 <h3 style="margin-top:16px">Adresse du chantier</h3>${I('Nom','sn')}${I('Adresse','sa')}${I('Code postal Ville','sc')}<button class="b gh sm" onclick="same()">Identique au client</button></div>
 	${feCard(d)}
 <div class="c"><h3>Objet</h3><textarea rows="3" oninput="sd('o',this.value)">${esc(d.o)}</textarea></div>
-${[['F','Fournitures & matériels'],['M',"Main-d'œuvre & interventions techniques"]].map(([k,h])=>`<div class="c"><h3>${h}</h3>${d[k].map((l,i)=>ln(k,l,i)).join('')}<button class="b gh sm" onclick="al('${k}')">＋ Ajouter une ligne</button>${catSel(k)}</div>`).join('')}
+${[['F','Fournitures & matériels'],['M',"Main-d'œuvre & interventions techniques"]].map(([k,h])=>`<div class="c"><h3 style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><span>${h}</span><small class="mu" style="font-weight:400">${d[k].filter(l=>l.d||n(l.p)).length} ligne(s) · ${E(sum(d[k]))}</small></h3>${d[k].map((l,i)=>ln(k,l,i)).join('')}<button class="b gh sm" onclick="al('${k}')">＋ Ajouter une ligne</button>${catSel(k)}</div>`).join('')}
 <div class="c" id="tots">${totH(d)}</div>
 <div class="c"><h3>Suivi</h3>${f?'':`<label class="tg"><input type="checkbox" ${d.st==='ok'?'checked':''} onchange="sd('st',this.checked?'ok':'att')">Devis accepté</label>`}
 <label class="tg"><input type="checkbox" ${d.ap?'checked':''} onchange="sd('ap',this.checked)">Acompte reçu</label>

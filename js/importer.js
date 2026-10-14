@@ -133,16 +133,17 @@ function imParse(text,filename){
   let ci=-1;for(let k=0;k<flat.length;k++){const m=flat[k].match(cliRe);if(m&&!own(flat[k])){ci=k;if(m[1].trim()&&!/^(adresse|t[ée]l)/i.test(m[1]))cn=m[1].trim();else{for(let j=k+1;j<Math.min(k+4,flat.length);j++){if(flat[j]&&!own(flat[j])&&!/^(adresse|t[ée]l|e-?mail|\d)/i.test(flat[j])&&!/^(mode de r|validit|date|conditions)/i.test(flat[j])){cn=flat[j];ci=j;break}}}break}}
   if(!cn){const k=flat.findIndex((l,i)=>/^(m\.|mr|monsieur|mme|madame|mlle)\b/i.test(l)&&!own(l)&&i>0);if(k>-1){cn=flat[k];ci=k}}
   cn=cn.split(/\s{2,}|\t|\s+(?:adresse|t[ée]l|e-?mail)\b/i)[0].replace(/^(?:nom|client)\s*[:\-]\s*/i,'').trim();
-  /* Bloc client relu en une seule ligne : « Nom : XAdresse : YCode postal Ville : ZTél. : … » */
-  const cb=all.match(/nom\s*[:\-]\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’ .\-]{1,50}?)(?=\s*adresse\s*[:\-]|\s*code postal|\s*t[ée]l|\s*e-?mail|$)/i);
-  if(cb&&!own(cb[1])){const v=cb[1].trim();if(v.length<=60&&!/\d{5}/.test(v)){cn=v;if(ci<0)ci=flat.findIndex(l=>l.includes(cb[0].slice(0,Math.min(40,cb[0].length))))}}
+  /* Bloc client relu : « Nom : X » seul, ou « Nom : XAdresse : Y… » sur une ligne collée */
+  const cb=all.match(/nom\s*[:\-]\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’ .\-]{1,50}?)(?=\s*adresse\s*[:\-]|\s*code postal|\s*t[ée]l|\s*e-?mail|\s*$)/im);
+  if(cb&&!own(cb[1])){const v=cb[1].trim();if(v.length<=60&&!/\d{5}/.test(v)&&!/^(devis|facture|rapport)/i.test(v)){cn=v;if(ci<0)ci=flat.findIndex(l=>l.includes('Nom'))}}
   if(cn.length>60||/\d{5}/.test(cn)||/^(devis|facture|rapport)/i.test(cn))cn='';
   const zone=(ci>-1?flat.slice(ci,ci+8):flat.slice(0,30)).filter(l=>!own(l)).join('\n');
   const zoneAll=flat.filter(l=>!own(l)).join('\n');
   const em=(zone.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)||zoneAll.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)||[''])[0];ce=em;
   const ph=(zone.match(/(?:\+33\s?[1-9]|0[1-9])(?:[ .\-]?\d{2}){4}/)||zoneAll.match(/(?:\+33\s?[1-9]|0[1-9])(?:[ .\-]?\d{2}){4}/)||[''])[0];ct=ph;
-  const st=zone.match(IM_STREET)||(ci>-1?null:zoneAll.match(IM_STREET));if(st)ca=st[1].replace(IM_CITY,'').replace(/[,\s]+$/,'').trim();
-  const labAdr=zone.match(/adresse(?: de facturation| du client)?\s*[:\-]\s*([^\n]+)/i)||all.match(/adresse\s*[:\-]\s*(\d{1,4}[^\n]{2,50}?)(?=\s*code postal|\s*t[ée]l|\s*e-?mail|$)/i);if(!ca&&labAdr)ca=labAdr[1].replace(IM_CITY,'').replace(/[,\s]+$/,'').trim();
+  const adrClean=s=>s.replace(IM_CITY,'').replace(/code postal(?:\s*ville)?\s*[:\-]?\s*$/i,'').replace(/[,\s]+$/,'').trim();
+  const st=zone.match(IM_STREET)||(ci>-1?null:zoneAll.match(IM_STREET));if(st)ca=adrClean(st[1]);
+  const labAdr=zone.match(/adresse(?: de facturation| du client)?\s*[:\-]\s*([^\n]+)/i)||all.match(/adresse\s*[:\-]\s*(\d{1,4}[^\n]{2,50}?)(?=\s*code postal|\s*t[ée]l|\s*e-?mail|$)/i);if(!ca&&labAdr)ca=adrClean(labAdr[1]);
   const cm=(st?zone.slice(zone.indexOf(st[0])):zone).match(IM_CITY)||zone.match(IM_CITY)||all.match(/code postal(?:\s*ville)?\s*[:\-]\s*(\d{5})\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’ \-]{1,40}?)(?=\s*t[ée]l|\s*e-?mail|\s*$)/i);if(cm)cc=cm[1]+' '+cm[2].trim().replace(/\s+(t[ée]l|e-?mail).*$/i,'');
   if(!cn&&ci<0)W.push('Client non reconnu : saisissez-le ci-dessous.');
   /* chantier / objet */
