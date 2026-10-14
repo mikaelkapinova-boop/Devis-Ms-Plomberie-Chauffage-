@@ -105,7 +105,7 @@ async function pdfExtract(f,prog){
   const pdf=await G.pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
   const rows=[],N=Math.min(pdf.numPages,12);
   for(let p=1;p<=N;p++){const pg=await pdf.getPage(p),tc=await pg.getTextContent();
-    rows.push(...rowsOf(tc.items.map(i=>({s:i.str,x:i.transform[4],y:i.transform[5]+(N-p)*-2000,w:i.width||0,h:Math.abs(i.height||i.transform[3]||10)}))));prog(p/N*.3)}
+    rows.push(...rowsOf(tc.items.map(i=>({s:i.str,x:i.transform[4],y:i.transform[5]+(N-p)*2000,w:i.width||0,h:Math.abs(i.height||i.transform[3]||10)}))));prog(p/N*.3)}
   let text=rowsText(rows);
   if(text.replace(/\s/g,'').length>=40)return{text,rows};
   // PDF image (ex. généré par l'app) → OCR page par page
@@ -198,18 +198,42 @@ function classify(l,ctx){
   if(RX_MV.test(d))m+=3;if(l.u==='h')m+=3;if(RX_M.test(d))m+=1;if(RX_F.test(d))f+=2;if(/^fourniture/i.test(d)&&!/pose/i.test(d))f+=2;
   if(/^(u|m|ml|kg|l|m²)$/.test(l.u))f+=1;
   if(m!==f)return m>f?'M':'F';return /^(u|m|ml|kg|l|m²)$/.test(l.u)?'F':'M'}
+function isSummaryLine(value){
+  const t=norm(value);
+  const aggregate=/\\b(?:sous\\s*total|total(?:e|aux)?|montant|cumul)\\b/.test(t);
+  const category=/\\b(?:main\\s+d\\s*oeuvre|m\\s*o|prestations?|fournitures?|materiels?|services?|travaux|pose|deplacement)\\b/.test(t);
+  return aggregate&&category;
+}
 function parseItems(L){
   let s=L.findIndex(r=>HEAD.test(r.t)&&HEAD2.test(r.t)&&r.t.length<140);const strict=s<0;let e=L.length;
   for(let i=s+1;i<L.length;i++)if(END.test(L[i].t)){e=i;break}
   const items=[];let ctx=null,last=null,cont=0;
+  const seenSubtotals=new Set();let recap=false;
   for(let k=Math.max(0,s-3);k<s;k++){const h=L[k];if(h&&h.c.length===1&&HEADING.test(h.t))ctx=/fourn|mat[ée]ri/i.test(h.t)?'F':'M'}
-  for(let i=s+1;i<e;i++){const r=L[i],t=r.t;if(SKIP.test(t))continue;
+  for(let i=s+1;i<e;i++){
+    const r=L[i],t=r.t,tn=norm(t);
+    const supplySubtotal=/^sous\\s*total\\s+fournitures?\\b/.test(tn);
+    const labourSubtotal=/^sous\\s*total\\s+main\\s+d\\s*oeuvre\\b/.test(tn);
+    const labourGrandTotal=/^main\\s+d\\s*oeuvre\\s+totale?\\b/.test(tn);
+    // When a supplies subtotal appears again after labour subtotals, the document is in its final recap.
+    if(supplySubtotal&&seenSubtotals.has('F')&&seenSubtotals.has('M'))recap=true;
+    if(labourGrandTotal&&seenSubtotals.has('M'))recap=true;
+    if(supplySubtotal)seenSubtotals.add('F');
+    if(labourSubtotal)seenSubtotals.add('M');
+    if(recap)continue;
+    if(SKIP.test(t)||isSummaryLine(t))continue;
     if(HEAD.test(t)&&HEAD2.test(t)&&t.length<140){last=null;continue}
     if(r.c.length===1&&HEADING.test(t)){ctx=/fourn|mat[ée]ri/i.test(t)?'F':'M';last=null;continue}
     const it=lineItem(r,strict);
-    if(it){it.ctx=ctx;items.push(it);last=it;cont=0;continue}
-    if(last&&cont<2&&t.length<100&&!STOP_LBL.test(t)&&!META.test(t)&&!ADDR.test(t)&&!/\d{2}\s?[\/.]\s?\d{2}/.test(t)&&/[a-zà-ÿ]{3}/i.test(t)){last.des+=' – '+t.replace(/^[-–•*\s]+/,'');cont++}}
-  items.forEach(l=>{l.kind=classify(l,l.ctx)});return items}
+    if(it){
+      // A summary label must never be converted into a billable detail line.
+      if(isSummaryLine(it.des))continue;
+      it.ctx=ctx;items.push(it);last=it;cont=0;continue
+    }
+    if(last&&cont<2&&t.length<100&&!STOP_LBL.test(t)&&!META.test(t)&&!ADDR.test(t)&&!/\\d{2}\\s?[\\/.]\\s?\\d{2}/.test(t)&&/[a-zà-ÿ]{3}/i.test(t)){last.des+=' – '+t.replace(/^[-–•*\\s]+/,'');cont++}
+  }
+  items.forEach(l=>{l.kind=classify(l,l.ctx)});return items
+}
 function money(t){const m=t.match(/(-?\d[\d\s.]*(?:,\d{1,2})?)\s*(?:€|eur\w*)?\s*$/i);return m?pn(m[1]):NaN}
 function parseTotals(L){const T={ht:null,ttc:null,tva:null,rate:null,rmPct:null,rm:null};
   for(const r of L){const t=r.t,m=money(t),pc=(t.match(/(\d{1,2}(?:[.,]\d+)?)\s*%/)||[])[1];
@@ -240,14 +264,22 @@ function clientFrom(block){const c={name:'',addr:'',cp:'',ville:'',tel:'',email:
     c.addr=appendUniqueText(c.addr,s)}
   c.name=dedupeRepeatedPhrase(c.name);c.addr=dedupeRepeatedPhrase(c.addr);
   return c}
-function blockAfter(L,i,ci,max){const out=[],r0=L[i],x0=r0.xs?r0.xs[ci]:null,right=!r0.xs&&ci>0;let miss=0;
-  for(let k=i+1;k<L.length&&out.length<max;k++){const r=L[k];let s='';
+function blockAfter(L,i,ci,max){
+  const out=[],r0=L[i],x0=r0.xs?r0.xs[ci]:null;
+  const x1=r0.xs&&ci+1<r0.xs.length?r0.xs[ci+1]-8:Infinity;
+  const right=!r0.xs&&ci>0;let miss=0;
+  for(let k=i+1;k<L.length&&out.length<max;k++){
+    const r=L[k];let s='';
     if(HEAD.test(r.t)&&HEAD2.test(r.t))break;
-    if(x0!=null&&r.xs)s=r.c.filter((c,j)=>r.xs[j]>=x0-12).join(' ');
-    else if(right){if(r.c.length<2)break;s=r.c[r.c.length-1]}else s=r.c[0];
+    if(x0!=null&&r.xs)s=r.c.filter((cell,j)=>r.xs[j]>=x0-12&&r.xs[j]<x1).join(' ');
+    else if(right){if(r.c.length<2)break;s=r.c[r.c.length-1]}
+    else s=r.c[0];
     s=(s||'').trim();if(!s){if(++miss>2)break;continue}
-    if(STOP_LBL.test(s)||CLI_LBL.test(s)||SITE_LBL.test(s))break;out.push(s)}
-  return out}
+    if(STOP_LBL.test(s)||CLI_LBL.test(s)||SITE_LBL.test(s))break;
+    out.push(s);
+  }
+  return out;
+}
 function findClient(L){let cli=null,site=null;
   // Client fields are taken only from an explicit client/destination block.
   // This avoids mistaking the company, issuer, or another contact for the customer.
