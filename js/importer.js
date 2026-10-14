@@ -110,7 +110,7 @@ const END=/^(?:total\s*(?:h\.?t|ttc|net|g[ée]n[ée]ral)|net\s*(?:[àa]\s*payer|
 const SKIP=/^(?:sous[- ]?total|report|suite|page\s*\d)/i;
 const HEAD=/(d[ée]signation|description|libell[ée]|prestations?|article)/i,HEAD2=/(qt[ée]|quantit|p\.?\s?u|prix|montant|total|unit)/i;
 const HEADING=/^[-–•*#\s]*(fournitures?|mat[ée]riels?|mat[ée]riaux|main[- ]d['’]?\s?(?:œ|oe)uvre|prestations?|services?|travaux|d[ée]placements?)\b[^0-9€]{0,50}$/i;
-const CLI_LBL=/^(?:nom\s+du\s+)?(?:c[l1i]{1,2}[eo]nt|destinataire|factur[ée]e?\s*(?:à|a)|adress[ée]e?\s*(?:à|a)|bill\s*to)\s*[:\-]?\s*(.*)$/i;
+const CLI_LBL=/^(?:nom\s+du\s+)?(?:c[l1i]{1,2}[eo]nt|destinataire|factur[ée]e?\s*(?:à|a)|adress[ée]e?\s*(?:à|a)|bill\s*to|à\s*l['’]attention\s+de|intervention\s+chez)\s*[:\-]?\s*(.*)$/i;
 const SITE_LBL=/^(?:adresse\s*(?:du\s*)?chantier|chantier|lieu\s*(?:d['’]\s*)?intervention|adresse\s*d['’]\s*intervention)\s*[:\-]?\s*(.*)$/i;
 const STOP_LBL=/^(?:d[ée]signation|description|libell[ée]|date\b|n[°o]\b|num[ée]ro|objet|validit[ée]|[ée]ch[ée]ance|r[ée]f[ée]rence|qt[ée]|quantit|total|conditions|paiement|mode\s+de|[ée]metteur|exp[ée]diteur|prestataire|fournisseur|main[- ]d|fournitures?|devis\b|facture\b|rapport\b)/i;
 const MOIS={janvier:1,fevrier:2,février:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,août:8,septembre:9,octobre:10,novembre:11,decembre:12,décembre:12};
@@ -206,15 +206,17 @@ function blockAfter(L,i,ci,max){const out=[],r0=L[i],x0=r0.xs?r0.xs[ci]:null,rig
     if(STOP_LBL.test(s)||CLI_LBL.test(s)||SITE_LBL.test(s))break;out.push(s)}
   return out}
 function findClient(L){let cli=null,site=null;
+  // Client fields are taken only from an explicit client/destination block.
+  // This avoids mistaking the company, issuer, or another contact for the customer.
   for(let i=0;i<L.length&&!(cli&&site);i++){const r=L[i];
-    for(let ci=0;ci<r.c.length;ci++){const cell=r.c[ci];if(cell.length>80)continue;let m;
-      if(!cli&&(m=cell.match(CLI_LBL))){const b=blockAfter(L,i,ci,6);if(m[1].trim())b.unshift(m[1].trim());const c=clientFrom(b);if(c.name&&!isMine(c.name))cli=c}
-      else if(!site&&(m=cell.match(SITE_LBL))){const b=blockAfter(L,i,ci,3).filter(x=>!/^nom\s*:/i.test(x));if(m[1].trim())b.unshift(m[1].trim());const c=clientFrom(['x'].concat(b));if(c.addr||c.cp)site=c}}}
-  if(!cli){const k=L.slice(0,45).findIndex(r=>/^(?:m\.|mr|mme|mlle|monsieur|madame|soci[ée]t[ée]|sarl|sas|eurl|sci)\b/i.test(r.c[r.c.length-1])&&!isMine(r.t));
-    if(k>=0){const b=[L[k].c[L[k].c.length-1]];for(let j=k+1;j<Math.min(L.length,k+4);j++){const s=L[j].c[L[j].c.length-1];if(STOP_LBL.test(s))break;b.push(s)}cli=clientFrom(b)}}
+    for(let ci=0;ci<r.c.length;ci++){const cell=r.c[ci];if(cell.length>120)continue;let m;
+      if(!cli&&(m=cell.match(CLI_LBL))){const b=blockAfter(L,i,ci,8);if(m[1].trim())b.unshift(m[1].trim());const c=clientFrom(b);if(c.name&&!isMine(c.name))cli=c}
+      else if(!site&&(m=cell.match(SITE_LBL))){const b=blockAfter(L,i,ci,4).filter(x=>!/^nom\s*:/i.test(x));if(m[1].trim())b.unshift(m[1].trim());const c=clientFrom(['x'].concat(b));if(c.addr||c.cp)site=c}
+    }
+  }
   cli=cli||{name:'',addr:'',cp:'',ville:'',tel:'',email:''};
-  if(!cli.email){for(const r of L){const m=r.t.match(EMAIL);if(m&&!isMine(m[0])){cli.email=m[0];break}}}
-  const addrs=[];if(cli.addr||cli.cp)addrs.push({t:'Facturation',addr:cli.addr,cp:cli.cp,ville:cli.ville});
+  const addrs=[];
+  if(cli.addr||cli.cp)addrs.push({t:'Facturation',addr:cli.addr,cp:cli.cp,ville:cli.ville});
   if(site&&(site.addr||site.cp))addrs.push({t:'Chantier',addr:site.addr,cp:site.cp,ville:site.ville});
   return{cli,addrs}}
 function detectType(L,name){const head=L.slice(0,18).map(r=>r.t).join('\n')+'\n'+name,all=L.map(r=>r.t).join('\n'),n=(rx,s)=>(s.match(rx)||[]).length;
