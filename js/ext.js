@@ -242,3 +242,29 @@ function openFullImport(){if(typeof render==='function'){V={v:'i'};render();scro
 
 function importPage(){ return getImportHTML(); }
 
+
+
+/* Synchronisation de l'état lorsqu'un autre onglet de l'application est modifié. */
+(function(){
+  const storageKeys = {
+    ms_clients:'clients', ms_cat:'cat', ms_docs:'docs', ms_rep:'rep',
+    ms_seq:'seq', ms_cfg:'cfg', ms_plan:'plan', ms_chat:'chat', ms_ph:'ph'
+  };
+  window.addEventListener('storage', function(event){
+    const key = storageKeys[event.key];
+    if(!key || event.newValue == null) return;
+    try{
+      const value = JSON.parse(event.newValue);
+      if(key === 'cfg'){
+        S.cfg = Object.assign({}, S.cfg || {}, value || {});
+        if(typeof cfgInit === 'function') cfgInit();
+        if(typeof applyTheme === 'function') applyTheme();
+      } else {
+        S[key] = value;
+      }
+      if(typeof render === 'function') render();
+    }catch(error){
+      console.warn('Synchronisation Ms Devis impossible :', error);
+    }
+  });
+})();
