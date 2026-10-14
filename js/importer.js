@@ -103,17 +103,62 @@ function imgCanvas(f){return new Promise((ok,no)=>{const u=URL.createObjectURL(f
 async function pdfExtract(f,prog){
   await loadLib(CDN.pdf,()=>G.pdfjsLib);G.pdfjsLib.GlobalWorkerOptions.workerSrc=CDN.pdfw;
   const pdf=await G.pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
-  const rows=[],N=Math.min(pdf.numPages,12);
-  for(let p=1;p<=N;p++){const pg=await pdf.getPage(p),tc=await pg.getTextContent();
-    rows.push(...rowsOf(tc.items.map(i=>({s:i.str,x:i.transform[4],y:i.transform[5]+(N-p)*2000,w:i.width||0,h:Math.abs(i.height||i.transform[3]||10)}))));prog(p/N*.3)}
-  let text=rowsText(rows);
-  if(text.replace(/\s/g,'').length>=40)return{text,rows};
-  // PDF image (ex. généré par l'app) → OCR page par page
-  const parts=[],P=Math.min(pdf.numPages,4);
-  for(let p=1;p<=P;p++){const pg=await pdf.getPage(p),vp=pg.getViewport({scale:2.5}),cv=document.createElement('canvas');
-    cv.width=vp.width;cv.height=vp.height;await pg.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
-    parts.push(await ocr(cv,q=>prog(.3+((p-1)+q)/P*.7)))}
-  return{text:parts.map(x=>x.text).join('\n'),rows:parts.every(x=>x.rows)?[].concat(...parts.map(x=>x.rows)):null}}
+  const N=Math.min(pdf.numPages,12),allRows=[];
+  for(let p=1;p<=N;p++){
+    const pg=await pdf.getPage(p),tc=await pg.getTextContent();
+    const textRows=rowsOf(tc.items.map(i=>({s:i.str,x:i.transform[4],y:i.transform[5]+(N-p)*2000,w:i.width||0,h:Math.abs(i.height||i.transform[3]||10)})));
+    allRows.push(...textRows);
+    // OCR every page as well: text PDFs may contain handwriting added over the digital text layer.
+    const vp=pg.getViewport({scale:2.8}),cv=document.createElement('canvas');
+    cv.width=vp.width;cv.height=vp.height;
+    const g=cv.getContext('2d',{willReadFrequently:true});
+    await pg.render({canvasContext:g,viewport:vp}).promise;
+    // Increase contrast while preserving dark pen strokes and small handwritten characters.
+    try{
+      const im=g.getImageData(0,0,cv.width,cv.height),d=im.data;
+      for(let j=0;j<d.length;j+=4){
+        const lum=.299*d[j]+.587*d[j+1]+.114*d[j+2];
+        const v=lum<150?Math.max(0,(lum-15)*.82):Math.min(255,150+(lum-150)*1.7);
+        d[j]=d[j+1]=d[j+2]=v;
+      }
+      g.putImageData(im,0,0);
+    }catch(_){}
+    let scanned=null;
+    try{scanned=await ocr(cv,q=>prog(((p-1)+q)/N));}catch(_){}
+    if(scanned&&scanned.rows){
+      const ocrRows=scanned.rows.map(r=>({
+        c:r.c,xs:r.xs,
+        _ocr:true,
+        _rawY:r.y,
+        y:(r.y||0)/2.8+(N-p)*2000
+      }));
+      // Keep OCR rows only when the text layer doesn't already contain that content.
+      // This retains handwritten additions without duplicating printed PDF text.
+      for(const or of ocrRows){
+        const ot=norm(or.c.join(' '));
+        if(!ot)continue;
+        const duplicate=textRows.some(tr=>{
+          const tt=norm(tr.c.join(' '));
+          if(!tt)return false;
+          if(tt===ot||tt.includes(ot)||ot.includes(tt))return true;
+          const a=tt.split(' ').filter(Boolean),bb=new Set(ot.split(' ').filter(Boolean));
+          const common=a.filter(w=>bb.has(w)).length;
+          return common>=3&&common/Math.max(a.length,bb.size)>=.72;
+        });
+        if(!duplicate){
+          or.c=or.c.map(dedupeRepeatedPhrase);
+          allRows.push(or);
+        }
+      }
+    }
+    prog(p/N);
+  }
+  // Restore page/line order and avoid exact text-layer overlays.
+  const rows=allRows.sort((a,b)=>(b.y||0)-(a.y||0)||((a.xs&&a.xs[0])||0)-((b.xs&&b.xs[0])||0));
+  const text=rowsText(rows);
+  if(text.replace(/\s/g,'').length>=1)return{text,rows};
+  return{text:'',rows:[]};
+}
 async function docxExtract(f){
   await loadLib(CDN.mam,()=>G.mammoth);
   const r=await G.mammoth.convertToHtml({arrayBuffer:await f.arrayBuffer()});
