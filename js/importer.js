@@ -20,6 +20,30 @@ const CDN={
 const H=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Math.random().toString(36).slice(2,9);
 const norm=s=>String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+function dedupeRepeatedPhrase(value){
+  let words=String(value==null?'':value).replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim().split(' ').filter(Boolean);
+  for(let pass=0;pass<8;pass++){
+    let changed=false;
+    outer: for(let start=0;start<words.length;start++){
+      const max=Math.floor((words.length-start)/2);
+      for(let len=max;len>=2;len--){
+        const a=words.slice(start,start+len).map(norm).join('|');
+        const b=words.slice(start+len,start+2*len).map(norm).join('|');
+        if(a&&a===b){
+          words.splice(start+len,len);
+          const prev=words[start+len-1],next=words[start+len];
+          if(prev&&next){
+            const pn=norm(prev),nn=norm(next);
+            if(nn.length>=4&&nn.length<pn.length&&pn.startsWith(nn))words.splice(start+len,1);
+          }
+          changed=true;break outer;
+        }
+      }
+    }
+    if(!changed)break;
+  }
+  return words.join(' ').replace(/\s+([,.;:])/g,'$1').replace(/([,.;:])(?=\S)/g,'$1 ').replace(/\s+/g,' ').trim();
+}
 const r2=v=>Math.round((v+Number.EPSILON)*100)/100;
 const eur=v=>(isFinite(v)?v:0).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
 const today=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
@@ -45,13 +69,23 @@ function kindOf(f){const e=ext(f.name),t=f.type||'';
 function rowsOf(items){ // items:{s,x,y,w,h} ; y décroissant = haut → bas
   const its=items.filter(i=>i.s&&i.s.trim()).sort((a,b)=>b.y-a.y||a.x-b.x),rs=[];
   for(const it of its){const r=rs[rs.length-1];if(r&&Math.abs(r.y-it.y)<=Math.max(2.5,it.h*.5))r.it.push(it);else rs.push({y:it.y,it:[it]})}
-  return rs.map(r=>{r.it.sort((a,b)=>a.x-b.x);const cells=[];let cur='',end=null,x0=0;const h=Math.max(r.it[0].h,6);
+  return rs.map(r=>{
+    r.it.sort((a,b)=>a.x-b.x);
+    // Some PDFs expose the same visual text twice at the same coordinates.
+    const unique=[];
+    for(const item of r.it){
+      const key=norm(item.s);
+      const overlaid=unique.some(prev=>norm(prev.s)===key&&Math.abs(prev.x-item.x)<=2&&Math.abs(prev.y-item.y)<=Math.max(2.5,item.h*.5));
+      if(!overlaid)unique.push(item);
+    }
+    r.it=unique;
+    const cells=[];let cur='',end=null,x0=0;const h=Math.max(r.it[0]?.h||6,6);
     for(const t of r.it){
       if(end===null)x0=t.x;
-      else if(t.x-end>h*1.0){cells.push({s:cur.trim(),x:x0});cur='';x0=t.x}
+      else if(t.x-end>h*1.0){cells.push({s:dedupeRepeatedPhrase(cur.trim()),x:x0});cur='';x0=t.x}
       else if(t.x-end>h*.18&&!/\s$/.test(cur)&&!/^\s/.test(t.s))cur+=' ';
-      cur+=t.s;end=t.x+t.w}
-    cells.push({s:cur.trim(),x:x0});const f=cells.filter(c=>c.s);
+      cur+=t.s;end=Math.max(end===null?-Infinity:end,t.x+t.w)}
+    cells.push({s:dedupeRepeatedPhrase(cur.trim()),x:x0});const f=cells.filter(c=>c.s);
     return{c:f.map(c=>c.s),xs:f.map(c=>c.x)}}).filter(r=>r.c.length)}
 const rowsText=rows=>rows.map(r=>r.c.join('  ')).join('\n');
 const toRows=t=>String(t||'').split(/\r?\n/).map(s=>s.replace(/\u00a0/g,' ').trim()).filter(Boolean).map(s=>({c:s.split(/\s{2,}|\t+/).map(x=>x.trim()).filter(Boolean),xs:null}));
@@ -107,7 +141,7 @@ const UNIT_GLUE=/^(\d+(?:[.,]\d+)?)(h|u|m|ml|m2|m²|kg|l|j)$/i;
 const META=/siret|siren|\biban\b|\bbic\b|\bt[ée]l\b|t[ée]l[ée]phone|tva\s*intra|\bpage\s*\d|\brcs\b|capital\s|www\.|@|\bnaf\b|\bape\b|assurance|d[ée]cennale|mentions/i;
 const ADDR=/^\d{1,4}\s*(?:bis|ter)?[, ]+\s*(?:rue|avenue|av\.?|bd|boulevard|chemin|impasse|all[ée]e|place|route|r[ée]sidence|quai|cours|passage|square|lotissement)\b|\b\d{5}\s+[A-ZÀ-Ý][A-Za-zÀ-ÿ' \-]+$/i;
 const END=/^(?:total\s*(?:h\.?t|ttc|net|g[ée]n[ée]ral)|net\s*(?:[àa]\s*payer|h\.?t)|montant\s*(?:h\.?t|ttc|total|tva)|base\s*h\.?t|tva\b|conditions|bon\s*pour\s*accord|reste\s*(?:[àa]\s*payer|d[ûu])|acompte|r[èe]glement|mode\s*de\s*paiement|rib\b|iban)/i;
-const SKIP=/^(?:sous[- ]?total|report|suite|page\s*\d)/i;
+const SKIP=/^(?:sous[- ]?total|sous\s+total|subtotal|report|suite|page\s*\d|(?:total|montant)\b.*\b(?:main[- ]?d['’]?\s?(?:œ|oe)uvre|m\.?o\.?|prestations?|fournitures?|mat[ée]riels?|services?|travaux|pose)\b|(?:main[- ]?d['’]?\s?(?:œ|oe)uvre|m\.?o\.?|prestations?|fournitures?|mat[ée]riels?|services?|travaux|pose)\b.*\b(?:sous[- ]?total|total|montant)\b)/i;
 const HEAD=/(d[ée]signation|description|libell[ée]|prestations?|article)/i,HEAD2=/(qt[ée]|quantit|p\.?\s?u|prix|montant|total|unit)/i;
 const HEADING=/^[-–•*#\s]*(fournitures?|mat[ée]riels?|mat[ée]riaux|main[- ]d['’]?\s?(?:œ|oe)uvre|prestations?|services?|travaux|d[ée]placements?)\b[^0-9€]{0,50}$/i;
 const CLI_LBL=/^(?:nom\s+du\s+)?(?:c[l1i]{1,2}[eo]nt|destinataire|factur[ée]e?\s*(?:à|a)|adress[ée]e?\s*(?:à|a)|bill\s*to|à\s*l['’]attention\s+de|intervention\s+chez)\s*[:\-]?\s*(.*)$/i;
@@ -187,15 +221,24 @@ function parseTotals(L){const T={ht:null,ttc:null,tva:null,rate:null,rmPct:null,
   if(T.rate==null){const snap=x=>{for(const a of[0,2.1,5.5,8.5,10,20])if(Math.abs(x-a)<.7)return a;return r2(x)};
     if(T.tva!=null&&T.ht>0)T.rate=snap(T.tva/T.ht*100);else if(T.ttc>0&&T.ht>0)T.rate=snap((T.ttc/T.ht-1)*100)}
   return T}
+function appendUniqueText(existing,next){
+  const a=dedupeRepeatedPhrase(existing),b=dedupeRepeatedPhrase(next),na=norm(a),nb=norm(b);
+  if(!a)return b;if(!b)return a;
+  if(na===nb||na.includes(nb))return a;
+  if(nb.includes(na))return b;
+  return a+', '+b;
+}
 function clientFrom(block){const c={name:'',addr:'',cp:'',ville:'',tel:'',email:''};
-  for(const raw of block){let s=String(raw).trim();if(!s||isMine(s))continue;
+  for(const raw of block){let s=dedupeRepeatedPhrase(String(raw).trim());if(!s||isMine(s))continue;
     const em=s.match(EMAIL);if(em&&!c.email){c.email=em[0];s=s.replace(em[0],'').replace(/e-?mail\s*:?/i,'').trim()}
     const ph=s.match(PHONE);if(ph&&!c.tel){c.tel=fmtTel(ph[0]);s=s.replace(ph[0],'').replace(/(t[ée]l[ée]?(?:phone)?|mob(?:ile)?|port(?:able)?)\.?\s*:?/i,'').trim()}
-    s=s.replace(/^(?:nom|adresse|adr\.?|ville|code\s*postal)\s*:\s*/i,'').replace(/^[:\-–\s]+|[:\-–\s]+$/g,'');if(!s)continue;
+    s=dedupeRepeatedPhrase(s.replace(/^(?:nom|adresse|adr\.?|ville|code\s*postal)\s*:\s*/i,'').replace(/^[:\-–\s]+|[:\-–\s]+$/g,''));if(!s)continue;
+    if(c.name&&norm(s)===norm(c.name))continue;
     const cv=s.match(/\b(\d{5})\s+([A-Za-zÀ-ÿ'’\- ]{2,})$/);
-    if(cv&&!c.cp){c.cp=cv[1];c.ville=cv[2].trim();s=s.replace(cv[0],'').trim();if(s)c.addr=c.addr?c.addr+', '+s:s;continue}
+    if(cv&&!c.cp){c.cp=cv[1];c.ville=cv[2].trim();s=s.replace(cv[0],'').trim();if(s)c.addr=appendUniqueText(c.addr,s);continue}
     if(!c.name){c.name=s;continue}
-    c.addr=c.addr?c.addr+', '+s:s}
+    c.addr=appendUniqueText(c.addr,s)}
+  c.name=dedupeRepeatedPhrase(c.name);c.addr=dedupeRepeatedPhrase(c.addr);
   return c}
 function blockAfter(L,i,ci,max){const out=[],r0=L[i],x0=r0.xs?r0.xs[ci]:null,right=!r0.xs&&ci>0;let miss=0;
   for(let k=i+1;k<L.length&&out.length<max;k++){const r=L[k];let s='';
@@ -228,7 +271,7 @@ function detectNum(L,name){const head=L.slice(0,30).map(r=>r.t).join('\n');
   const rx=[/\b((?:DEV|FAC|FACT|FA|RAP|RI|DE)[-_/ ]?\d{4}[-_/ ]?\d{1,6})\b/i,/(?:devis|facture|rapport)\s*(?:n[°o]|num[ée]ro|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-_/.]{2,})/i,/n[°o]\s*(?:de\s*)?(?:devis|facture)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-_/.]{2,})/i];
   for(const r of rx){const m=head.match(r)||name.match(r);if(m)return m[1].toUpperCase().replace(/[_ /]/g,'-')}return''}
 function parse(text,name,rowsIn){
-  const L=(rowsIn&&rowsIn.length?rowsIn:toRows(text)).filter(r=>r.c&&r.c.length);L.forEach(r=>{r.t=r.c.join(' ').replace(/\s+/g,' ').trim()});
+  const L=(rowsIn&&rowsIn.length?rowsIn:toRows(text)).filter(r=>r.c&&r.c.length);L.forEach(r=>{r.c=r.c.map(dedupeRepeatedPhrase).filter(Boolean);r.t=dedupeRepeatedPhrase(r.c.join(' ')).replace(/\s+/g,' ').trim()});
   const type=detectType(L,name||''),num=detectNum(L,name||''),top=L.slice(0,40);
   let date=null,due=null;
   for(const r of top){const ds=datesIn(r.t);if(!ds.length)continue;
