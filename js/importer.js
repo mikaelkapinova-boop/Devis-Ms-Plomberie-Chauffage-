@@ -199,38 +199,43 @@ function classify(l,ctx){
   if(/^(u|m|ml|kg|l|m²)$/.test(l.u))f+=1;
   if(m!==f)return m>f?'M':'F';return /^(u|m|ml|kg|l|m²)$/.test(l.u)?'F':'M'}
 function isSummaryLine(value){
-  const t=norm(value);
-  const aggregate=/\\b(?:sous\\s*total|total(?:e|aux)?|montant|cumul)\\b/.test(t);
-  const category=/\\b(?:main\\s+d\\s*oeuvre|m\\s*o|prestations?|fournitures?|materiels?|services?|travaux|pose|deplacement)\\b/.test(t);
-  return aggregate&&category;
+  const t=norm(value).replace(/[^a-z0-9]+/g,' ').trim();
+  return (/^(?:sous total|total|totale|montant|cumul)\b/.test(t)&&
+    /\b(?:main d oeuvre|fournitures?|materiels?|prestations?|services?|travaux|deplacement|pose)\b/.test(t))
+    || /^(?:main d oeuvre totale?|total main d oeuvre|deplacement)$/.test(t)
+    || /^(?:total net du devis|total ht|total ttc|total net|total general)$/.test(t);
 }
 function parseItems(L){
-  let s=L.findIndex(r=>HEAD.test(r.t)&&HEAD2.test(r.t)&&r.t.length<140);const strict=s<0;let e=L.length;
-  for(let i=s+1;i<L.length;i++)if(END.test(L[i].t)){e=i;break}
+  let s=L.findIndex(r=>HEAD.test(r.t)&&HEAD2.test(r.t)&&r.t.length<140);
+  const strict=s<0;let e=L.length;
+  for(let i=Math.max(0,s+1);i<L.length;i++)if(END.test(L[i].t)){e=i;break}
   const items=[];let ctx=null,last=null,cont=0;
-  const seenSubtotals=new Set();let recap=false;
+  let sawLabourSection=false,sawLabourSubtotal=false,sawSupplySubtotal=false,recap=false;
   for(let k=Math.max(0,s-3);k<s;k++){const h=L[k];if(h&&h.c.length===1&&HEADING.test(h.t))ctx=/fourn|mat[ée]ri/i.test(h.t)?'F':'M'}
-  for(let i=s+1;i<e;i++){
-    const r=L[i],t=r.t,tn=norm(t);
-    const supplySubtotal=/^sous\\s*total\\s+fournitures?\\b/.test(tn);
-    const labourSubtotal=/^sous\\s*total\\s+main\\s+d\\s*oeuvre\\b/.test(tn);
-    const labourGrandTotal=/^main\\s+d\\s*oeuvre\\s+totale?\\b/.test(tn);
-    // When a supplies subtotal appears again after labour subtotals, the document is in its final recap.
-    if(supplySubtotal&&seenSubtotals.has('F')&&seenSubtotals.has('M'))recap=true;
-    if(labourGrandTotal&&seenSubtotals.has('M'))recap=true;
-    if(supplySubtotal)seenSubtotals.add('F');
-    if(labourSubtotal)seenSubtotals.add('M');
+  for(let i=Math.max(0,s+1);i<e;i++){
+    const r=L[i],t=r.t,tn=norm(t).replace(/[^a-z0-9]+/g,' ').trim();
+    const supplySubtotal=/^sous total fournitures?\b/.test(tn);
+    const labourSubtotal=/^sous total main d oeuvre\b/.test(tn);
+    const labourGrandTotal=/^main d oeuvre totale?\b/.test(tn);
+    const finalTotal=/^(?:total net du devis|total general|total ttc|total ht|net a payer)\b/.test(tn);
+    if(supplySubtotal&&sawSupplySubtotal&&sawLabourSection)recap=true;
+    if(labourGrandTotal&&sawLabourSubtotal)recap=true;
+    if(finalTotal)recap=true;
     if(recap)continue;
+    if(supplySubtotal){sawSupplySubtotal=true;last=null;continue}
+    if(labourSubtotal){sawLabourSubtotal=true;last=null;continue}
+    if(/^main d oeuvre\b/.test(tn)&&!labourGrandTotal)sawLabourSection=true;
     if(SKIP.test(t)||isSummaryLine(t))continue;
     if(HEAD.test(t)&&HEAD2.test(t)&&t.length<140){last=null;continue}
-    if(r.c.length===1&&HEADING.test(t)){ctx=/fourn|mat[ée]ri/i.test(t)?'F':'M';last=null;continue}
+    if(r.c.length===1&&HEADING.test(t)){ctx=/fourn|mat[ée]ri/i.test(t)?'F':'M';if(ctx==='M')sawLabourSection=true;last=null;continue}
     const it=lineItem(r,strict);
     if(it){
-      // A summary label must never be converted into a billable detail line.
       if(isSummaryLine(it.des))continue;
       it.ctx=ctx;items.push(it);last=it;cont=0;continue
     }
-    if(last&&cont<2&&t.length<100&&!STOP_LBL.test(t)&&!META.test(t)&&!ADDR.test(t)&&!/\\d{2}\\s?[\\/.]\\s?\\d{2}/.test(t)&&/[a-zà-ÿ]{3}/i.test(t)){last.des+=' – '+t.replace(/^[-–•*\\s]+/,'');cont++}
+    if(last&&cont<2&&t.length<100&&!STOP_LBL.test(t)&&!META.test(t)&&!ADDR.test(t)&&!/\d{2}\s?[\/.]\s?\d{2}/.test(t)&&/[a-zà-ÿ]{3}/i.test(t)){
+      last.des+=' – '+t.replace(/^[-–•*\s]+/,'');cont++
+    }
   }
   items.forEach(l=>{l.kind=classify(l,l.ctx)});return items
 }
