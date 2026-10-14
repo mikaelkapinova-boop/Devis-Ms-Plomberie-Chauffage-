@@ -200,10 +200,10 @@ function classify(l,ctx){
   if(m!==f)return m>f?'M':'F';return /^(u|m|ml|kg|l|m²)$/.test(l.u)?'F':'M'}
 function isSummaryLine(value){
   const t=norm(value).replace(/[^a-z0-9]+/g,' ').trim();
-  return (/^(?:sous total|total|totale|montant|cumul)\b/.test(t)&&
-    /\b(?:main d oeuvre|fournitures?|materiels?|prestations?|services?|travaux|deplacement|pose)\b/.test(t))
-    || /^(?:main d oeuvre totale?|total main d oeuvre|deplacement)$/.test(t)
-    || /^(?:total net du devis|total ht|total ttc|total net|total general)$/.test(t);
+  const hasTotal=/^(?:sous total|total|totale|montant|cumul)\b/.test(t);
+  const hasCategory=/\b(?:main d oeuvre|fournitures?|materiels?|prestations?|services?|travaux|pose|deplacement)\b/.test(t);
+  return (hasTotal&&hasCategory)
+    || /^(?:main d oeuvre totale?|total main d oeuvre|total net du devis|total ht|total ttc|total net|total general)$/.test(t);
 }
 function parseItems(L){
   let s=L.findIndex(r=>HEAD.test(r.t)&&HEAD2.test(r.t)&&r.t.length<140);
@@ -214,9 +214,9 @@ function parseItems(L){
   for(let k=Math.max(0,s-3);k<s;k++){const h=L[k];if(h&&h.c.length===1&&HEADING.test(h.t))ctx=/fourn|mat[ée]ri/i.test(h.t)?'F':'M'}
   for(let i=Math.max(0,s+1);i<e;i++){
     const r=L[i],t=r.t,tn=norm(t).replace(/[^a-z0-9]+/g,' ').trim();
-    const supplySubtotal=/^sous total fournitures?\b/.test(tn);
-    const labourSubtotal=/^sous total main d oeuvre\b/.test(tn);
-    const labourGrandTotal=/^main d oeuvre totale?\b/.test(tn);
+    const supplySubtotal=/^sous\s*total\s+fournitures?\b/.test(tn);
+    const labourSubtotal=/^sous\s*total\s+main\s+d\s*oeuvre\b/.test(tn);
+    const labourGrandTotal=/^main\s+d\s*oeuvre\s+totale?\b/.test(tn);
     const finalTotal=/^(?:total net du devis|total general|total ttc|total ht|net a payer)\b/.test(tn);
     if(supplySubtotal&&sawSupplySubtotal&&sawLabourSection)recap=true;
     if(labourGrandTotal&&sawLabourSubtotal)recap=true;
@@ -241,12 +241,15 @@ function parseItems(L){
 }
 function money(t){const m=t.match(/(-?\d[\d\s.]*(?:,\d{1,2})?)\s*(?:€|eur\w*)?\s*$/i);return m?pn(m[1]):NaN}
 function parseTotals(L){const T={ht:null,ttc:null,tva:null,rate:null,rmPct:null,rm:null};
-  for(const r of L){const t=r.t,m=money(t),pc=(t.match(/(\d{1,2}(?:[.,]\d+)?)\s*%/)||[])[1];
-    if(/net\s*[àa]\s*payer|total\s*ttc|montant\s*ttc|total\s*t\.?t\.?c/i.test(t)&&!/reste/i.test(t)){if(!isNaN(m))T.ttc=m}
-    else if(/(?:total|montant|net)\s*(?:net\s*)?h\.?t|^h\.?t\b|total\s*net\s*du/i.test(t)){if(!isNaN(m))T.ht=m}
+  for(const r of L){
+    const t=r.t.trim(),tn=norm(t),m=money(t),pc=(t.match(/(\d{1,2}(?:[.,]\d+)?)\s*%/)||[])[1];
+    // Only accept document-level totals, not line totals or section subtotals.
+    if(/^(?:net\s*[àa]\s*payer|total\s*ttc|montant\s*ttc|total\s*t\.?t\.?c)\b/i.test(t)){if(!isNaN(m))T.ttc=m}
+    else if(/^(?:total|montant)\s*(?:net\s*)?h\.?t\.?\b|^total\s+net\s+du\s+devis\b|^total\s+g[ée]n[ée]ral\s+h\.?t\.?\b/i.test(t)){if(!isNaN(m))T.ht=m}
     else if(/non\s+applicable|293\s*b/i.test(t)){T.rate=0}
-    else if(/\btva\b|t\.v\.a/i.test(t)&&!/intra|n°/i.test(t)){if(pc)T.rate=pn(pc);if(!isNaN(m)&&!/%\s*$/.test(t))T.tva=Math.abs(m)}
-    else if(/^\W*(?:remise|r[ée]duction|escompte)\b(?!\s+(?:en|à|a)\s)/i.test(t)){if(pc)T.rmPct=pn(pc);else if(!isNaN(m))T.rm=Math.abs(m)}}
+    else if(/^\s*(?:tva|t\.v\.a)\b/i.test(t)&&!/intra|n°/i.test(t)){if(pc)T.rate=pn(pc);if(!isNaN(m)&&!/%\s*$/.test(t))T.tva=Math.abs(m)}
+    else if(/^\\W*(?:remise|r[ée]duction|escompte)\b(?!\s+(?:en|à|a)\s)/i.test(t)){if(pc)T.rmPct=pn(pc);else if(!isNaN(m))T.rm=Math.abs(m)}
+  }
   if(T.rate==null){const snap=x=>{for(const a of[0,2.1,5.5,8.5,10,20])if(Math.abs(x-a)<.7)return a;return r2(x)};
     if(T.tva!=null&&T.ht>0)T.rate=snap(T.tva/T.ht*100);else if(T.ttc>0&&T.ht>0)T.rate=snap((T.ttc/T.ht-1)*100)}
   return T}
