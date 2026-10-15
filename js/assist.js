@@ -652,34 +652,49 @@ pwa = function () {
 (function(){
 "use strict";
 function pxCfg(){
- if(!S.cfg.as||typeof S.cfg.as!=="object")S.cfg.as={k:"devis",ai:"api",m:"auto",r:"raison",ps:6,army:false};
- S.cfg.as.ai="api";S.cfg.as.m="auto";
- S.cfg.as.r=["rapide","raison","profond"].includes(S.cfg.as.r)?S.cfg.as.r:"raison";
- S.cfg.as.ps=Math.max(1,Math.min(16,Number(S.cfg.as.ps)||6));S.cfg.as.army=!!S.cfg.as.army;return S.cfg.as;
+ if(!S.cfg.as||typeof S.cfg.as!=="object")S.cfg.as={k:"devis",ai:"loc",m:"auto",r:"raison",ps:6,army:false,aiModeV:1};
+ var c=S.cfg.as,migrated=false;
+ if(c.aiModeV!==1){c.ai="loc";c.army=false;(S.threads||[]).forEach(function(t){t.ai="loc";t.army=false});c.aiModeV=1;migrated=true}
+ if(c.ai!=="loc"&&c.ai!=="api")c.ai=pk()?"api":"loc";
+ if(c.ai==="api")c.m="auto";
+ c.r=["rapide","raison","profond"].includes(c.r)?c.r:"raison";
+ c.ps=Math.max(1,Math.min(16,Number(c.ps)||6));c.army=!!c.army;
+ if(migrated&&typeof save==="function"){save("cfg");save("threads")}
+ return c;
 }
-function pxArmyOn(t){return !!(pxCfg().army||(t&&t.army))}
-iaLabel=function(t){return "Perplexity API"+(pxArmyOn(t)?" · 🧠 Armée active":"")};
-window.pxArmySet=function(on){var c=pxCfg(),t=TH();c.army=!!on;t.army=!!on;t.ai="api";t.m="auto";thSave();save("cfg");render();if(SHEET==="ia")pxSheet()};
+function pxArmyOn(t){var c=pxCfg();return c.ai==="api"&&!(t&&t.ai==="loc")&&!!(c.army||(t&&t.army))}
+iaLabel=function(t){var engine=(t&&t.ai)||pxCfg().ai;return engine==="loc"?"Assistant local · gratuit":"Perplexity API"+(pxArmyOn(t)?" · 🧠 Armée active":"")};
+window.pxEngineSet=function(engine){if(engine!=="loc"&&engine!=="api")return;var c=pxCfg(),t=TH();c.ai=engine;c.aiModeV=1;t.ai=engine;if(engine==="api"){c.m="auto";t.m="auto"}else{c.army=false;t.army=false}thSave();save("cfg");render();if(SHEET==="ia")pxSheet()};
+window.pxArmySet=function(on){var c=pxCfg(),t=TH();c.ai="api";c.aiModeV=1;c.army=!!on;t.ai="api";t.army=!!on;t.m="auto";thSave();save("cfg");render();if(SHEET==="ia")pxSheet()};
 window.pxReasonSet=function(v){if(!["rapide","raison","profond"].includes(v))return;var c=pxCfg(),t=TH();c.r=v;t.r=v;thSave();save("cfg");render();if(SHEET==="ia")pxSheet()};
 window.pxArmyCount=function(v){var n=Math.max(1,Math.min(16,Number(v)||6)),c=pxCfg(),t=TH();c.ps=n;t.ps=n;thSave();save("cfg");var e=$("#pxArmyCount");if(e)e.textContent=n};
+var pxBoot=boot;boot=async function(){var r=await pxBoot.apply(this,arguments);pxCfg();render();return r};
 
 function pxSheet(){
  var s=$("#sheet");if(!s)return;var c=pxCfg(),t=TH(),army=pxArmyOn(t),key=pk(),n=Math.max(1,Math.min(16,Number(t.ps||c.ps)||6));
- var h="<h2>Perplexity API<button data-a='close'>Fermer</button></h2>";
- h+="<div class='px-card'><div class='px-title'><b>Perplexity API</b><small>Recherche, raisonnement, fichiers et code dans l’application</small><span>✓</span></div>";
- h+="<div class='px-row'><div><b>Aide de l’armée</b><small>Pyramide d’agents : travail parallèle, vérification et consolidation.</small></div><button class='px-switch "+(army?"on":"")+"' onclick='pxArmySet("+(army?"false":"true")+")'><i></i></button></div></div>";
- h+="<div class='gl'>Mode</div><div class='px-list'>";
- [["rapide","Rapide","Réponse directe et ciblée"],["raison","Raisonnement","Analyse et vérification renforcées"],["profond","Profond","Recherche large et contrôle final"]].forEach(function(o){h+="<button class='px-mode "+(t.r===o[0]?"on":"")+"' onclick=\"pxReasonSet('"+o[0]+"')\"><span><b>"+o[1]+"</b><small>"+o[2]+"</small></span><strong>"+(t.r===o[0]?"✓":"")+"</strong></button>"});
- h+="</div>";
- if(army)h+="<div class='gl'>Armée</div><div class='px-card'><div class='px-row'><div><b id='pxArmyCount'>"+n+" soldats</b><small>soldats → analystes → commandant</small></div></div><input type='range' min='1' max='16' value='"+n+"' oninput='pxArmyCount(this.value)'><div class='px-pyramid'><span>COMMANDANT</span><span>ANALYSTES</span><span>SOLDATS × "+n+"</span></div></div>";
- h+="<div class='gl'>Connexion</div>";
- h+=key?"<div class='px-ok'>✓ Clé API Perplexity enregistrée</div>":"<div class='px-key'><input id='pkin' type='password' placeholder='pplx-…' autocomplete='off'><button class='b sm' data-a='pk'><span>Enregistrer la clé</span></button></div>";
- h+="<p class='note'>Aucun sélecteur de modèle et aucune option « Max ». Perplexity gère automatiquement le modèle.</p>";
+ var engine=t.ai||c.ai,reason=t.r||c.r;
+ var h="<h2>Moteur de l’assistant<button data-a='close'>Fermer</button></h2><div class='gl'>Choisir le moteur</div><div class='px-list'>";
+ h+="<button class='px-mode "+(engine==="loc"?"on":"")+"' data-a='eng' data-v='loc'><span><b>Assistant local · gratuit</b><small>Sans clé API ni IA générative : recherche, calculs et lecture de listes sur cet appareil.</small></span><strong>"+(engine==="loc"?"✓":"")+"</strong></button>";
+ h+="<button class='px-mode "+(engine==="api"?"on":"")+"' data-a='eng' data-v='api'><span><b>Perplexity API</b><small>Réponses générées en ligne · clé API requise.</small></span><strong>"+(engine==="api"?"✓":"")+"</strong></button></div>";
+ if(engine==="loc"){
+   h+="<p class='note'>L’assistant local consulte les données de cette application et traite les demandes compatibles sur cet appareil. Aucun message n’est envoyé à une API. Choisis Perplexity API ci-dessus pour utiliser une clé.</p>";
+ }else{
+   h+="<div class='px-card'><div class='px-title'><b>Perplexity API</b><small>Recherche et réponses en ligne dans l’application</small><span>✓</span></div>";
+   h+="<div class='px-row'><div><b>Aide de l’armée</b><small>Pyramide d’agents : travail parallèle, vérification et consolidation.</small></div><button class='px-switch "+(army?"on":"")+"' onclick='pxArmySet("+(army?"false":"true")+")'><i></i></button></div></div>";
+   h+="<div class='gl'>Mode</div><div class='px-list'>";
+   [["rapide","Rapide","Réponse directe et ciblée"],["raison","Raisonnement","Analyse et vérification renforcées"],["profond","Profond","Recherche large et contrôle final"]].forEach(function(o){h+="<button class='px-mode "+(reason===o[0]?"on":"")+"' onclick=\"pxReasonSet('"+o[0]+"')\"><span><b>"+o[1]+"</b><small>"+o[2]+"</small></span><strong>"+(reason===o[0]?"✓":"")+"</strong></button>"});
+   h+="</div>";
+   if(army)h+="<div class='gl'>Armée</div><div class='px-card'><div class='px-row'><div><b id='pxArmyCount'>"+n+" soldats</b><small>soldats → analystes → commandant</small></div></div><input type='range' min='1' max='16' value='"+n+"' oninput='pxArmyCount(this.value)'><div class='px-pyramid'><span>COMMANDANT</span><span>ANALYSTES</span><span>SOLDATS × "+n+"</span></div></div>";
+   h+="<div class='gl'>Connexion</div>";
+   h+=key?"<div class='px-ok'>✓ Clé API Perplexity enregistrée</div>":"<div class='px-key'><input id='pkin' type='password' placeholder='pplx-…' autocomplete='off'><button class='b sm' data-a='pk'><span>Enregistrer la clé</span></button></div>";
+   h+="<p class='note'>Perplexity choisit automatiquement le modèle.</p>";
+ }
  s.innerHTML="<div class='bg'></div><div class='pn'><div class='grab'></div>"+h+"</div>";s.classList.add("o");
 }
 var oldSheetRender=sheetRender;sheetRender=function(){if(SHEET==="ia")return pxSheet();return oldSheetRender.apply(this,arguments)};
 var oldSheetAct=sheetAct;sheetAct=function(a,v,b){
- if(a==="eng"||a==="army"){pxArmySet(v==="on"||v==="swarm");return}
+ if(a==="eng"){pxEngineSet(v);return}
+ if(a==="army"){pxArmySet(v==="on"||v==="swarm");return}
  if(a==="mode"||a==="reason"){pxReasonSet(v);return}
  if(a==="mod")return toast("Le choix du modèle est automatique.");
  if(a==="pk"){var k=(($("#pkin")&&$("#pkin").value)||"").trim();if(!k)return toast("Colle ta clé API Perplexity");S.cfg.pk=k;save("cfg");toast("Clé API Perplexity enregistrée");render();pxSheet();return}
@@ -688,10 +703,12 @@ var oldSheetAct=sheetAct;sheetAct=function(a,v,b){
 
 chatV=function(){
  var t=TH(),d=DEM[t.k]||DEM.devis,msgs=t.msgs.slice(-80),off=t.msgs.length-msgs.length,doc=d.mod?S.docs.find(function(x){return x.id===t.doc}):null;
- var welcome="<div class='bub a'>"+esc(d.l)+". "+(d.mod?(doc?esc(doc.num)+" · "+esc(doc.cn||""):"Choisis le document."):"Écris ta demande, ou joins une photo/PDF.")+"</div>";
+ var engine=(t.ai==="loc"||t.ai==="api")?t.ai:pxCfg().ai;
+ var welcome=engine==="loc"?"<div class='bub a'>Bonjour ! Je suis l’assistant local de l’application. Je peux rechercher dans tes devis, factures, clients, achats et planning, lire des listes et préparer une estimation sans clé API. Les demandes compatibles sont traitées sur cet appareil.</div>":"<div class='bub a'>"+esc(d.l)+". "+(d.mod?(doc?esc(doc.num)+" · "+esc(doc.cn||""):"Choisis le document."):"Écris ta demande, ou joins une photo/PDF.")+"</div>";
+ var placeholder=engine==="loc"?"Pose une question sur tes données ou colle une liste…":"Écris ta demande…";
  var typing=ASBUSY?"<div class='bub a'><span class='typing'><i></i><i></i><i></i></span></div>":"";
  var pills="<button class='pill' onclick=\"sheetOpen('dem')\">"+esc(d.l)+"</button><button class='pill' onclick=\"sheetOpen('ia')\">"+esc(iaLabel(t))+"</button>";
- return "<div class='ash'><button class='icb' onclick=\"sheetOpen('fils')\">☰</button><div class='ttl'>"+esc(thTitle(t))+"</div><button class='icb' onclick='thNew();render()'>✎</button></div><div id='cm' class='cm'>"+(msgs.length?msgs.map(function(m,i){return bub2(m,off+i)}).join(""):welcome)+typing+"</div><div class='cmp2'><div class='pills'>"+pills+"</div><div class='atts2'>"+ATT.map(function(a,i){return "<span class='chip'>"+(a.k==="pdf"?"📄":"🖼️")+" "+esc(a.f.name.slice(0,22))+"<button onclick='ATT.splice("+i+",1);render()'>×</button></span>"}).join("")+"</div><div class='crow2'><button class='plus' onclick=\"sheetOpen('plus')\">+</button><textarea id='cin' rows='1' placeholder='Écris ta demande…' oninput='cinGrow(this)' onkeydown=\"if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))asSend()\"></textarea><button class='send' id='sendb' onclick='window.asSend()' "+(ASBUSY?"disabled":"")+">↑</button></div><input type='file' id='fpick' accept='image/*,application/pdf' multiple hidden onchange='attAdd(this.files)'><input type='file' id='fcam' accept='image/*' capture='environment' hidden onchange='attAdd(this.files)'></div>"
+ return "<div class='ash'><button class='icb' onclick=\"sheetOpen('fils')\">☰</button><div class='ttl'>"+esc(thTitle(t))+"</div><button class='icb' onclick='thNew();render()'>✎</button></div><div id='cm' class='cm'>"+(msgs.length?msgs.map(function(m,i){return bub2(m,off+i)}).join(""):welcome)+typing+"</div><div class='cmp2'><div class='pills'>"+pills+"</div><div class='atts2'>"+ATT.map(function(a,i){return "<span class='chip'>"+(a.k==="pdf"?"📄":"🖼️")+" "+esc(a.f.name.slice(0,22))+"<button onclick='ATT.splice("+i+",1);render()'>×</button></span>"}).join("")+"</div><div class='crow2'><button class='plus' onclick=\"sheetOpen('plus')\">+</button><textarea id='cin' rows='1' placeholder='"+placeholder+"' oninput='cinGrow(this)' onkeydown=\"if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))asSend()\"></textarea><button class='send' id='sendb' onclick='window.asSend()' "+(ASBUSY?"disabled":"")+">↑</button></div><input type='file' id='fpick' accept='image/*,application/pdf' multiple hidden onchange='attAdd(this.files)'><input type='file' id='fcam' accept='image/*' capture='environment' hidden onchange='attAdd(this.files)'></div>"
 };
 
 async function pxArmyAgent(t,q,role,effort){
@@ -718,7 +735,16 @@ async function pxArmySend(t,txt,clear){
  finally{ASBUSY=false;render()}
 }
 var oldAsSend=asSend;asSend=function(){
- var c=pxCfg(),t=TH();t.ai="api";t.m="auto";t.army=!!c.army;t.ps=c.ps;thSave();save("cfg");
+ var c=pxCfg(),t=TH(),engine=t.ai||c.ai;
+ if(engine!=="loc"&&engine!=="api")engine=c.ai="loc";
+ t.ai=engine;c.ai=engine;
+ if(engine==="loc"){
+   c.army=false;t.army=false;thSave();save("cfg");
+   if(DEM[t.k]&&DEM[t.k].mod&&!t.doc)return sheetOpen("doc");
+   return typeof smartLocalSend==="function"?smartLocalSend():toast("Le moteur local n’est pas disponible sur cette version.");
+ }
+ t.m="auto";t.army=!!c.army;t.ps=c.ps;thSave();save("cfg");
+ if(DEM[t.k]&&DEM[t.k].mod&&!t.doc)return sheetOpen("doc");
  if(c.army){var ta=$("#cin"),txt=(ta?ta.value:"").trim();if(!txt&&!ATT.length)return toast("Écris un message ou joins un fichier");if(DEM[t.k].mod&&!t.doc)return sheetOpen("doc");var clear=function(){if(ta){ta.value="";cinGrow(ta)}draftClear("cin")};return pxArmySend(t,txt,clear)}
  var ta=$("#cin"),txt=(ta?ta.value:"").trim();
  var clear=function(){if(ta){ta.value="";cinGrow(ta)}draftClear("cin")};
@@ -728,13 +754,13 @@ var oldAsSend=asSend;asSend=function(){
 };
 window.asSend=asSend;
 
-var css=document.createElement("style");css.textContent=".px-card{background:var(--cd);border-radius:18px;padding:14px;box-shadow:0 0 0 1px var(--ln);margin-bottom:10px}.px-title{display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--ln)}.px-title b{display:block;font-size:18px}.px-title small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.px-title span{margin-left:auto;color:var(--ok);font-weight:700}.px-row{display:flex;align-items:center;gap:12px;padding-top:13px}.px-row>div{flex:1}.px-row b{display:block}.px-row small{display:block;color:var(--mu);font-size:12px;line-height:1.3;margin-top:2px}.px-switch{width:52px;height:30px;border:0;border-radius:16px;padding:3px;background:#777}.px-switch i{display:block;width:24px;height:24px;border-radius:50%;background:#fff;transition:.18s}.px-switch.on{background:var(--ok)}.px-switch.on i{transform:translateX(22px)}.px-list{background:var(--cd);border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px var(--ln)}.px-mode{display:flex;align-items:center;gap:12px;width:100%;padding:14px;border:0;border-bottom:1px solid var(--ln);background:var(--cd);color:var(--ink);text-align:left;font:inherit}.px-mode:last-child{border-bottom:0}.px-mode.on{background:color-mix(in srgb,var(--ac) 10%,var(--cd))}.px-mode span{flex:1}.px-mode b{display:block}.px-mode small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.px-mode strong{color:var(--ac)}.px-key{background:var(--cd);padding:10px;border-radius:14px;box-shadow:0 0 0 1px var(--ln)}.px-key input{width:100%;margin-bottom:8px}.px-key .b{width:100%}.px-ok{padding:11px 13px;border-radius:13px;background:color-mix(in srgb,var(--ok) 12%,var(--cd));color:var(--ok);font-size:13px}.px-pyramid{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.px-pyramid span{font-size:11px;padding:6px 8px;background:var(--in);border:1px solid var(--ln);border-radius:9px;color:var(--mu)}";document.head.appendChild(css);pxCfg();
+var css=document.createElement("style");css.textContent=".px-card{background:var(--cd);border-radius:18px;padding:14px;box-shadow:0 0 0 1px var(--ln);margin-bottom:10px}.px-title{display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--ln)}.px-title b{display:block;font-size:18px}.px-title small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.px-title span{margin-left:auto;color:var(--ok);font-weight:700}.px-row{display:flex;align-items:center;gap:12px;padding-top:13px}.px-row>div{flex:1}.px-row b{display:block}.px-row small{display:block;color:var(--mu);font-size:12px;line-height:1.3;margin-top:2px}.px-switch{width:52px;height:30px;border:0;border-radius:16px;padding:3px;background:#777}.px-switch i{display:block;width:24px;height:24px;border-radius:50%;background:#fff;transition:.18s}.px-switch.on{background:var(--ok)}.px-switch.on i{transform:translateX(22px)}.px-list{background:var(--cd);border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px var(--ln)}.px-mode{display:flex;align-items:center;gap:12px;width:100%;padding:14px;border:0;border-bottom:1px solid var(--ln);background:var(--cd);color:var(--ink);text-align:left;font:inherit}.px-mode:last-child{border-bottom:0}.px-mode.on{background:color-mix(in srgb,var(--ac) 10%,var(--cd))}.px-mode span{flex:1}.px-mode b{display:block}.px-mode small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.px-mode strong{color:var(--ac)}.px-key{background:var(--cd);padding:10px;border-radius:14px;box-shadow:0 0 0 1px var(--ln)}.px-key input{width:100%;margin-bottom:8px}.px-key .b{width:100%}.px-ok{padding:11px 13px;border-radius:13px;background:color-mix(in srgb,var(--ok) 12%,var(--cd));color:var(--ok);font-size:13px}.px-pyramid{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.px-pyramid span{font-size:11px;padding:6px 8px;background:var(--in);border:1px solid var(--ln);border-radius:9px;color:var(--mu)}";document.head.appendChild(css);
 })();
 
-/* === VERSION 6.0.0 === */
+/* === VERSION 7.4.0 === */
 (function(){
 "use strict";
-var APP_VERSION="6.0.0",APP_RELEASE="Correctif du bouton Envoyer : récupération du texte et de la fonction clear, puis appel Perplexity API.";
+var APP_VERSION="7.4.0",APP_RELEASE="Assistant local sans clé API disponible dans le menu IA, sélectionné par défaut.";
 window.APP_VERSION=APP_VERSION;
 window.newsShow=function(){var d=document.createElement("div");d.className="news";d.innerHTML="<div><h2>Version "+APP_VERSION+"</h2><p>"+APP_RELEASE+"</p><button class='b' style='width:100%;margin-top:10px' onclick='this.closest(\".news\").remove()'><span>Compris</span></button></div>";d.addEventListener("click",function(e){if(e.target===d)d.remove()});document.body.appendChild(d)};
 var oldBoot=boot;boot=async function(){var r=await oldBoot.apply(this,arguments);try{if(S.cfg&&S.cfg.appVersionSeen!==APP_VERSION){S.cfg.appVersionSeen=APP_VERSION;save("cfg");setTimeout(newsShow,900)}}catch(e){}return r};
