@@ -16,6 +16,13 @@ Site : https://mikaelkapinova-boop.github.io/Devis-Ms-Plomberie-Chauffage-/
 Depuis l'onglet ****, « Envoyer à Perplexity » envoie la demande par e-mail (sujet `[DEVIS]`).
 Une automatisation Perplexity lit l'e-mail, prépare le résultat et le dépose dans `inbox/` (ou modifie l'appli), puis l'appli le propose à l'import.
 
+## Assistant local gratuit
+Dans l'assistant, ouvre le bouton du moteur et sélectionne **Assistant local · gratuit**. Ce mode ne requiert ni compte, ni clé API, ni abonnement : il exécute des règles et des calculs dans le navigateur, puis recherche dans les devis, factures, rapports, clients, tarifs, planning et achats enregistrés sur cet appareil. Il peut aussi préparer une carte de devis/facture à partir de lignes déjà chiffrées, sans inventer les prix. Les résultats de recherche incluent des boutons pour ouvrir les éléments trouvés.
+
+La recherche floue utilise [Fuse.js 7.5.0](https://github.com/krisk/Fuse), intégré au dépôt sous licence Apache 2.0 (`js/vendor/FUSE-LICENSE.txt`). Les historiques de moins de 10 000 éléments utilisent le moteur simple; les plus grands peuvent basculer sur `FuseWorker`, qui répartit la recherche sur plusieurs cœurs du processeur. Le code, le moteur et les données de recherche sont servis par l'application; aucune demande n'est envoyée à Perplexity ou à un moteur distant. Le cache local permet de retrouver ces fonctions hors connexion après le premier chargement.
+
+Ce mode reste déterministe : il ne répond pas aux questions générales, ne recherche pas de prix sur Internet et ne modifie pas automatiquement un document existant. Pour lire un fichier joint, il réutilise le lecteur local de l'importateur; celui-ci peut télécharger ses bibliothèques de lecture/OCR au premier usage, mais n'envoie pas le fichier.
+
 ##  v3.5
 
 - **Conversations séparées** (☰) : chaque sujet garde son historique, sa demande, son IA, son modèle et son mode.
@@ -50,3 +57,9 @@ Menu **Importer** : choisir un ou plusieurs fichiers (PDF, scan/photo avec OCR, 
 3. Les fichiers et lignes en attente peuvent être retirés, y compris par glissement vers la gauche sur mobile.
 
 Limites : l'OCR et les bibliothèques PDF/Word se chargent depuis Internet ; `.doc` ancien format non lu (enregistrer en `.docx`) ; la qualité d'un scan flou limite l'extraction, d'où l'écran de vérification.
+
+## Ms Devis 7.3 — Lignes compactes et achats
+- Les lignes de devis et facture sont compactes et colorées : bleu pour les fournitures, violet pour la main-d’œuvre. Une désignation, son prix et son unité peuvent être mémorisés depuis la ligne, puis retrouvés dans Mes tarifs avec une recherche.
+- La main-d’œuvre peut être répartie par pièce. Les pièces, affectations et sous-totaux sont repris dans l’aperçu imprimable.
+- L’importateur des achats accepte les tickets et factures fournisseur en PDF, photo, DOCX, TXT et CSV. Après vérification, chaque justificatif peut être classé au mois comptable ou rattaché à un chantier, avec suivi des dépenses et du solde provisoire.
+- Les montants d’import restent à vérifier avant validation. Un HT sans TVA lisible est affiché comme montant disponible et n’est pas présenté comme un TTC estimé.

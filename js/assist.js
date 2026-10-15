@@ -28,7 +28,7 @@ const ENG = {
   cmp:  {l: 'Computer', s: "Dans l'appli · via le pont serveur.py sur ton PC · crédits Computer"},
   pro:  {l: 'Perplexity Pro', s: "Sans clé · s'ouvre dans Safari, pas dans l'appli · session déjà connectée"},
   mail: {l: 'Computer e-mail', s: 'Envoi par e-mail · le résultat arrive dans « Reçus »'},
-  loc:  {l: 'Sans IA', s: "Lit une liste de matériel directement sur l'appareil"},
+  loc:  {l: 'Assistant local · sans IA', s: 'Recherche Fuse.js, calculs et règles déterministes sur cet appareil · gratuit'},
   apple: {l: 'Apple Intelligence', s: "Outils d’écriture sur l’appareil · pas un appel, pas Siri"},
   swarm: {l: 'Cerveau collectif', s: 'Soldats éphémères · mémoire partagée · recherche parallèle · outils permanents'}
 };
@@ -161,6 +161,7 @@ function modEff(t) { /* modèle réellement utilisé (résout « Auto ») */
   return modByApi(t.m) || modByApi(ORCH[o][t.r]);
 }
 function iaLabel(t) {
+  if ((t.ai || S.cfg.as?.ai) === 'loc') return 'Assistant local · sans IA';
   const m = modCur(t), e = modEff(t);
   return (m.id === 'auto' ? (e ? e.n : 'Auto') : m.n) + ' · ' + MODES[t.r].l;
 }
@@ -170,7 +171,9 @@ function pk() { return (S.cfg.pk || '').trim(); }
 chatV = function () {
   const t = TH(), d = DEM[t.k], msgs = t.msgs.slice(-80), off = t.msgs.length - msgs.length;
   const doc = d.mod ? S.docs.find(x => x.id === t.doc) : null;
-  const welcome = `<div class="bub a">${esc(d.l)}. ${d.mod ? (doc ? esc(doc.num) + (doc.cn ? ' · ' + esc(doc.cn) : '') : 'Choisis le document.') : 'Écris, ou joins une photo.'}</div>`;
+  const welcome = t.ai === 'loc'
+    ? `<div class="bub a"><b>Assistant local activé · sans IA générative</b><br>Je cherche dans tes devis, factures, clients, tarifs, planning et achats. Je peux faire des calculs et lire des listes déjà chiffrées. Tes demandes restent sur cet appareil.<br><br>Essaie : « factures impayées », « dépenses de septembre », « cherche mitigeur », « ouvre FAC-2026-001 », ou colle tes lignes de matériel.</div>`
+    : `<div class="bub a">${esc(d.l)}. ${d.mod ? (doc ? esc(doc.num) + (doc.cn ? ' · ' + esc(doc.cn) : '') : 'Choisis le document.') : 'Écris, ou joins une photo.'}</div>`;
   const typing = ASBUSY ? `<div class="bub a"><span class="typing"><i></i><i></i><i></i></span></div>` : '';
   return `<div class="ash"><button class="icb" onclick="sheetOpen('fils')" aria-label="Conversations">☰</button><div class="ttl" onclick="thRename()">${esc(thTitle(t))}</div><button class="icb" onclick="thNew();render()" aria-label="Nouvelle conversation">✎</button></div>
 <div id="inbx"></div>
@@ -178,7 +181,7 @@ chatV = function () {
 <div class="cmp2">
 <div class="pills"><button class="pill" onclick="sheetOpen('dem')">${esc(d.l)}</button>${d.mod ? `<button class="pill" onclick="sheetOpen('doc')">${doc ? esc(doc.num) : 'Document'}</button>` : ''}<button class="pill" onclick="sheetOpen('ia')">${esc(iaLabel(t))}</button></div>
 <div class="atts2">${ATT.map((a, i) => `<span class="chip">${a.k === 'pdf' ? '📄' : '🖼️'} ${esc(a.f.name.slice(0, 22))}<button onclick="ATT.splice(${i},1);render()" aria-label="Retirer">×</button></span>`).join('')}</div>
-<div class="crow2"><button class="plus" onclick="sheetOpen('plus')" aria-label="Ajouter">+</button><textarea id="cin" rows="1" placeholder="Écris ta demande…" oninput="cinGrow(this)" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))asSend()"></textarea><button class="send" id="sendb" onclick="asSend()" ${ASBUSY ? 'disabled' : ''} aria-label="Envoyer">↑</button></div>
+<div class="crow2"><button class="plus" onclick="sheetOpen('plus')" aria-label="Ajouter">+</button><textarea id="cin" rows="1" placeholder="${t.ai === 'loc' ? 'Ex. factures impayées, dépense de septembre, ou lignes à chiffrer…' : 'Écris ta demande…'}" oninput="cinGrow(this)" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))asSend()"></textarea><button class="send" id="sendb" onclick="asSend()" ${ASBUSY ? 'disabled' : ''} aria-label="Envoyer">↑</button></div>
 <input type="file" id="fpick" accept="image/*,application/pdf" multiple hidden onchange="attAdd(this.files)"><input type="file" id="fcam" accept="image/*" capture="environment" hidden onchange="attAdd(this.files)">
 </div>`;
 };
@@ -218,6 +221,11 @@ function bub2(m, i) {
     if (a.open) acts += B('Ouvrir ' + esc(a.num || ''), `go('${a.v}','${a.open}')`);
     if (a.undo) acts += B('Annuler la modification', `asUndo('${a.undo}',${i})`, 'b gh sm');
   }
+  if (Array.isArray(m.matches)) m.matches.slice(0, 6).forEach(hit => {
+    const route = ['e','xe','ce','g','p','sf','d','f','r','x','c','h'].includes(hit.v) ? hit.v : 'h';
+    const id = String(hit.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    acts += B('Ouvrir ' + esc(hit.label || 'résultat'), id ? `go('${route}','${id}')` : `go('${route}')`, 'b gh sm');
+  });
   if (m.ix && i === TH().msgs.length - 1 && !ASBUSY) {
     const x = m.ix, tid = esc(x.tid || '');
     acts += x.type === 'ask_user_question' ? B('Répondre', `mcAnswer('${tid}')`)
@@ -251,21 +259,26 @@ function sheetRender() {
     const c = S.cfg.as || (S.cfg.as = {ai:'api',m:'auto',r:'raison',ps:6,army:false});
     const army = !!c.army;
     const n = Math.max(1, Math.min(16, Number(c.ps) || 6));
-    h = `<h2>Perplexity<button data-a="close">OK</button></h2>`;
+    h = `<h2>Moteur de l’assistant<button data-a="close">OK</button></h2>`;
     h += `<div class="gl">Moteur</div><div class="grp">
-      <button class="it" data-a="eng" data-v="api"><span class="ic">⚡</span><span class="tx"><b>Perplexity API</b><small>API directe dans l’application · modèle choisi automatiquement</small></span><span class="ck">✓</span></button>
+      <button class="it" data-a="eng" data-v="loc"><span class="ic">🔒</span><span class="tx"><b>Assistant local · gratuit</b><small>Sans IA générative ni clé API · recherche et calculs sur cet appareil, même hors connexion</small></span>${t.ai === 'loc' ? '<span class="ck">✓</span>' : ''}</button>
+      <button class="it" data-a="eng" data-v="api"><span class="ic">⚡</span><span class="tx"><b>Perplexity API</b><small>Réponses en ligne · clé API requise</small></span>${t.ai !== 'loc' ? '<span class="ck">✓</span>' : ''}</button>
     </div>`;
-    h += `<div class="gl">Aide de l’armée</div><div class="grp">
+    if (t.ai === 'loc') {
+      h += `<p class="note">Fuse.js recherche les données locales et tolère les fautes de frappe. Au-delà de 10 000 entrées, FuseWorker répartit la recherche sur plusieurs cœurs du processeur. Rien n’est envoyé à un service de recherche ou d’IA.</p>`;
+    } else h += `<div class="gl">Aide de l’armée</div><div class="grp">
       <button class="it" data-a="army" data-v="${army ? 'off' : 'on'}"><span class="ic">🧠</span><span class="tx"><b>${army ? 'Armée activée' : 'Activer l’aide de l’armée'}</b><small>${army ? 'Soldats → analystes → commandant · travail parallèle' : 'Ajoute une pyramide d’agents Perplexity pour renforcer la recherche'}</small></span><span class="ck">${army ? '✓' : ''}</span></button>
     </div>`;
-    h += `<div class="gl">Type de raisonnement</div><div class="seg">${Object.entries(MODES).map(([k,m]) => `<button class="${t.r === k ? 'on' : ''}" data-a="mode" data-v="${k}">${m.l}</button>`).join('')}</div>`;
-    if (army) h += `<div class="gl">Pyramide de soldats</div><div class="grp" style="padding:14px">
+    if (t.ai !== 'loc') h += `<div class="gl">Type de raisonnement</div><div class="seg">${Object.entries(MODES).map(([k,m]) => `<button class="${t.r === k ? 'on' : ''}" data-a="mode" data-v="${k}">${m.l}</button>`).join('')}</div>`;
+    if (army && t.ai !== 'loc') h += `<div class="gl">Pyramide de soldats</div><div class="grp" style="padding:14px">
       <b>${n} soldats</b><input type="range" min="1" max="16" step="1" value="${n}" oninput="S.cfg.as.ps=Number(this.value);S.cfg.as.army=true;save('cfg');this.previousElementSibling.textContent=this.value+' soldats'">
       <small>Les soldats travaillent en parallèle, puis les analystes consolident et le commandant produit la réponse finale.</small>
     </div>`;
-    if (!pk()) h += `<div class="grp" style="padding:10px"><input id="pkin" type="password" placeholder="Clé API pplx-…" autocomplete="off"><button class="b sm" style="width:100%;margin-top:8px" data-a="pk"><span>Enregistrer la clé</span></button></div>`;
-    else h += `<div class="note">✓ Clé API Perplexity enregistrée</div>`;
-    h += `<p class="note">Aucun sélecteur de modèle et aucune option Max. Perplexity choisit automatiquement le modèle.</p>`;
+    if (t.ai !== 'loc') {
+      if (!pk()) h += `<div class="grp" style="padding:10px"><input id="pkin" type="password" placeholder="Clé API pplx-…" autocomplete="off"><button class="b sm" style="width:100%;margin-top:8px" data-a="pk"><span>Enregistrer la clé</span></button></div>`;
+      else h += `<div class="note">✓ Clé API Perplexity enregistrée</div>`;
+      h += `<p class="note">Aucun sélecteur de modèle et aucune option Max. Perplexity choisit automatiquement le modèle.</p>`;
+    }
   } else if (SHEET === 'fils') {
     const L = S.threads.slice().sort((a, b) => b.up - a.up).filter(x => !THQ || (thTitle(x) + ' ' + x.msgs.map(m => m.t).join(' ')).toLowerCase().includes(THQ));
     h = `<h2>Conversations<button data-a="new">Nouvelle</button></h2><input id="thq" type="search" placeholder="Rechercher" value="${esc(THQ)}" oninput="THQ=this.value.toLowerCase();sheetRender();setTimeout(()=>{const e=$('#thq');e.focus();e.setSelectionRange(e.value.length,e.value.length)},0)" style="margin-bottom:10px">
@@ -293,7 +306,7 @@ function sheetAct(a, v, b) {
     sheetClose(); return render();
   }
   if (a === 'doc') { t.doc = v; thSave(); sheetClose(); return render(); }
-  if (a === 'eng') { t.ai = 'api'; t.m = 'auto'; if (!t.army) t.army = false; thSave(); save('cfg'); return render(); }
+  if (a === 'eng') { t.ai = v === 'loc' ? 'loc' : 'api'; S.cfg.as.ai = t.ai; if (t.ai === 'api') t.m = 'auto'; thSave(); save('cfg'); return render(); }
   if (a === 'army') { t.ai = 'api'; t.m = 'auto'; t.army = (v === 'on'); S.cfg.as = S.cfg.as || {}; S.cfg.as.ai = 'api'; S.cfg.as.m = 'auto'; S.cfg.as.army = t.army; S.cfg.as.ps = Math.max(1, Math.min(16, Number(S.cfg.as.ps) || 6)); thSave(); save('cfg'); return sheetRender(); }
   if (a === 'pk') { const k = ($('#pkin')?.value || '').trim(); if (!k) return toast('Colle ta clé API'); S.cfg.pk = k; save('cfg'); toast('Clé enregistrée'); render(); return sheetRender(); }
   if (a === 'mcconn') return mcConnect();

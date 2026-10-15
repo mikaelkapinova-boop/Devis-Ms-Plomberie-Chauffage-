@@ -27,6 +27,10 @@ function dedupeRepeatedPhrase(value){
     outer: for(let start=0;start<words.length;start++){
       const max=Math.floor((words.length-start)/2);
       for(let len=max;len>=2;len--){
+        const phrase=words.slice(start,start+len);
+        // Repeated amounts are common on quantity-one rows (unit price = line total).
+        // Keep numeric-only repetitions so strict quote parsing can still identify both fields.
+        if(!phrase.some(word=>/[A-Za-zÀ-ÿ]/.test(word)))continue;
         const a=words.slice(start,start+len).map(norm).join('|');
         const b=words.slice(start+len,start+2*len).map(norm).join('|');
         if(a&&a===b){
@@ -42,7 +46,12 @@ function dedupeRepeatedPhrase(value){
     }
     if(!changed)break;
   }
-  return words.join(' ').replace(/\s+([,.;:])/g,'$1').replace(/([,.;:])(?=\S)/g,'$1 ').replace(/\s+/g,' ').trim();
+  const joined=words.join(' ').replace(/\s+([,.;:])/g,'$1');
+  return joined.replace(/([,.;:])(?=\S)/g,(match,punctuation,offset,source)=>{
+    const start=source.lastIndexOf(' ',offset)+1,end=source.indexOf(' ',offset+1),token=source.slice(start,end<0?source.length:end);
+    if(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(token)||/(?:https?:\/\/|www\.)/i.test(token))return punctuation;
+    return (punctuation===','||punctuation==='.')&&/\d/.test(source[offset-1]||'')&&/\d/.test(source[offset+1]||'')?punctuation:punctuation+' ';
+  }).replace(/\s+/g,' ').trim();
 }
 const r2=v=>Math.round((v+Number.EPSILON)*100)/100;
 const eur=v=>(isFinite(v)?v:0).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
@@ -51,10 +60,10 @@ const fsz=b=>b>1048576?(b/1048576).toFixed(1).replace('.',',')+' Mo':Math.max(1,
 const say=m=>{try{if(typeof G.toast==='function')G.toast(m)}catch(e){}};
 const SS=()=>typeof S!=='undefined'?S:null;
 function pn(s){
-  s=String(s==null?'':s).replace(/[€\s\u00a0]|eur\w*/gi,'');if(!s)return NaN;
-  if(s.includes(',')&&s.includes('.'))s=s.replace(/\./g,'').replace(',','.');
-  else if(s.includes(','))s=s.replace(',','.');
-  else if(/^-?[1-9]\d{0,2}(\.\d{3})+$/.test(s))s=s.replace(/\./g,'');
+  s=String(s==null?'':s).replace(/[€₹$£\s\u00a0]|eur\w*/gi,'');if(!s)return NaN;
+  if(s.includes(',')&&s.includes('.'))s=s.lastIndexOf(',')>s.lastIndexOf('.')?s.replace(/\./g,'').replace(',','.'):s.replace(/,/g,'');
+  else if(s.includes(','))s=/^-?\d{1,3}(,\d{3})+$/.test(s)?s.replace(/,/g,''):s.replace(',','.');
+  else if(/^-?\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,'');
   const v=parseFloat(s);return isFinite(v)?v:NaN}
 const nv=v=>{const x=pn(v);return isNaN(x)?0:x};
 function loadLib(url,test){return new Promise((ok,no)=>{if(test())return ok();const s=document.createElement('script');s.src=url;s.onload=ok;s.onerror=()=>no(new Error('Bibliothèque indisponible (connexion ?)'));document.head.appendChild(s)})}
@@ -91,8 +100,13 @@ const rowsText=rows=>rows.map(r=>r.c.join('  ')).join('\n');
 const toRows=t=>String(t||'').split(/\r?\n/).map(s=>s.replace(/\u00a0/g,' ').trim()).filter(Boolean).map(s=>({c:s.split(/\s{2,}|\t+/).map(x=>x.trim()).filter(Boolean),xs:null}));
 async function ocr(src,prog){
   await loadLib(CDN.ocr,()=>G.Tesseract);
-  const r=await G.Tesseract.recognize(src,'fra',{logger:m=>{if(m.status==='recognizing text'&&prog)prog(m.progress)}});
-  const d=r.data;let ws=d.words;
+  const r=await G.Tesseract.recognize(src,'fra+eng',{logger:m=>{if(m.status==='recognizing text'&&prog)prog(m.progress)}});
+  const d=r.data;
+  // Tesseract already groups words into reading-order lines. Re-clustering every word
+  // only by its vertical coordinate breaks tilted scans into fragments and scrambles tables.
+  const lineRows=(d.lines||[]).map(l=>({c:[dedupeRepeatedPhrase(l.text||'')],xs:null,y:l.bbox?-((l.bbox.y0+l.bbox.y1)/2):undefined})).filter(l=>l.c[0]);
+  if(lineRows.length)return{text:rowsText(lineRows),rows:lineRows};
+  let ws=d.words;
   if((!ws||!ws.length)&&d.lines)ws=[].concat(...d.lines.map(l=>l.words||[]));
   if(ws&&ws.length){const items=ws.filter(w=>w.bbox&&w.text).map(w=>({s:w.text,x:w.bbox.x0,y:-(w.bbox.y0+w.bbox.y1)/2,w:w.bbox.x1-w.bbox.x0,h:w.bbox.y1-w.bbox.y0}));const rows=rowsOf(items);return{text:rowsText(rows),rows}}
   return{text:d.text||'',rows:null}}
@@ -180,19 +194,19 @@ async function extractText(it){
 /* ---------- analyse intelligente ---------- */
 const EMAIL=/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i;
 const PHONE=/(?:(?:\+|00)33[\s.]?|\b0)[1-9](?:[\s.\-]?\d{2}){4}\b/;
-const NUM2=/^-?\d+(?:[.,]\d+)?$|^-?\d{1,3}(?:\.\d{3})+(?:,\d+)?$/;
+const NUM2=/^-?\d+(?:[.,]\d+)?$|^-?\d{1,3}(?:\.\d{3})+(?:,\d+)?$|^-?\d{1,3}(?:,\d{3})+(?:\.\d+)?$/;
 const UNIT_RX=/^(h|hr|hrs|heures?|u|un|unit[ée]s?|pce|pcs|pi[èe]ces?|m|ml|m2|m²|m3|kg|l|lot|ens|ensemble|forfait|ff|jours?|j)\.?$/i;
 const UNIT_GLUE=/^(\d+(?:[.,]\d+)?)(h|u|m|ml|m2|m²|kg|l|j)$/i;
 const META=/siret|siren|\biban\b|\bbic\b|\bt[ée]l\b|t[ée]l[ée]phone|tva\s*intra|\bpage\s*\d|\brcs\b|capital\s|www\.|@|\bnaf\b|\bape\b|assurance|d[ée]cennale|mentions/i;
 const ADDR=/^\d{1,4}\s*(?:bis|ter)?[, ]+\s*(?:rue|avenue|av\.?|bd|boulevard|chemin|impasse|all[ée]e|place|route|r[ée]sidence|quai|cours|passage|square|lotissement)\b|\b\d{5}\s+[A-ZÀ-Ý][A-Za-zÀ-ÿ' \-]+$/i;
-const END=/^(?:total\s*(?:h\.?t|ttc|net|g[ée]n[ée]ral)|net\s*(?:[àa]\s*payer|h\.?t)|montant\s*(?:h\.?t|ttc|total|tva)|base\s*h\.?t|tva\b|conditions|bon\s*pour\s*accord|reste\s*(?:[àa]\s*payer|d[ûu])|acompte|r[èe]glement|mode\s*de\s*paiement|rib\b|iban)/i;
+const END=/^(?:total\s*(?:h\.?t|ttc|net|g[ée]n[ée]ral|due)|net\s*(?:[àa]\s*payer|h\.?t)|montant\s*(?:h\.?t|ttc|total|tva)|base\s*h\.?t|tva\b|gst\b|sales\s+tax\b|subtotal\b|conditions|bon\s*pour\s*accord|reste\s*(?:[àa]\s*payer|d[ûu])|acompte|r[èe]glement|mode\s*de\s*paiement|rib\b|iban)/i;
 const SKIP=/^(?:sous[- ]?total|sous\s+total|subtotal|report|suite|page\s*\d|(?:total|montant)\b.*\b(?:main[- ]?d['’]?\s?(?:œ|oe)uvre|m\.?o\.?|prestations?|fournitures?|mat[ée]riels?|services?|travaux|pose)\b|(?:main[- ]?d['’]?\s?(?:œ|oe)uvre|m\.?o\.?|prestations?|fournitures?|mat[ée]riels?|services?|travaux|pose)\b.*\b(?:sous[- ]?total|total|montant)\b)/i;
 const HEAD=/(d[ée]signation|description|libell[ée]|prestations?|article)/i,HEAD2=/(qt[ée]|quantit|p\.?\s?u|prix|montant|total|unit)/i;
 const HEADING=/^[-–•*#\s]*(fournitures?|mat[ée]riels?|mat[ée]riaux|main[- ]d['’]?\s?(?:œ|oe)uvre|prestations?|services?|travaux|d[ée]placements?)\b[^0-9€]{0,50}$/i;
 const CLI_LBL=/^(?:nom\s+du\s+)?(?:c[l1i]{1,2}[eo]nt|destinataire|factur[ée]e?\s*(?:à|a)|adress[ée]e?\s*(?:à|a)|bill\s*to|à\s*l['’]attention\s+de|intervention\s+chez)\s*[:\-]?\s*(.*)$/i;
 const SITE_LBL=/^(?:adresse\s*(?:du\s*)?chantier|chantier|lieu\s*(?:d['’]\s*)?intervention|adresse\s*d['’]\s*intervention)\s*[:\-]?\s*(.*)$/i;
-const STOP_LBL=/^(?:d[ée]signation|description|libell[ée]|date\b|n[°o]\b|num[ée]ro|objet|validit[ée]|[ée]ch[ée]ance|r[ée]f[ée]rence|qt[ée]|quantit|total|conditions|paiement|mode\s+de|[ée]metteur|exp[ée]diteur|prestataire|fournisseur|main[- ]d|fournitures?|devis\b|facture\b|rapport\b)/i;
-const MOIS={janvier:1,fevrier:2,février:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,août:8,septembre:9,octobre:10,novembre:11,decembre:12,décembre:12};
+const STOP_LBL=/^(?:d[ée]signation|description|libell[ée]|date\b|n[°o]\b|num[ée]ro|objet|motif|observations?|constatations?|travaux\s+r[ée]alis[ée]s?|pr[ée]conisations?|origine|cause|validit[ée]|[ée]ch[ée]ance|r[ée]f[ée]rence|qt[ée]|quantit|total|conditions|paiement|mode\s+de|[ée]metteur|exp[ée]diteur|prestataire|fournisseur|main[- ]d|fournitures?|devis\b|facture\b|rapport\b)/i;
+const MOIS={janvier:1,fevrier:2,février:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,août:8,septembre:9,octobre:10,novembre:11,decembre:12,décembre:12,january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12};
 const RX_MV=/^(pose|installation|d[ée]pose|remplacement|r[ée]paration|d[ée]pannage|mise en|raccordement|entretien|recherche|d[ée]placement|main|forfait|intervention|nettoyage|d[ée]sembouage|ramonage|contr[ôo]le|diagnostic|purge|vidange|[ée]tude|essai|ouverture|percement|saign[ée]e)/i;
 const RX_M=/main[- ]d.?[œo]euvre|\bm\.?o\.?\b|\bpose\b|installation|d[ée]pose|d[ée]pannage|d[ée]placement|intervention|recherche de fuite|mise en service|r[ée]glage|entretien|ramonage|d[ée]sembouage|nettoyage|diagnostic|raccordement|r[ée]paration|forfait|heure|visite|essai|manutention|[ée]vacuation|mise en (?:route|eau)|percement|prestation/i;
 const RX_F=/tube|tuyau|raccord|coude|manchon|r[ée]duction|vanne|robinet|mitigeur|radiateur|s[èe]che[- ]serviettes?|chaudi[èe]re|ballon|cumulus|chauffe[- ]eau|joint|cuivre|\bper\b|multicouche|\bvis\b|collier|siphon|flexible|\bwc\b|cuvette|lavabo|vasque|douche|receveur|baignoire|pompe|circulateur|groupe de s[ée]curit[ée]|vase d.expansion|thermostat|sonde|fourniture|mat[ée]riel|pi[èe]ce|\bkit\b|clapet|filtre|purgeur|d[ée]tendeur|compteur|bonde|r[ée]servoir|cartouche|collecteur|nourrice|isolant|gaine|conduit|ventouse|br[uû]leur|inhibiteur|glycol|t[ée]flon|filasse|soudure|brasure|silicone|colle\b|baguette|console|fixation|visserie|consommable/i;
@@ -203,7 +217,7 @@ function normUnit(u){u=String(u).toLowerCase().replace(/\.$/,'');
 function iso(d,m,y){d=+d;m=+m;y=+y;if(y<100)y+=2000;if(m<1||m>12||d<1||d>31||y<2000||y>2100)return null;return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0')}
 function datesIn(s){s=s.replace(new RegExp(PHONE.source,'g'),' ');const o=[];let m;
   const a=/\b(\d{1,2})\s?[\/.\-]\s?(\d{1,2})\s?[\/.\-]\s?(\d{4}|\d{2})\b/g;while((m=a.exec(s))){const v=iso(m[1],m[2],m[3]);if(v)o.push(v)}
-  const b=/\b(\d{1,2})(?:er)?\s+(janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre)\s+(\d{4})\b/gi;
+  const b=/\b(\d{1,2})(?:er)?\s+(janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre|january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})\b/gi;
   while((m=b.exec(s))){const v=iso(m[1],MOIS[m[2].toLowerCase()],m[3]);if(v)o.push(v)}return o}
 function fmtTel(t){const d=t.replace(/\D/g,'').replace(/^(33|0033)/,'0');return d.length===10?d.replace(/(\d{2})(?=\d)/g,'$1 '):t.trim()}
 function isMine(s){const S_=SS();s=String(s||'');if(/ms\s*plomberie|plomberie\s*(?:&|et)\s*chauffage/i.test(s))return true;
@@ -211,9 +225,10 @@ function isMine(s){const S_=SS();s=String(s||'');if(/ms\s*plomberie|plomberie\s*
     const ph=s.match(PHONE);if(ph){const d=ph[0].replace(/\D/g,'').slice(-9);if(d&&cfg.replace(/\D/g,'').includes(d))return true}}catch(e){}return false}
 
 function lineItem(r,strict){
-  const cm=r.c.length>=2,cs=cm?r.c.slice():(r.c[0]||'').split(/\s+/),tail=[];let i=cs.length;
+  const cm=r.c.length>=2,cs=(cm?r.c.flatMap(cell=>{const x=String(cell||'').trim(),m=x.match(/^(\d+(?:[.,]\d+)?)\s+([^\s]+)$/);return m&&UNIT_RX.test(m[2])?[m[1],m[2]]:[x]}):(r.c[0]||'').split(/\s+/)).filter(x=>! /^[\s"'‘’“”`~;:,|©]+$/.test(x)),tail=[];let i=cs.length;
   while(i>0){const raw=cs[i-1].trim();if(!raw){i--;continue}
-    const c=raw.replace(/€|\beuros?\b|\beur\b/ig,'').trim();
+    let c=raw.replace(/[€₹¥$£©“”]|\beuros?\b|\beur\b/ig,'').trim();
+    if(/^\d+\.$/.test(c))c=c.slice(0,-1); // OCR often leaves a sentence dot after an integer quantity.
     if(!c){tail.unshift({k:'cur',raw});i--;continue}
     const sp=c.replace(/\s/g,'');
     if(/^-?\d+(?:[.,]\d+)?%$/.test(sp)){tail.unshift({k:'pct',v:pn(sp),raw});i--;continue}
@@ -225,8 +240,17 @@ function lineItem(r,strict){
   if(!N.length)return null;
   const base=Math.max(0,N.length-5),A=N.slice(base);
   const ok=(a,b,c)=>Math.abs(a*b-c)<=Math.max(.05,Math.abs(c)*.006);
-  const tryEnd=e=>{for(let j=e-1;j>=1;j--)for(let k=j-1;k>=0;k--)if(ok(A[k],A[j],A[e]))return{q:A[k],pu:A[j],i:k+base,e:e+base};return null};
-  let t=A.length>=3?tryEnd(A.length-1):null;if(!t&&A.length>=4)t=tryEnd(A.length-2);
+  const stripCurrencyGlyph7=raw=>{const s=String(raw||'').replace(/[€₹¥$£©“”\s]/g,'');if(!/^7(?:\d{2,}|\d{1,3}(?:,\d{3})+)(?:[.,]\d{2})?$/.test(s))return null;return pn(s.slice(1))};
+  const tryEnd=(e,repairOcr=false)=>{for(let j=e-1;j>=1;j--)for(let k=j-1;k>=0;k--){
+    if(ok(A[k],A[j],A[e]))return{q:A[k],pu:A[j],i:k+base,e:e+base};
+    // Some OCR models read the rupee glyph as a leading 7. Correct it only when
+    // removing that glyph makes quantity × unit price equal the printed amount.
+    if(repairOcr){const rawPrice=tail[pos[j+base]]?.raw,rawAmount=tail[pos[e+base]]?.raw,p=stripCurrencyGlyph7(rawPrice),a=stripCurrencyGlyph7(rawAmount);
+      if(p!=null&&a!=null&&ok(A[k],p,a))return{q:A[k],pu:p,i:k+base,e:e+base,repaired:true};
+      if(p!=null&&ok(A[k],p,A[e]))return{q:A[k],pu:p,i:k+base,e:e+base,repaired:true};
+      if(a!=null&&ok(A[k],A[j],a))return{q:A[k],pu:A[j],i:k+base,e:e+base,repaired:true};}
+  }return null};
+  let t=A.length>=3?tryEnd(A.length-1):null;if(!t&&A.length>=3)t=tryEnd(A.length-1,true);if(!t&&A.length>=4)t=tryEnd(A.length-2);if(!t&&A.length>=4)t=tryEnd(A.length-2,true);
   let q,pu,first,valid=true;
   if(t){q=t.q;pu=t.pu;first=pos[t.i]}
   else if(A.length>=2&&Math.abs(A[A.length-1]-A[A.length-2])<.005){q=1;pu=A[A.length-1];first=pos[N.length-2]}
@@ -237,12 +261,13 @@ function lineItem(r,strict){
   if(!unit&&cm&&first>0&&tail[first-1].k==='unit'){unit=tail[first-1].v;first--}
   const des=cs.slice(0,i).concat(tail.slice(0,first).map(x=>x.raw)).join(' ').replace(/[\s:;.\-–—|]+$/,'').trim();
   if(!/[A-Za-zÀ-ÿ]{3}/.test(des)||META.test(des)||ADDR.test(des)||PHONE.test(des))return null;
-  return{id:uid(),des,q,u:unit,pu,ok:valid}}
-function classify(l,ctx){
+  const description=des.replace(/^\d{1,3}[.)\,"'’‘]?\s+/,'');
+  return{id:uid(),des:description,q,u:unit,pu,ok:valid,ocrRepaired:!!(t&&t.repaired)}}
+function classify(l,ctx,docType){
   if(ctx)return ctx;let f=0,m=0;const d=l.des;
   if(RX_MV.test(d))m+=3;if(l.u==='h')m+=3;if(RX_M.test(d))m+=1;if(RX_F.test(d))f+=2;if(/^fourniture/i.test(d)&&!/pose/i.test(d))f+=2;
   if(/^(u|m|ml|kg|l|m²)$/.test(l.u))f+=1;
-  if(m!==f)return m>f?'M':'F';return /^(u|m|ml|kg|l|m²)$/.test(l.u)?'F':'M'}
+  if(m!==f)return m>f?'M':'F';if(docType==='f')return'F';return /^(u|m|ml|kg|l|m²)$/.test(l.u)?'F':'M'}
 function isSummaryLine(value){
   const t=norm(value).replace(/[^a-z0-9]+/g,' ').trim();
   const hasTotal=/^(?:sous total|total|totale|montant|cumul)\b/.test(t);
@@ -250,13 +275,13 @@ function isSummaryLine(value){
   return (hasTotal&&hasCategory)
     || /^(?:main d oeuvre totale?|total main d oeuvre|total net du devis|total ht|total ttc|total net|total general)$/.test(t);
 }
-function parseItems(L){
+function parseItems(L,docType){
   let s=L.findIndex(r=>HEAD.test(r.t)&&HEAD2.test(r.t)&&r.t.length<140);
   const strict=s<0;let e=L.length;
   for(let i=Math.max(0,s+1);i<L.length;i++){
     if(END.test(L[i].t)){
       const tn=norm(L[i].t).replace(/[^a-z0-9]+/g,' ').trim();
-      if(/^(?:total ht|total ttc|total net|total general|net a payer|montant total|montant tva|base ht|tva|conditions|bon pour accord|reste a payer|acompte|reglement|mode de paiement|rib|iban)\b/.test(tn)){e=i;break}
+      if(/^(?:total ht|total ttc|total net|total general|total due|net a payer|montant total|montant tva|base ht|tva|gst|sales tax|subtotal|conditions|bon pour accord|reste a payer|acompte|reglement|mode de paiement|rib|iban)\b/.test(tn)){e=i;break}
     }
   }
   const items=[];let ctx=null,last=null,cont=0,sawSupplySubtotal=false,recap=false;
@@ -281,17 +306,17 @@ function parseItems(L){
       last.des+=' – '+t.replace(/^[-–•*\s]+/,'');cont++;
     }
   }
-  items.forEach(l=>{l.kind=classify(l,l.ctx)});return items;
+  items.forEach(l=>{l.kind=classify(l,l.ctx,docType)});return items;
 }
-function money(t){const m=t.match(/(-?\d[\d\s.]*(?:,\d{1,2})?)\s*(?:€|eur\w*)?\s*$/i);return m?pn(m[1]):NaN}
+function money(t){const s=String(t||'').replace(/[;:|,'"’]+\s*$/,'');const m=s.match(/(?:[€₹¥$£©]\s*)?(-?\d[\d\s.,]*)\s*(?:€|₹|¥|\$|£|©|eur\w*)?\s*$/i);return m?pn(m[1]):NaN}
 function parseTotals(L){const T={ht:null,ttc:null,tva:null,rate:null,rmPct:null,rm:null};
   for(const r of L){
     const t=r.t.trim(),tn=norm(t),m=money(t),pc=(t.match(/(\d{1,2}(?:[.,]\d+)?)\s*%/)||[])[1];
     // Only accept document-level totals, not line totals or section subtotals.
-    if(/^(?:net\s*[àa]\s*payer|total\s*ttc|montant\s*ttc|total\s*t\.?t\.?c)\b/i.test(t)){if(!isNaN(m))T.ttc=m}
-    else if(/^(?:total|montant)\s*(?:net\s*)?h\.?t\.?\b|^total\s+net\s+du\s+devis\b|^total\s+g[ée]n[ée]ral\s+h\.?t\.?\b/i.test(t)){if(!isNaN(m))T.ht=m}
+    if(/^(?:net\s*[àa]\s*payer|total\s*ttc|montant\s*ttc|total\s*t\.?t\.?c|total\s+due)\b/i.test(t)){if(!isNaN(m))T.ttc=m}
+    else if(/^(?:total|montant)\s*(?:net\s*)?h\.?t\.?\b|^total\s+net\s+du\s+devis\b|^total\s+g[ée]n[ée]ral\s+h\.?t\.?\b|^sub\s*total\b|^subtotal\b/i.test(t)){if(!isNaN(m))T.ht=m}
     else if(/non\s+applicable|293\s*b/i.test(t)){T.rate=0}
-    else if(/^\s*(?:tva|t\.v\.a)\b/i.test(t)&&!/intra|n°/i.test(t)){if(pc)T.rate=pn(pc);if(!isNaN(m)&&!/%\s*$/.test(t))T.tva=Math.abs(m)}
+    else if(/^\s*(?:tva|t\.v\.a|gst(?:\s+at\s+\d+(?:[.,]\d+)?\s*%)?|sales\s+tax)\b/i.test(t)&&!/intra|n°/i.test(t)){if(pc)T.rate=pn(pc);if(!isNaN(m)&&!/%\s*$/.test(t))T.tva=Math.abs(m)}
     else if(/^\\W*(?:remise|r[ée]duction|escompte)\b(?!\s+(?:en|à|a)\s)/i.test(t)){if(pc)T.rmPct=pn(pc);else if(!isNaN(m))T.rm=Math.abs(m)}
   }
   if(T.rate==null){const snap=x=>{for(const a of[0,2.1,5.5,8.5,10,20])if(Math.abs(x-a)<.7)return a;return r2(x)};
@@ -308,7 +333,7 @@ function clientFrom(block){const c={name:'',addr:'',cp:'',ville:'',tel:'',email:
   for(const raw of block){let s=dedupeRepeatedPhrase(String(raw).trim());if(!s||isMine(s))continue;
     const em=s.match(EMAIL);if(em&&!c.email){c.email=em[0];s=s.replace(em[0],'').replace(/e-?mail\s*:?/i,'').trim()}
     const ph=s.match(PHONE);if(ph&&!c.tel){c.tel=fmtTel(ph[0]);s=s.replace(ph[0],'').replace(/(t[ée]l[ée]?(?:phone)?|mob(?:ile)?|port(?:able)?)\.?\s*:?/i,'').trim()}
-    s=dedupeRepeatedPhrase(s.replace(/^(?:nom|adresse|adr\.?|ville|code\s*postal)\s*:\s*/i,'').replace(/^[:\-–\s]+|[:\-–\s]+$/g,''));if(!s)continue;
+    s=dedupeRepeatedPhrase(s.replace(/^(?:nom|adresse|adr\.?|ville|code\s*postal(?:\s+(?:du\s+)?chantier)?)\s*:\s*/i,'').replace(/^[:\-–\s]+|[:\-–\s]+$/g,''));if(!s)continue;
     if(c.name&&norm(s)===norm(c.name))continue;
     const cv=s.match(/\b(\d{5})\s+([A-Za-zÀ-ÿ'’\- ]{2,})$/);
     if(cv&&!c.cp){c.cp=cv[1];c.ville=cv[2].trim();s=s.replace(cv[0],'').trim();if(s)c.addr=appendUniqueText(c.addr,s);continue}
@@ -337,7 +362,7 @@ function findClient(L){let cli=null,site=null;
   // This avoids mistaking the company, issuer, or another contact for the customer.
   for(let i=0;i<L.length&&!(cli&&site);i++){const r=L[i];
     for(let ci=0;ci<r.c.length;ci++){const cell=r.c[ci];if(cell.length>120)continue;let m;
-      if(!cli&&(m=cell.match(CLI_LBL))){const b=blockAfter(L,i,ci,8);if(m[1].trim())b.unshift(m[1].trim());const c=clientFrom(b);if(c.name&&!isMine(c.name))cli=c}
+      if(!cli&&(m=cell.match(CLI_LBL))){const b=blockAfter(L,i,ci,8),labelName=m[1].trim();if(labelName&&(!/^bill\s*to\b/i.test(cell)||labelName.replace(/[^A-Za-zÀ-ÿ]/g,'').length>=3))b.unshift(labelName);const c=clientFrom(b);if(c.name&&!isMine(c.name))cli=c}
       else if(!site&&(m=cell.match(SITE_LBL))){const b=blockAfter(L,i,ci,4).filter(x=>!/^nom\s*:/i.test(x));if(m[1].trim())b.unshift(m[1].trim());const c=clientFrom(['x'].concat(b));if(c.addr||c.cp)site=c}
     }
   }
@@ -347,28 +372,39 @@ function findClient(L){let cli=null,site=null;
   if(site&&(site.addr||site.cp))addrs.push({t:'Chantier',addr:site.addr,cp:site.cp,ville:site.ville});
   return{cli,addrs}}
 function detectType(L,name){const head=L.slice(0,18).map(r=>r.t).join('\n')+'\n'+name,all=L.map(r=>r.t).join('\n'),n=(rx,s)=>(s.match(rx)||[]).length;
-  const d=n(/devis/gi,head)*3+n(/devis/gi,all)+(/bon pour accord/i.test(all)?3:0),
-        f=n(/factur/gi,head)*3+n(/factur/gi,all)+(/net [àa] payer|[ée]ch[ée]ance/i.test(all)?1:0),
+  const d=n(/devis|estimate|quotation/gi,head)*3+n(/devis|estimate|quotation/gi,all)+(/bon pour accord/i.test(all)?3:0),
+        f=n(/factur|invoice|receipt/gi,head)*3+n(/factur|invoice|receipt/gi,all)+(/net [àa] payer|[ée]ch[ée]ance|total due/i.test(all)?1:0),
         x=n(/rapport|compte[- ]rendu|bon d.intervention/gi,head)*4+n(/observations?|constat/gi,all);
   return x>d&&x>f?'x':f>d?'f':'d'}
+function reportCategory(text){const t=norm(text);if(/degat des eaux|inondation|sinistre.*eau/.test(t))return'Dégât des eaux';if(/recherche.*fuite|fuite|infiltration/.test(t))return'Recherche de fuite';if(/panne.*chauffage|chaudiere|chauffage/.test(t))return'Panne de chauffage';if(/diagnostic.*plomberie|diagnostic plomberie/.test(t))return'Diagnostic plomberie';return'Autre'}
 function detectNum(L,name){const head=L.slice(0,30).map(r=>r.t).join('\n');
-  const rx=[/\b((?:DEV|FAC|FACT|FA|RAP|RI|DE)[-_/ ]?\d{4}[-_/ ]?\d{1,6})\b/i,/(?:devis|facture|rapport)\s*(?:n[°o]|num[ée]ro|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-_/.]{2,})/i,/n[°o]\s*(?:de\s*)?(?:devis|facture)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-_/.]{2,})/i];
+  const rx=[/\b((?:DEV|FAC|FACT|FA|RAP|RI|DE|INV)[-_/ ]?\d{4}[-_/ ]?\d{1,6})\b/i,/(?:devis|facture|rapport|invoice|receipt)\s*(?:n[°o]|no\.?|num[ée]ro|number|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-_/.]{2,})/i,/n[°o]\s*(?:de\s*)?(?:devis|facture)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-_/.]{2,})/i];
   for(const r of rx){const m=head.match(r)||name.match(r);if(m)return m[1].toUpperCase().replace(/[_ /]/g,'-')}return''}
 function parse(text,name,rowsIn){
-  const L=(rowsIn&&rowsIn.length?rowsIn:toRows(text)).filter(r=>r.c&&r.c.length);L.forEach(r=>{r.c=r.c.map(dedupeRepeatedPhrase).filter(Boolean);r.t=dedupeRepeatedPhrase(r.c.join(' ')).replace(/\s+/g,' ').trim()});
+  const L=(rowsIn&&rowsIn.length?rowsIn:toRows(text)).filter(r=>r.c&&r.c.length);L.forEach(r=>{r.c=r.c.map(v=>dedupeRepeatedPhrase(v).replace(/^[\s.;:|,'"“”’]+/,'').replace(/^i(?=\s+(?:subtotal|total|gst|tva)\b)/i,'')).filter(Boolean);r.t=dedupeRepeatedPhrase(r.c.join(' ')).replace(/\s+/g,' ').trim()});
   const type=detectType(L,name||''),num=detectNum(L,name||''),top=L.slice(0,40);
   let date=null,due=null;
   for(const r of top){const ds=datesIn(r.t);if(!ds.length)continue;
-    if(/valid|[ée]ch[ée]ance|valable/i.test(r.t)){due=due||ds[0]}else if(!date||/date/i.test(r.t))date=date&&!/date/i.test(r.t)?date:ds[0]}
-  const{cli,addrs}=findClient(L),lines=parseItems(L),tot=parseTotals(L),warns=[];
+    if(/valid|[ée]ch[ée]ance|valable|\bdue\b/i.test(r.t)){due=due||ds[0]}else if(!date||/date/i.test(r.t))date=date&&!/date/i.test(r.t)?date:ds[0]}
+  const{cli,addrs}=findClient(L),lines=parseItems(L,type),tot=parseTotals(L),warns=[],repairs=[];
   const sum=r2(lines.reduce((a,l)=>a+l.q*l.pu,0));
+  const dropLeadingOcrGlyph=v=>{const s=String(v==null?'':v);if(!/^\d{4,}(?:\.\d{1,2})?$/.test(s))return null;const n=pn(s.slice(1));return isFinite(n)?r2(n):null};
+  const matches=(a,b)=>a!=null&&b!=null&&Math.abs(a-b)<=.01;
+  if(tot.ht!=null&&sum>0&&!matches(tot.ht,sum)&&matches(dropLeadingOcrGlyph(tot.ht),sum)){tot.ht=sum;repairs.push('sous-total')}
+  if(tot.ht!=null&&tot.rate!=null){const inferredTax=r2(tot.ht*tot.rate/100),inferredTtc=r2(tot.ht+inferredTax);
+    if(tot.tva!=null&&!matches(tot.tva,inferredTax)&&matches(dropLeadingOcrGlyph(tot.tva),inferredTax)){tot.tva=inferredTax;repairs.push('TVA')}
+    if(tot.ttc!=null&&!matches(tot.ttc,inferredTtc)&&matches(dropLeadingOcrGlyph(tot.ttc),inferredTtc)){tot.ttc=inferredTtc;repairs.push('total TTC')}
+  }
+  if(lines.some(l=>l.ocrRepaired))repairs.push('prix de ligne');
+  if(repairs.length)warns.push('Caractères OCR corrigés par rapprochement des calculs ('+repairs.join(', ')+'). Vérifiez les montants sur le document original.');
   if(tot.rmPct==null&&tot.rm&&sum>0)tot.rmPct=r2(tot.rm/sum*100);
   const ht=r2(sum*(1-(tot.rmPct||0)/100));
   if(type!=='x'&&!lines.length)warns.push('Aucune ligne de prestation ou fourniture reconnue : ajoutez-les à la main ou réessayez avec un meilleur scan.');
   if(tot.ht!=null&&lines.length&&Math.abs(tot.ht-ht)>.05)warns.push('Écart entre le total lu ('+eur(tot.ht)+') et la somme des lignes ('+eur(ht)+') : vérifiez les quantités et prix.');
+  if(tot.ttc!=null&&lines.length){const calculatedTTC=r2(ht*(1+(tot.rate||0)/100));if(Math.abs(tot.ttc-calculatedTTC)>.05)warns.push('Écart entre le TTC lu ('+eur(tot.ttc)+') et le TTC recalculé ('+eur(calculatedTTC)+') : vérifiez la TVA, les lignes ou un éventuel acompte.');}
   if(lines.some(l=>!l.ok))warns.push('Certaines lignes sont à vérifier (encadrées en orange).');
   if(!cli.name)warns.push('Client non détecté : saisissez-le ci-dessous.');
-  return{type,num,date,due,cli,addrs,lines,tot:{ht:tot.ht,ttc:tot.ttc,rate:tot.rate,rmPct:tot.rmPct||0},warns,txt:type==='x'?text.slice(0,6000):'',paid:/acquitt/i.test(text)}}
+  return{type,num,date,due,cli,addrs,lines,tot:{ht:tot.ht,ttc:tot.ttc,rate:tot.rate,rmPct:tot.rmPct||0},warns,txt:type==='x'?text.slice(0,6000):'',reportType:type==='x'?reportCategory(text):'',paid:/acquitt/i.test(text)}}
 const calc=d=>{const s=r2(d.lines.reduce((a,l)=>a+nv(l.q)*nv(l.pu),0)),rm=r2(s*nv(d.tot.rmPct)/100),ht=r2(s-rm),tva=r2(ht*nv(d.tot.rate)/100);return{s,rm,ht,tva,ttc:r2(ht+tva)}};
 
 /* ---------- adaptation au modèle de données de l'app (détecté sur tes données) ---------- */
@@ -381,9 +417,9 @@ const has=(m,list)=>list.find(k=>(m[k]||[]).length&&m[k].some(v=>v!=null&&v!==''
 function probe(){const s=SS()||{},D=(s.docs||[]).filter(Boolean).slice(-40),C=(s.clients||[]).filter(Boolean).slice(-60),T=(s.cat||[]).filter(Boolean).slice(-80),R=(s.rep||[]).filter(Boolean).slice(-20);
   const sig=[D.length,C.length,T.length,R.length].join('|');if(PR&&PRsig===sig)return PR;
   const K={},isPhone=v=>/^[+\d][\d\s.()+\-]{7,}$/.test(v.trim());
-  K.dNum=pick(D,v=>/^[A-Za-z]{1,5}[-_/ ]?\d{4}[-_/ ]?\d{1,6}$/.test(v.trim()),['no','num','numero','n','ref','nb'],'no');
+  K.dNum=pick(D,v=>/^[A-Za-z]{1,5}[-_/ ]?\d{4}[-_/ ]?\d{1,6}$/.test(v.trim()),['no','num','numero','n','ref','nb'],'num');
   K.dDate=pick(D,v=>/^\d{4}-\d{2}-\d{2}$/.test(v),['date','dt','d','dc'],'date');
-  K.dCli='cl';const ids=new Set(C.map(c=>c.id)),cn={};
+  K.dCli='cid';const ids=new Set(C.map(c=>c.id)),cn={};
   D.forEach(d=>{for(const k in d)if(typeof d[k]==='string'&&ids.has(d[k]))cn[k]=(cn[k]||0)+1});
   const ck=Object.keys(cn).sort((a,b)=>cn[b]-cn[a])[0];if(ck)K.dCli=ck;
   const LN=[];D.forEach(d=>(d.F||[]).concat(d.M||[]).forEach(l=>l&&typeof l==='object'&&LN.push(l)));const lk=keysOf(LN);
@@ -396,19 +432,18 @@ function probe(){const s=SS()||{},D=(s.docs||[]).filter(Boolean).slice(-40),C=(s
        cp:C.length?pick(C,v=>/^\d{5}$/.test(v.trim()),['cp','zip','postal'],null):'cp',
        ville:C.length?pick(C,v=>v.length>1,['v','ville','city','vl'],null,1):'v',
        addr:pick(C,v=>/\d/.test(v)&&/[A-Za-zÀ-ÿ]{3}/.test(v)&&!/@/.test(v)&&v.length>6,['a','adr','adresse','address','rue'],'a',1)};
-  K.dEmb={};D.slice(-8).forEach(d=>{const cl=C.find(c=>c.id===d[K.dCli]);if(!cl)return;
-    for(const r in K.c){const ck2=K.c[r];if(!ck2||!cl[ck2])continue;for(const k in d)if(!K.dEmb[r]&&k!==K.dCli&&typeof d[k]==='string'&&d[k]===cl[ck2])K.dEmb[r]=k}});
-  const tk=keysOf(T);K.cat={name:'n',price:'p',unit:null,type:null,buy:null,mrg:null};K.catT={F:'F',M:'M'};
+  K.dEmb={name:'cn',addr:'ca',postalCity:'cc',tel:'ct',email:'ce'};
+  const tk=keysOf(T);K.cat={name:'d',price:'p',unit:'u',type:'t',buy:null,mrg:null};K.catT={F:'F',M:'M'};
   if(T.length){let b=0;for(const x in tk){if(x==='id')continue;const vs=tk[x].filter(v=>typeof v==='string'&&v);if(!vs.length)continue;const a=vs.reduce((q,v)=>q+v.length,0)/vs.length;if(a>b){b=a;K.cat.name=x}}
     K.cat.price=has(tk,['p','pv','pu','prix','price','ht'])||'p';K.cat.unit=has(tk,['u','un','unit','unite']);
     K.cat.type=has(tk,['k','cat','categorie','type','t','g']);K.cat.buy=has(tk,['a','ach','achat','pa','cout']);K.cat.mrg=has(tk,['m','mg','marge','coef','marg']);
     if(K.cat.type){const vals=[...new Set(tk[K.cat.type].filter(v=>typeof v==='string'&&v))];K.catT={F:vals.find(v=>/^f|fourn|mat/i.test(v))||'F',M:vals.find(v=>/^(m|p|s)|prest|main|serv/i.test(v))||'M'}}
     if(K.cat.buy&&K.cat.mrg){const x=T.find(t=>nv(t[K.cat.buy])>0&&nv(t[K.cat.price])>0);
       if(x){const b2=nv(x[K.cat.buy]),m=nv(x[K.cat.mrg]),p=nv(x[K.cat.price]);K.cat.f=Math.abs(b2*(1+m/100)-p)<.02?1:Math.abs(b2/(1-m/100)-p)<.02?2:0;K.cat.mv=m}else K.cat.f=0}}
-  K.r={txt:'tx',ti:'ti',date:'date',cli:'cl'};
+  K.r={txt:'tr',ti:'ty',date:'date',cli:'cn'};
   if(R.length){const rk=keysOf(R);let b=0;for(const x in rk){if(x==='id')continue;const vs=rk[x].filter(v=>typeof v==='string'&&v);if(!vs.length)continue;const a=vs.reduce((q,v)=>q+v.length,0)/vs.length;if(a>b){b=a;K.r.txt=x}}
-    K.r.date=pick(R,v=>/^\d{4}-\d{2}-\d{2}$/.test(v),['date','dt','d'],'date');K.r.ti=has(rk,['ti','titre','t','obj','objet','n'])||'ti';
-    const cc={};R.forEach(d=>{for(const k in d)if(typeof d[k]==='string'&&ids.has(d[k]))cc[k]=1});K.r.cli=Object.keys(cc)[0]||'cl'}
+    K.r.date=pick(R,v=>/^\d{4}-\d{2}-\d{2}$/.test(v),['date','dt','d'],'date');K.r.ti=has(rk,['ty','ti','titre','t','obj','objet','n'])||'ty';
+    const cc={};R.forEach(d=>{for(const k in d)if(typeof d[k]==='string'&&ids.has(d[k]))cc[k]=1});K.r.cli=Object.keys(cc)[0]||'cn'}
   K.first=D.length>1&&String(D[0][K.dDate]||'')>=String(D[D.length-1][K.dDate]||'');
   PR=K;PRsig=sig;return K}
 const emptyLike=o=>{const r={};for(const k in o){const v=o[k];r[k]=Array.isArray(v)?[]:typeof v==='number'?0:typeof v==='boolean'?false:v&&typeof v==='object'?{}:''}return r};
@@ -472,11 +507,15 @@ function mkDoc(it,K,cid,out){const s=SS(),d=it.data,t=d.type==='f'?'f':'d',docs=
   const o=emptyLike(tpl);o.id=uid();o.t=t;
   let no=it.opt.num&&d.num?d.num:'';if(!no||dup)no=nextNo(t,K,no||'');
   o[K.dNum]=no;o[K.dDate]=d.date||today();if(cid)o[K.dCli]=cid;
-  const c=d.cli;if(c.name){const emb={name:c.name,tel:c.tel,email:c.email,addr:c.addr};for(const r in K.dEmb)if(emb[r])o[K.dEmb[r]]=emb[r]}
+  const c=d.cli;if(c.name){const emb={name:c.name,tel:c.tel,email:c.email,addr:c.addr,postalCity:[c.cp,c.ville].filter(Boolean).join(' ')};for(const r in K.dEmb)if(emb[r])o[K.dEmb[r]]=emb[r]}
+  const site=(d.addrs||[]).find(a=>/chantier|intervention/i.test(a.t||''));if(site){o.sa=site.addr||'';o.sc=[site.cp,site.ville].filter(Boolean).join(' ')}
   o.F=F;o.M=M;o.rm=d.tot.rmPct||0;o.tva=rate;o.acc=tpl.acc!=null?tpl.acc:((s.cfg&&s.cfg.acc)||40);o.paid=!!(t==='f'&&d.paid);o.ap=false;o.st='';
   if(K.first)docs.unshift(o);else docs.push(o);out.push((t==='f'?'Facture ':'Devis ')+no+' créé'+(t==='f'?'e':'')+' ('+d.lines.length+' ligne'+(d.lines.length>1?'s':'')+')');return o}
-function mkRapport(it,K,cid,out){const s=SS(),R=s.rep||(s.rep=[]),d=it.data,o=Object.assign(emptyLike(R[R.length-1]||{}),{id:uid()});
-  o[K.r.date]=d.date||today();o[K.r.ti]='Rapport '+(d.num||it.name.replace(/\.[^.]+$/,''));o[K.r.txt]=d.txt||'';if(cid)o[K.r.cli]=cid;R.unshift(o);out.push('Rapport créé');return o}
+function mkRapport(it,K,cid,out){const s=SS(),R=s.rep||(s.rep=[]),d=it.data,y=new Date().getFullYear(),seqKey='r'+y;
+  if(!d.num)s.seq[seqKey]=(s.seq[seqKey]||0)+1;
+  const a=d.addrs?.[it.addr||0]||{addr:d.cli.addr,cp:d.cli.cp,ville:d.cli.ville},num=d.num||'RAP-'+y+'-'+String(s.seq[seqKey]).padStart(3,'0'),o=Object.assign(emptyLike(R[R.length-1]||{}),{id:uid(),num,date:d.date||today(),ty:d.reportType||'Autre',cn:d.cli.name||'',ca:a.addr||d.cli.addr||'',cc:[a.cp||d.cli.cp,a.ville||d.cli.ville].filter(Boolean).join(' '),ct:d.cli.tel||'',ass:'',sn:'',mo:'',co:'',org:'',tr:d.txt||'',pr:''});
+  if(K.r.date!=='date')o[K.r.date]=d.date||today();if(K.r.ti!=='ty')o[K.r.ti]='Rapport';if(K.r.txt!=='tr')o[K.r.txt]=d.txt||'';if(K.r.cli!=='cn'&&cid)o[K.r.cli]=cid;
+  R.unshift(o);out.push('Rapport créé');return o}
 function commit(it){const s=SS();if(!s)return say('Application non prête');const K=probe(),d=it.data,sc=it.sc,out=[];snap();
   try{let cid=null;
     if((sc.all||sc.cli)&&d.cli.name)cid=upCli(it,K,out);
@@ -561,6 +600,7 @@ function view(){restore();const it=cur();
   <label class="imp-drop" id="imp-drop" for="imp-file">${IC.up}<b>Sélectionner des fichiers</b><small>PDF, Images, Word</small></label>
   <input id="imp-file" type="file" multiple accept=".pdf,.docx,.doc,.txt,.csv,image/*" style="display:none">
   <label class="b gh" for="imp-cam"><span style="display:flex;gap:8px;align-items:center">${IC.cam} Prendre une photo</span></label><input id="imp-cam" type="file" accept="image/*" capture="environment" style="display:none">
+  <button class="b gh" data-a="supplier"><span>Importer un ticket ou une facture fournisseur</span></button>
   <button class="b cu" data-a="go"><span>Transférer vers la nouvelle mise en page</span></button></div>
   ${ST.items.length?`<div class="c imp"><h3>Fichiers importés</h3>${ST.items.map(itemRow).join('')}</div>`:''}
   ${it&&it.data?review(it):''}${UNDO&&!(it&&it.status==='done')?`<div class="c imp"><button class="b gh" data-a="un"><span>Annuler le dernier transfert</span></button></div>`:''}`}
@@ -574,6 +614,7 @@ function preview(it){const m=document.createElement('div');m.className='imp-pv i
   m.innerHTML=`<div><b>${H(it.name)}</b><button class="b gh sm" style="width:auto;margin:0" data-x><span>Fermer</span></button></div><div>${orig}<pre>${H(it.raw||'(texte indisponible)')}</pre></div>`;
   m.addEventListener('click',e=>{if(e.target.closest('[data-x]'))m.remove()});document.body.appendChild(m)}
 function onClick(e){const a=e.target.closest('[data-a]');if(!a)return;const act=a.dataset.a,row=e.target.closest('[data-id]'),it=row?ST.items.find(i=>i.id===row.dataset.id):cur();
+  if(act==='supplier'){if(typeof G.go==='function')G.go('sf');return}
   if(act==='sel'){if(e.target.closest('.imp-ac'))return;ST.sel=row.dataset.id;paint();return}
   if(act==='pv'&&it)return preview(it);
   if(act==='re'&&it){it.status='wait';runQueue();paint();return}
