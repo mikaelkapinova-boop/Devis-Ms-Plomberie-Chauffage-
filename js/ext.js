@@ -34,12 +34,12 @@ return `<div class="c"><h3>Mon entreprise (en-tête des documents)</h3>${I('Rais
 <div class="c"><h3>Micro-entreprise (calcul des bénéfices)</h3><div class="g2">${N('Cotisations (%)','cot')}${N('Impôt libératoire (%)','imp')}</div></div>
 <div class="c"><h3>Apparence</h3><label>Thème<select onchange="cs('th',this.value)"><option value="auto" ${c.th==='auto'?'selected':''}>Automatique</option><option value="light" ${c.th==='light'?'selected':''}>Clair</option><option value="dark" ${c.th==='dark'?'selected':''}>Sombre</option></select></label></div>
 <div class="c"><h3>Clé API</h3><label>Clé Perplexity<input type="password" placeholder="pplx-…" value="${esc(c.pk||'')}" oninput="cs('pk',this.value)" autocomplete="off"></label><button class="b gh sm" onclick="go('k')">Connecteurs</button></div>
-	<div class="c"><h3>Synchronisation entre téléphones</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Utilise le même identifiant et mot de passe de l’application sur les deux appareils. Les données sont chiffrées avant leur envoi vers GitHub. Colle le même jeton GitHub (autorisé à lire et écrire le dépôt de l’application) sur chacun. Ensuite, les changements se synchronisent automatiquement au fil de l’utilisation.</p>${I('Jeton GitHub (à saisir sur chaque téléphone)','gh.tok','password','github_pat_…')}<button class="b gh sm" type="button" onclick="ghPush(1)">Synchroniser maintenant</button><small id="ghst" class="mu" style="display:block;margin-top:8px">${esc(ghLastStatus)}</small></div>
+	<div class="c"><h3>Synchronisation entre téléphones</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Utilise le même identifiant, mot de passe et jeton GitHub sur les deux appareils. Les données sont chiffrées avant leur envoi. Quand l’application est ouverte et connectée à Internet, les changements apparaissent automatiquement sur l’autre téléphone en quelques secondes.</p>${I('Jeton GitHub (à saisir sur chaque téléphone)','gh.tok','password','github_pat_…')}<button class="b gh sm" type="button" onclick="ghPush(1)">Synchroniser maintenant</button><small id="ghst" class="mu" style="display:block;margin-top:8px">${esc(ghLastStatus)}</small></div>
 	<div class="c"><h3>Sauvegarde</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Toutes tes données restent enregistrées dans l'appli (devis, factures, clients, tarifs, rapports) jusqu'à suppression manuelle. Fais une sauvegarde régulière.</p><div class="g2"><button class="b" onclick="bkExp()">Exporter (fichier .json)</button><label class="b gh" style="text-align:center;display:flex;align-items:center;justify-content:center"><span>Restaurer une sauvegarde</span><input type="file" accept=".json,application/json" style="display:none" onchange="bkImp(this.files[0])"></label></div><p class="mu" style="font-size:12px;margin:8px 0 0">${S.docs.length} document(s) · ${S.clients.length} client(s) · ${S.cat.length} tarif(s) · ${S.rep.length} rapport(s)</p></div>
 <div class="c"><h3>Accès</h3><p class="mu" style="margin:0 0 8px;font-size:13px">L'appli est protégée par identifiant et mot de passe. Les données envoyées hors de l'appareil (GitHub, boîte de réception) sont chiffrées avec ce mot de passe.</p><button class="b gh sm" onclick="authLogout()">Se déconnecter</button></div>
 <div class="c"><h3>Zone sensible</h3><button class="b rd sm" data-t="Tout effacer sur cet appareil" onclick="arm2(this,wipe)">Tout effacer sur cet appareil</button></div>
 <p class="mu" style="text-align:center;font-size:12px">Version ${APPV}</p>`}
-const APPV='7.7.0';
+const APPV='7.8.0';
 function wipe(){for(const k in S)localStorage.removeItem('ms_'+k);localStorage.removeItem('ms_stamp');localStorage.removeItem('ms_key');sessionStorage.removeItem('ms_key');idbPut('pack',null);location.reload()}
 
 /* ---------- Sauvegarde / restauration ---------- */
@@ -272,7 +272,7 @@ function ghApplyPack(pack) {
 }
 function ghStartAuto() {
   if (!S.cfg.gh.tok) return;
-  if (!ghPoll) ghPoll = setInterval(() => { if (!document.hidden) ghSync(false); }, 30000);
+  if (!ghPoll) ghPoll = setInterval(() => { if (!document.hidden) ghSync(false); }, 3000);
   if (ghEventsBound) return;
   ghEventsBound = true;
   window.addEventListener('focus', () => { if (!document.hidden) ghSync(false); });

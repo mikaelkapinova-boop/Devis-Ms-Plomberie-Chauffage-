@@ -2,3 +2,4 @@ tokens.json
 perplexity_jobs.json
 perplexity_jobs.json.tmp
 __pycache__/
+.vercel
