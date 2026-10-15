@@ -75,7 +75,7 @@ const OUTILS = {
         assurance: {type: 'string'}, sinistre: {type: 'string'}, motif: {type: 'string'}, constatations: {type: 'string'},
         origine: {type: 'string'}, travaux: {type: 'string'}, preconisations: {type: 'string'}
       }, ['motif']),
-      fn('client', 'Enregistre ou met à jour un client.', {nom: {type: 'string'}, adresse: {type: 'string'}, cp_ville: {type: 'string'}, tel: {type: 'string'}, email: {type: 'string'}}, ['nom']),
+      fn('client', 'Crée ou met à jour une fiche client à partir des coordonnées lisibles dans un message, une photo ou un document.', {nom: {type: 'string'}, adresse: {type: 'string'}, cp_ville: {type: 'string'}, tel: {type: 'string'}, email: {type: 'string'}}, ['nom']),
       fn('planning', 'Ajoute une intervention au planning.', {date: {type: 'string'}, debut: {type: 'string'}, fin: {type: 'string'}, client: {type: 'string'}, adresse: {type: 'string'}, objet: {type: 'string'}, notes: {type: 'string'}}, ['date', 'objet']),
       fn('tarif', 'Ajoute une ligne à Mes tarifs.', {designation: {type: 'string'}, prix_achat: {type: 'number'}, marge: {type: 'number'}, fournisseur: {type: 'string'}, type: {type: 'string'}}, ['designation', 'prix_achat']),
       fn('marquer_paye', 'Marque une facture payée ou non payée.', {numero: {type: 'string'}, paye: {type: 'boolean'}}, ['numero', 'paye']),
@@ -206,14 +206,20 @@ const OUTILS = {
   client(a) {
     const nom = String(a.nom || '').trim();
     if (nom.length < 2) return {ok: false, erreur: 'Nom trop court'};
-    let c = (S.clients || []).find(x => String(x.n || '').trim().toLowerCase() === nom.toLowerCase());
+    if (!Array.isArray(S.clients)) S.clients = [];
+    let c = S.clients.find(x => String(x.n || '').trim().toLowerCase() === nom.toLowerCase());
     if (!c) { c = {id: nw(), n: nom, a: '', c: '', t: '', e: ''}; S.clients.push(c); }
-    if (a.adresse) c.a = a.adresse;
-    if (a.cp_ville) c.c = a.cp_ville;
-    if (a.tel) c.t = a.tel;
-    if (a.email) c.e = a.email;
+    const adresse = String(a.adresse || '').trim();
+    const cpVille = String(a.cp_ville || '').trim();
+    const tel = String(a.tel || '').trim();
+    const email = String(a.email || '').trim();
+    if (adresse) c.a = adresse;
+    if (cpVille) c.c = cpVille;
+    if (tel) c.t = tel;
+    if (email) c.e = email;
     save('clients');
-    return {ok: true, nom: c.n, texte: 'Client enregistré : ' + c.n};
+    const infos = [c.a, c.c, c.t, c.e].filter(Boolean).join(' · ');
+    return {ok: true, nom: c.n, texte: 'Client enregistré : ' + c.n + (infos ? ' · ' + infos : '')};
   },
 
   planning(a) {
@@ -322,6 +328,21 @@ const OUTILS = {
   }
 };
 
+function swapLineType(k, i) {
+  const d = typeof cur === 'function' ? cur() : null;
+  const from = k === 'M' ? 'M' : 'F';
+  const to = from === 'M' ? 'F' : 'M';
+  const index = Number(i);
+  if (!d || !Array.isArray(d[from]) || !Number.isInteger(index) || index < 0 || index >= d[from].length) return;
+  const line = d[from].splice(index, 1)[0];
+  if (!d[from].length) d[from].push({d: '', q: 1, u: from === 'M' ? 'h' : 'u', p: ''});
+  if (!Array.isArray(d[to])) d[to] = [];
+  d[to].push(Object.assign({}, line));
+  save('docs');
+  render();
+  toast('Ligne déplacée vers ' + (to === 'M' ? 'Main-d’œuvre' : 'Fourniture'));
+}
+
 function outilsLierLogo() {
   document.querySelectorAll('.toplogo').forEach(im => {
     if (im.dataset.home) return;
@@ -420,6 +441,7 @@ async function outilsBoucle(t, eff, userText, content, hist) {
     '\n\nOUTILS DE L\'APPLI — tu les appelles, tu ne décris pas comment faire à la place.\n' +
     'aller, lister, ouvrir, creer_document, modifier_document, creer_rapport, client, planning, tarif, marquer_paye, calculer, memoriser, etat.\n' +
     'Une action dans l\'appli = un appel d\'outil, puis tu confirmes le numéro créé. Tu ne dis jamais que tu ne peux pas. ' +
+    'Si une photo ou un document joint contient clairement les coordonnées d\'un client (nom et adresse, téléphone ou e-mail), relève uniquement les informations lisibles et appelle l\'outil client pour les enregistrer, même si la demande est simplement de les extraire ou de préparer un devis. Ne déduis et n\'invente aucune donnée. Si le nom n\'est pas lisible, ne crée pas de fiche et demande le nom. Une photo de chantier sans coordonnées visibles ne suffit pas.\n' +
     'Recherche web, pages et dépôt GitHub : outils Perplexity, pas une excuse.\n' +
     (mem ? '\n' + mem : '');
   const builtin = [];

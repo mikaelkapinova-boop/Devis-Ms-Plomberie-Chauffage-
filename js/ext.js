@@ -34,12 +34,12 @@ return `<div class="c"><h3>Mon entreprise (en-tête des documents)</h3>${I('Rais
 <div class="c"><h3>Micro-entreprise (calcul des bénéfices)</h3><div class="g2">${N('Cotisations (%)','cot')}${N('Impôt libératoire (%)','imp')}</div></div>
 <div class="c"><h3>Apparence</h3><label>Thème<select onchange="cs('th',this.value)"><option value="auto" ${c.th==='auto'?'selected':''}>Automatique</option><option value="light" ${c.th==='light'?'selected':''}>Clair</option><option value="dark" ${c.th==='dark'?'selected':''}>Sombre</option></select></label></div>
 <div class="c"><h3>Clé API</h3><label>Clé Perplexity<input type="password" placeholder="pplx-…" value="${esc(c.pk||'')}" oninput="cs('pk',this.value)" autocomplete="off"></label><button class="b gh sm" onclick="go('k')">Connecteurs</button></div>
-	<div class="c"><h3>Copie entre appareils</h3>${I('Jeton GitHub','gh.tok','password','github_pat_…')}<div class="g2"><button class="b gh sm" onclick="ghPush(1)">Envoyer</button><button class="b gh sm" onclick="ghPull(1)">Récupérer</button></div></div>
+	<div class="c"><h3>Synchronisation entre téléphones</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Utilise le même identifiant et mot de passe de l’application sur les deux appareils. Les données sont chiffrées avant leur envoi vers GitHub. Colle le même jeton GitHub (autorisé à lire et écrire le dépôt de l’application) sur chacun. Ensuite, les changements se synchronisent automatiquement au fil de l’utilisation.</p>${I('Jeton GitHub (à saisir sur chaque téléphone)','gh.tok','password','github_pat_…')}<button class="b gh sm" type="button" onclick="ghPush(1)">Synchroniser maintenant</button><small id="ghst" class="mu" style="display:block;margin-top:8px">${esc(ghLastStatus)}</small></div>
 	<div class="c"><h3>Sauvegarde</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Toutes tes données restent enregistrées dans l'appli (devis, factures, clients, tarifs, rapports) jusqu'à suppression manuelle. Fais une sauvegarde régulière.</p><div class="g2"><button class="b" onclick="bkExp()">Exporter (fichier .json)</button><label class="b gh" style="text-align:center;display:flex;align-items:center;justify-content:center"><span>Restaurer une sauvegarde</span><input type="file" accept=".json,application/json" style="display:none" onchange="bkImp(this.files[0])"></label></div><p class="mu" style="font-size:12px;margin:8px 0 0">${S.docs.length} document(s) · ${S.clients.length} client(s) · ${S.cat.length} tarif(s) · ${S.rep.length} rapport(s)</p></div>
 <div class="c"><h3>Accès</h3><p class="mu" style="margin:0 0 8px;font-size:13px">L'appli est protégée par identifiant et mot de passe. Les données envoyées hors de l'appareil (GitHub, boîte de réception) sont chiffrées avec ce mot de passe.</p><button class="b gh sm" onclick="authLogout()">Se déconnecter</button></div>
 <div class="c"><h3>Zone sensible</h3><button class="b rd sm" data-t="Tout effacer sur cet appareil" onclick="arm2(this,wipe)">Tout effacer sur cet appareil</button></div>
 <p class="mu" style="text-align:center;font-size:12px">Version ${APPV}</p>`}
-const APPV='7.5.0';
+const APPV='7.6.0';
 function wipe(){for(const k in S)localStorage.removeItem('ms_'+k);localStorage.removeItem('ms_stamp');localStorage.removeItem('ms_key');sessionStorage.removeItem('ms_key');idbPut('pack',null);location.reload()}
 
 /* ---------- Sauvegarde / restauration ---------- */
@@ -47,14 +47,283 @@ function dlBlob(b,nm){const u=URL.createObjectURL(b),a=document.createElement('a
 function bkExp(){const pack={};for(const k in S)pack[k]=S[k];pack._v=APPV;pack._t=Date.now();const c=JSON.parse(JSON.stringify(pack.cfg));c.ai={...c.ai,key:''};c.gh={...c.gh,tok:''};pack.cfg=c;dlBlob(new Blob([JSON.stringify(pack)],{type:'application/json'}),'sauvegarde-msplomberie-'+td()+'.json');toast('Sauvegarde exportée')}
 function bkImp(f){if(!f)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);if(!p.docs&&!p.clients)throw 0;const keep={ai:S.cfg.ai,gh:S.cfg.gh};for(const k of ['clients','cat','docs','cfg','seq','rep','ph','chat'])if(p[k]!=null)S[k]=p[k];cfgInit();if(!S.cfg.ai.key)S.cfg.ai=keep.ai;if(!S.cfg.gh.tok)S.cfg.gh=keep.gh;for(const k in S)save(k);toast('Sauvegarde restaurée');go('h')}catch(e){toast('Fichier de sauvegarde invalide')}};r.readAsText(f)}
 
-/* ---------- Synchronisation GitHub (optionnelle) ---------- */
-let ghSha=null,ghT;
-function ghApi(p,o={}){const r=repoInfo();if(!r||!S.cfg.gh.tok)return Promise.reject(new Error('non configuré'));return fetch('https://api.github.com/repos/'+r+'/contents/'+p,Object.assign({headers:{Authorization:'Bearer '+S.cfg.gh.tok,Accept:'application/vnd.github+json','Content-Type':'application/json'}},o)).then(async x=>{if(!x.ok&&x.status!==404)throw new Error('GitHub '+x.status);return x.status===404?null:x.json()})}
-function u8(s){return btoa(unescape(encodeURIComponent(s)))}function d8(s){return decodeURIComponent(escape(atob(s.replace(/\n/g,''))))}
-function ghPack(){const p={};for(const k of ['clients','cat','docs','seq','rep','chat','plan','ph'])p[k]=S[k];const c=JSON.parse(JSON.stringify(S.cfg));c.ai={...c.ai,key:''};c.gh={tok:'',repo:c.gh.repo};p.cfg=c;p._t=Number(localStorage.getItem('ms_stamp')||Date.now());return p}
-async function ghPush(manual){if(!S.cfg.gh.tok)return manual&&toast('Ajoute un jeton GitHub');const st=$('#ghst');try{if(ghSha===null){const cur=await ghApi('data/store.json');ghSha=cur?cur.sha:''}const body={message:'sync: données chiffrées '+new Date().toLocaleString('fr-FR'),content:u8(JSON.stringify(await encJSON(ghPack())))};if(ghSha)body.sha=ghSha;const r=await ghApi('data/store.json',{method:'PUT',body:JSON.stringify(body)});ghSha=r.content.sha;if(st)st.textContent='Envoyé sur GitHub à '+new Date().toLocaleTimeString('fr-FR');if(manual)toast('Données envoyées sur GitHub')}catch(e){ghSha=null;if(st)st.textContent='Erreur : '+e.message;if(manual)toast('Échec GitHub : '+e.message)}}
-async function ghPull(manual){if(!S.cfg.gh.tok)return manual&&toast('Ajoute un jeton GitHub');try{const cur=await ghApi('data/store.json');if(!cur){if(manual)toast('Aucune donnée sur GitHub pour l\'instant');return}ghSha=cur.sha;const p=await decJSON(JSON.parse(d8(cur.content))),stamp=Number(localStorage.getItem('ms_stamp')||0);if(manual||(p._t||0)>stamp){const keep={ai:S.cfg.ai,gh:S.cfg.gh};for(const k of ['clients','cat','docs','seq','rep','chat','plan','ph'])if(p[k]!=null)S[k]=p[k];if(p.cfg){S.cfg=Object.assign({},S.cfg,p.cfg);S.cfg.ai=keep.ai;S.cfg.gh=keep.gh}cfgInit();for(const k in S){try{localStorage.setItem('ms_'+k,JSON.stringify(S[k]))}catch(e){}}localStorage.setItem('ms_stamp',String(p._t||Date.now()));persistAll();render();if(manual)toast('Données récupérées depuis GitHub')}}catch(e){if(manual)toast('Échec GitHub : '+e.message)}}
-function ghSched(){if(!S.cfg.gh.tok)return;clearTimeout(ghT);ghT=setTimeout(()=>ghPush(0),4000)}
+/* ---------- Synchronisation chiffrée multi-appareils ---------- */
+const GH_REPO_DEFAULT = 'mikaelkapinova-boop/Devis-Ms-Plomberie-Chauffage-';
+const GH_ARRAYS = ['clients', 'cat', 'docs', 'achats', 'rep', 'chat', 'plan'];
+let ghSha = null, ghT = null, ghPoll = null, ghInFlight = null, ghEventsBound = false;
+let ghLastStatus = 'Ajoute le même jeton GitHub sur les deux téléphones pour activer la synchronisation.';
+let ghMeta = {v: 1, deleted: {}};
+function ghApi(p, o = {}) {
+  const repo = repoInfo();
+  if (!repo || !S.cfg.gh.tok) return Promise.reject(new Error('Jeton GitHub non configuré'));
+  const opts = Object.assign({method: 'GET'}, o);
+  opts.headers = Object.assign({Authorization: 'Bearer ' + S.cfg.gh.tok, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json'}, o.headers || {});
+  return fetch('https://api.github.com/repos/' + repo + '/contents/' + p, opts).then(async x => {
+    if (!x.ok && x.status !== 404) { const e = new Error('GitHub ' + x.status); e.status = x.status; throw e; }
+    return x.status === 404 ? null : x.json();
+  });
+}
+function ghClone(v) { return v == null ? v : JSON.parse(JSON.stringify(v)); }
+function ghStable(v) {
+  if (v === undefined) return 'undefined';
+  if (v === null || typeof v !== 'object') return JSON.stringify(v);
+  if (Array.isArray(v)) return '[' + v.map(ghStable).join(',') + ']';
+  return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + ghStable(v[k])).join(',') + '}';
+}
+function ghWithoutStamp(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return v;
+  const copy = Object.assign({}, v); delete copy._syncAt; return copy;
+}
+function ghSame(a, b) { return ghStable(ghWithoutStamp(a)) === ghStable(ghWithoutStamp(b)); }
+function ghHash(value) {
+  const s = String(value || ''); let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return (h >>> 0).toString(36);
+}
+function ghRecordId(k, item, i) {
+  if (item && item.id != null && String(item.id)) return String(item.id);
+  if (k === 'cat') return 'cat:' + String(item && item.d || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() + '|' + String(item && item.t || 'F') + '|' + String(item && item.ref || '');
+  if (k === 'chat' && item && item.ts) return 'chat:' + item.ts + ':' + String(item.r || '') + ':' + ghHash(item.t || '');
+  if (k === 'achats') return 'achat:' + ghHash([item && (item.invoice || item.num), item && (item.supplier || item.fo), item && item.date, item && item.total].join('|'));
+  if (k === 'ph') return 'photo:' + ghHash(item && item.s || ghStable(item));
+  return k + ':' + ghHash(ghStable(item) + ':' + i);
+}
+function ghIndex(k, list) {
+  const map = new Map();
+  (Array.isArray(list) ? list : []).forEach((item, i) => { if (item && typeof item === 'object') map.set(ghRecordId(k, item, i), item); });
+  return map;
+}
+function ghMergeDeleted(...packs) {
+  const deleted = {};
+  packs.filter(Boolean).forEach(pack => {
+    const groups = pack.__sync && pack.__sync.deleted || {};
+    Object.keys(groups).forEach(k => {
+      if (!deleted[k]) deleted[k] = {};
+      Object.keys(groups[k] || {}).forEach(id => { deleted[k][id] = Math.max(Number(deleted[k][id]) || 0, Number(groups[k][id]) || 0); });
+    });
+  });
+  return deleted;
+}
+async function ghBaseRead(repo) {
+  try { const v = await idbGet('gh_sync_base'); if (v && v.repo === repo) return v.pack; } catch (e) {}
+  try { const v = JSON.parse(localStorage.getItem('ms_gh_sync_base') || 'null'); return v && v.repo === repo ? v.pack : null; } catch (e) { return null; }
+}
+async function ghBaseWrite(repo, pack) {
+  const value = {repo, pack: ghClone(pack)};
+  try { await idbPut('gh_sync_base', value); }
+  catch (e) { try { localStorage.setItem('ms_gh_sync_base', JSON.stringify(value)); } catch (x) {} }
+}
+function ghPack() {
+  const p = {__sync: ghClone(ghMeta || {v: 1, deleted: {}}), _t: Number(localStorage.getItem('ms_stamp') || Date.now())};
+  GH_ARRAYS.forEach(k => { p[k] = ghClone(Array.isArray(S[k]) ? S[k] : []); });
+  p.seq = ghClone(S.seq || {}); p.ph = ghClone(S.ph || {});
+  const c = ghClone(S.cfg || {});
+  c.pk = '';
+  if (c.ai) c.ai.key = '';
+  c.gh = Object.assign({}, c.gh || {}, {tok: '', repo: c.gh && c.gh.repo || ''});
+  p.cfg = c;
+  return p;
+}
+function ghStampLocalChanges(base, local) {
+  const now = Date.now();
+  local.__sync = {v: 1, deleted: ghMergeDeleted(base, local)};
+  GH_ARRAYS.forEach(k => {
+    const current = ghIndex(k, local[k]);
+    const previous = ghIndex(k, base && base[k]);
+    if (!base) {
+      current.forEach(item => { if (!Number(item._syncAt)) item._syncAt = Number(local._t) || now; });
+      return;
+    }
+    current.forEach((item, id) => { const old = previous.get(id); if (!old || !ghSame(item, old)) item._syncAt = now; });
+    previous.forEach((item, id) => { if (!current.has(id)) local.__sync.deleted[k][id] = now; });
+  });
+}
+function ghRecordTime(item, pack) { return Number(item && item._syncAt) || Number(pack && pack._t) || 0; }
+function ghMergeArray(k, base, local, remote, bp, lp, rp, deleted) {
+  const b = ghIndex(k, base), l = ghIndex(k, local), r = ghIndex(k, remote);
+  const ids = new Set([...b.keys(), ...l.keys(), ...r.keys()]);
+  const out = [];
+  ids.forEach(id => {
+    const bv = b.get(id), lv = l.get(id), rv = r.get(id);
+    const lc = bp ? !ghSame(lv, bv) : lv !== undefined;
+    const rc = bp ? !ghSame(rv, bv) : rv !== undefined;
+    const deletedAt = Number(deleted && deleted[id]) || 0;
+    let chosen, source;
+    if (lc && rc) {
+      if (lv !== undefined && rv !== undefined) { source = ghRecordTime(lv, lp) > ghRecordTime(rv, rp) ? 'local' : 'remote'; chosen = source === 'local' ? lv : rv; }
+      else if (lv === undefined && rv !== undefined) { source = deletedAt >= ghRecordTime(rv, rp) ? '' : 'remote'; chosen = source ? rv : undefined; }
+      else if (rv === undefined && lv !== undefined) { source = deletedAt >= ghRecordTime(lv, lp) ? '' : 'local'; chosen = source ? lv : undefined; }
+    } else if (lc) { chosen = lv; source = 'local'; }
+    else if (rc) { chosen = rv; source = 'remote'; }
+    else if (rv !== undefined) { chosen = rv; source = 'remote'; }
+    else if (lv !== undefined) { chosen = lv; source = 'local'; }
+    else { chosen = bv; source = 'base'; }
+    if (chosen !== undefined) {
+      const time = ghRecordTime(chosen, source === 'local' ? lp : source === 'remote' ? rp : bp);
+      if (deletedAt && deletedAt >= time) return;
+      if (deleted && deletedAt && time > deletedAt) delete deleted[id];
+      out.push(ghClone(chosen));
+    }
+  });
+  return out;
+}
+function ghPlain(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+function ghMergeObject(base, local, remote, hasBase, lt, rt) {
+  const b = ghPlain(base) ? base : {}, l = ghPlain(local) ? local : {}, r = ghPlain(remote) ? remote : {};
+  const out = {};
+  new Set([...Object.keys(b), ...Object.keys(l), ...Object.keys(r)]).forEach(k => {
+    const bv = b[k], lv = l[k], rv = r[k];
+    if (ghPlain(bv) || ghPlain(lv) || ghPlain(rv)) {
+      const child = ghMergeObject(bv, lv, rv, hasBase && ghPlain(bv), lt, rt);
+      if (Object.keys(child).length) out[k] = child;
+      return;
+    }
+    const lc = hasBase ? !ghSame(lv, bv) : lv !== undefined;
+    const rc = hasBase ? !ghSame(rv, bv) : rv !== undefined;
+    let value;
+    if (lc && rc) value = hasBase ? (lt > rt ? lv : rv) : (rv !== undefined ? rv : lv);
+    else if (lc) value = lv;
+    else if (rc) value = rv;
+    else value = rv !== undefined ? rv : lv;
+    if (value !== undefined) out[k] = value;
+  });
+  return out;
+}
+function ghMergePhotos(base, local, remote, bp, lp, rp) {
+  const b = base || {}, l = local || {}, r = remote || {}, out = {};
+  new Set([...Object.keys(b), ...Object.keys(l), ...Object.keys(r)]).forEach(id => {
+    const bv = b[id], lv = l[id], rv = r[id];
+    const lc = bp ? !ghSame(lv, bv) : lv !== undefined;
+    const rc = bp ? !ghSame(rv, bv) : rv !== undefined;
+    let value;
+    if (lc && rc) {
+      if (!Array.isArray(lv)) value = (Number(rp && rp._t) > Number(lp && lp._t)) ? rv : undefined;
+      else if (!Array.isArray(rv)) value = (Number(lp && lp._t) > Number(rp && rp._t)) ? lv : undefined;
+      else {
+        const photos = new Map();
+        [...lv, ...rv].forEach((photo, i) => {
+          const key = ghRecordId('ph', photo, i), old = photos.get(key);
+          if (!old || Number(rp && rp._t) >= Number(lp && lp._t)) photos.set(key, ghClone(photo));
+        });
+        value = [...photos.values()];
+      }
+    } else if (lc) value = lv;
+    else if (rc) value = rv;
+    else value = rv !== undefined ? rv : lv;
+    if (Array.isArray(value) && value.length) out[id] = ghClone(value);
+  });
+  return out;
+}
+function ghMergePack(base, local, remote) {
+  const bp = !!base, rp = remote || {}, lp = local || {}, deleted = ghMergeDeleted(base, local, remote);
+  const merged = {__sync: {v: 1, deleted}, _t: Math.max(Number(lp._t) || 0, Number(rp._t) || 0)};
+  GH_ARRAYS.forEach(k => { if (!deleted[k]) deleted[k] = {}; merged[k] = ghMergeArray(k, base && base[k], lp[k], rp[k], bp, lp, rp, deleted[k]); });
+  merged.seq = {};
+  [base && base.seq, lp.seq, rp.seq].forEach(seq => Object.keys(seq || {}).forEach(k => { merged.seq[k] = Math.max(Number(merged.seq[k]) || 0, Number(seq[k]) || 0); }));
+  merged.ph = ghMergePhotos(base && base.ph, lp.ph, rp.ph, bp, lp, rp);
+  merged.cfg = ghMergeObject(base && base.cfg, lp.cfg, rp.cfg, bp, Number(lp._t) || 0, Number(rp._t) || 0);
+  return merged;
+}
+function ghComparable(pack) { const copy = ghClone(pack); if (copy) delete copy._t; return ghStable(copy); }
+function ghStatus(message) {
+  ghLastStatus = message;
+  const el = $('#ghst'); if (el) el.textContent = message;
+}
+function repoInfo() {
+  const r = String(S.cfg.gh.repo || '').trim();
+  return r.includes('/') ? r : GH_REPO_DEFAULT;
+}
+async function ghReadStore() {
+  const file = await ghApi('data/store.json');
+  if (!file) return {sha: '', pack: null};
+  let contents = String(file.content || '').trim();
+  if (contents) contents = d8(contents);
+  else if (file.download_url) {
+    const response = await fetch(file.download_url, {headers: {Authorization: 'Bearer ' + S.cfg.gh.tok}, cache: 'no-store'});
+    if (!response.ok) throw new Error('Lecture GitHub ' + response.status);
+    contents = await response.text();
+  } else throw new Error('Fichier de synchronisation illisible');
+  return {sha: file.sha, pack: await decJSON(JSON.parse(contents))};
+}
+async function ghWriteStore(pack, sha) {
+  const body = {message: 'sync: données chiffrées ' + new Date().toLocaleString('fr-FR'), content: u8(JSON.stringify(await encJSON(pack)))};
+  if (sha) body.sha = sha;
+  const response = await ghApi('data/store.json', {method: 'PUT', body: JSON.stringify(body)});
+  return response && response.content && response.content.sha || '';
+}
+function ghVisibleState() {
+  const c = ghClone(S.cfg || {}); c.pk = ''; if (c.ai) c.ai.key = ''; c.gh = Object.assign({}, c.gh || {}, {tok: ''});
+  return ghStable({clients: S.clients, cat: S.cat, docs: S.docs, achats: S.achats, rep: S.rep, chat: S.chat, plan: S.plan, ph: S.ph, seq: S.seq, cfg: c});
+}
+function ghApplyPack(pack) {
+  const before = ghVisibleState(), keep = {pk: S.cfg.pk, gh: ghClone(S.cfg.gh), ai: ghClone(S.cfg.ai)};
+  GH_ARRAYS.forEach(k => { if (Array.isArray(pack[k])) S[k] = ghClone(pack[k]); });
+  if (pack.seq) S.seq = ghClone(pack.seq);
+  if (pack.ph) S.ph = ghClone(pack.ph);
+  if (pack.cfg) {
+    S.cfg = Object.assign({}, S.cfg, ghClone(pack.cfg));
+    S.cfg.pk = keep.pk; S.cfg.gh = keep.gh; S.cfg.ai = keep.ai;
+  }
+  cfgInit();
+  [...GH_ARRAYS, 'seq', 'ph', 'cfg'].forEach(k => { try { localStorage.setItem('ms_' + k, JSON.stringify(S[k])); } catch (e) {} });
+  localStorage.setItem('ms_stamp', String(Math.max(Number(pack._t) || 0, Date.now())));
+  persistAll();
+  if (before !== ghVisibleState()) render();
+}
+function ghStartAuto() {
+  if (!S.cfg.gh.tok) return;
+  if (!ghPoll) ghPoll = setInterval(() => { if (!document.hidden) ghSync(false); }, 30000);
+  if (ghEventsBound) return;
+  ghEventsBound = true;
+  window.addEventListener('focus', () => { if (!document.hidden) ghSync(false); });
+  window.addEventListener('online', () => ghSync(false));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) ghSync(false); });
+}
+async function ghSync(manual) {
+  if (!S.cfg.gh.tok) { ghStatus('Ajoute le même jeton GitHub sur les deux téléphones pour activer la synchronisation.'); if (manual) toast('Ajoute le même jeton GitHub dans les réglages des deux appareils'); return; }
+  ghStartAuto();
+  if (ghInFlight) {
+    try { const result = await ghInFlight; if (manual && result && result.ok) toast('Données synchronisées entre les appareils'); return result; }
+    catch (e) { ghStatus('Échec de synchronisation · ' + (e && e.message || 'erreur réseau')); if (manual) toast('Synchronisation impossible : ' + (e && e.message || 'erreur réseau')); return {ok: false, error: e}; }
+  }
+  const job = (async () => {
+    const repo = repoInfo();
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const [remoteState, savedBase] = await Promise.all([ghReadStore(), ghBaseRead(repo)]);
+      const base = remoteState.pack ? savedBase : null;
+      ghMeta = ghMergeDeleted(base, remoteState.pack, {__sync: ghMeta});
+      ghMeta = {v: 1, deleted: ghMeta};
+      const local = ghPack();
+      ghStampLocalChanges(base, local);
+      const merged = ghMergePack(base, local, remoteState.pack);
+      let sha = remoteState.sha;
+      const changed = !remoteState.pack || ghComparable(merged) !== ghComparable(remoteState.pack);
+      if (changed) {
+        try { sha = await ghWriteStore(merged, sha); }
+        catch (e) { if ((e.status === 409 || e.status === 422) && attempt < 3) continue; throw e; }
+      }
+      ghSha = sha;
+      ghApplyPack(merged);
+      ghMeta = ghClone(merged.__sync || {v: 1, deleted: {}});
+      await ghBaseWrite(repo, merged);
+      ghStatus('Synchronisé automatiquement · ' + new Date().toLocaleTimeString('fr-FR'));
+      if (manual) toast('Données synchronisées entre les appareils');
+      return {ok: true};
+    }
+    throw new Error('Les deux téléphones ont modifié les données en même temps. Réessaie dans quelques secondes.');
+  })();
+  ghInFlight = job;
+  try { return await job; }
+  catch (e) {
+    ghStatus('Échec de synchronisation · ' + (e && e.message || 'erreur réseau'));
+    if (manual) toast('Synchronisation impossible : ' + (e && e.message || 'erreur réseau'));
+    return {ok: false, error: e};
+  }
+  finally { ghInFlight = null; }
+}
+function ghPush(manual) { return ghSync(!!manual); }
+function ghPull(manual) { return ghSync(!!manual); }
+function ghSched() { if (!S.cfg.gh.tok) return; ghStartAuto(); clearTimeout(ghT); ghT = setTimeout(() => ghSync(false), 1400); }
 
 /* ---------- Partage & e-mail ---------- */
 function pdfMeta(d){const C=S.cfg||{},lab=d.t==='f'?'FACTURE':d.t==='d'?'DEVIS':'RAPPORT';return{lab,num:d.num||'',date:fd(d.date),client:d.cn||'',co:C.co||'',nm:C.nm||'',siret:C.siret||'',tel:C.tel||'',logo:typeof LGT!=='undefined'?LGT:''}}
