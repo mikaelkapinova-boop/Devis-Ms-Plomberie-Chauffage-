@@ -92,6 +92,29 @@ test('manual quote: preserves contact details, separates site address, and recon
   assert.deepEqual(d.warns, []);
 });
 
+test('iPhone screenshot quote header: reads a short document number and French date', () => {
+  const text = `DEVIS\nN° DEV-932\nDate : 09/10/2026\nClient : M. Chelbi Abdelkoddous\nAdresse : 32 rue de Benney\nCode postal : 54290 Crévéchamps`;
+  const d = parseDocument(text, 'Devis_932.pdf', toRows(text));
+  assert.equal(d.num, 'DEV-932');
+  assert.equal(d.date, '2026-10-09');
+  assert.equal(d.cli.name, 'M. Chelbi Abdelkoddous');
+});
+
+test('document number falls back to a descriptive filename when OCR misses the header', () => {
+  const d = parseDocument('DEVIS\nDate : 09/10/2026', 'Devis_932.pdf', toRows('DEVIS\nDate : 09/10/2026'));
+  assert.equal(d.num, 'DEV-932');
+});
+
+test('full document transfer is blocked while extracted lines or totals need review', () => {
+  const base = {type:'d',lines:[{des:'Travaux de plomberie',q:1,pu:1105.49,ok:true}],tot:{ht:1255.45,ttc:null,rate:0,rmPct:0}};
+  assert.match(importer.transferProblems({data:base}).join(' '), /total HT lu \(1\s?255,45 €\).*1\s?105,49 €/);
+  base.lines[0].ok = false;
+  assert.match(importer.transferProblems({data:base}).join(' '), /ligne encadrée en orange/);
+  base.lines[0].ok = true;
+  base.tot.ht = 1105.49;
+  assert.deepEqual(importer.transferProblems({data:base}), []);
+});
+
 test('manual intervention report: detects the report type, contact, worksite, date, and narrative', () => {
   const report = `RAPPORT D’INTERVENTION N° RAP-2026-021
 Date : 15/09/2026

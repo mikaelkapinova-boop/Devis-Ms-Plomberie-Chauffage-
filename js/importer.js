@@ -377,9 +377,17 @@ function detectType(L,name){const head=L.slice(0,18).map(r=>r.t).join('\n')+'\n'
         x=n(/rapport|compte[- ]rendu|bon d.intervention/gi,head)*4+n(/observations?|constat/gi,all);
   return x>d&&x>f?'x':f>d?'f':'d'}
 function reportCategory(text){const t=norm(text);if(/degat des eaux|inondation|sinistre.*eau/.test(t))return'Dégât des eaux';if(/recherche.*fuite|fuite|infiltration/.test(t))return'Recherche de fuite';if(/panne.*chauffage|chaudiere|chauffage/.test(t))return'Panne de chauffage';if(/diagnostic.*plomberie|diagnostic plomberie/.test(t))return'Diagnostic plomberie';return'Autre'}
-function detectNum(L,name){const head=L.slice(0,30).map(r=>r.t).join('\n');
-  const rx=[/\b((?:DEV|FAC|FACT|FA|RAP|RI|DE|INV)[-_/ ]?\d{4}[-_/ ]?\d{1,6})\b/i,/(?:devis|facture|rapport|invoice|receipt)\s*(?:n[°o]|no\.?|num[ée]ro|number|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-_/.]{2,})/i,/n[°o]\s*(?:de\s*)?(?:devis|facture)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-_/.]{2,})/i];
-  for(const r of rx){const m=head.match(r)||name.match(r);if(m)return m[1].toUpperCase().replace(/[_ /]/g,'-')}return''}
+function detectNum(L,name){const head=L.slice(0,30).map(r=>r.t).join('\n'),file=String(name||'').replace(/\.[^.]+$/,'');
+  const rx=[
+    /\b((?:DEV|FAC|FACT|FA|RAP|RI|DE|INV)[-_/ ]?\d{4}[-_/ ]?\d{1,6})\b/i,
+    /(?:devis|facture|rapport|invoice|receipt)\s*(?:n[°o]|no\.?|num[ée]ro|number|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-_/.]{2,})/i,
+    /(?:n[°o]|no\.?|num[ée]ro|number|#)\s*(?:(?:de\s*)?(?:devis|facture|rapport|invoice|receipt)\s*)?[:\-]?\s*([A-Z0-9][A-Z0-9\-_/.]*\d[A-Z0-9\-_/.]*)/i
+  ];
+  const normalize=m=>m&&m[1].toUpperCase().replace(/[_ /]+/g,'-').replace(/-+/g,'-').replace(/[.,]+$/,'');
+  for(const source of [head,file])for(const r of rx){const m=source.match(r);if(m)return normalize(m)}
+  const namedFile=file.match(/\b(devis|quote|facture|invoice|rapport|report)[\s_-]+((?:(?:DEV|FAC|FACT|FA|RAP|INV)[-_/ ]?)?\d[\dA-Z\-_/]*)/i);
+  if(namedFile){const prefix=/^(devis|quote)$/i.test(namedFile[1])?'DEV':/^(facture|invoice)$/i.test(namedFile[1])?'FAC':'RAP';return normalize([null,/^[A-Z]{2,5}[-_/ ]?\d/i.test(namedFile[2])?namedFile[2]:prefix+'-'+namedFile[2]])}
+  return''}
 function parse(text,name,rowsIn){
   const L=(rowsIn&&rowsIn.length?rowsIn:toRows(text)).filter(r=>r.c&&r.c.length);L.forEach(r=>{r.c=r.c.map(v=>dedupeRepeatedPhrase(v).replace(/^[\s.;:|,'"“”’]+/,'').replace(/^i(?=\s+(?:subtotal|total|gst|tva)\b)/i,'')).filter(Boolean);r.t=dedupeRepeatedPhrase(r.c.join(' ')).replace(/\s+/g,' ').trim()});
   const type=detectType(L,name||''),num=detectNum(L,name||''),top=L.slice(0,40);
@@ -406,6 +414,15 @@ function parse(text,name,rowsIn){
   if(!cli.name)warns.push('Client non détecté : saisissez-le ci-dessous.');
   return{type,num,date,due,cli,addrs,lines,tot:{ht:tot.ht,ttc:tot.ttc,rate:tot.rate,rmPct:tot.rmPct||0},warns,txt:type==='x'?text.slice(0,6000):'',reportType:type==='x'?reportCategory(text):'',paid:/acquitt/i.test(text)}}
 const calc=d=>{const s=r2(d.lines.reduce((a,l)=>a+nv(l.q)*nv(l.pu),0)),rm=r2(s*nv(d.tot.rmPct)/100),ht=r2(s-rm),tva=r2(ht*nv(d.tot.rate)/100);return{s,rm,ht,tva,ttc:r2(ht+tva)}};
+const lineIncomplete=l=>!String(l&&l.des||'').trim()||!(nv(l&&l.q)>0);
+function transferProblems(it){const d=it&&it.data;if(!d||d.type==='x')return[];const problems=[],lines=Array.isArray(d.lines)?d.lines:[];
+  if(!lines.length)problems.push('Aucune ligne reconnue : ajoute une prestation ou une fourniture avant de créer le document.');
+  const incomplete=lines.filter(lineIncomplete).length;if(incomplete)problems.push(`${incomplete} ligne${incomplete>1?'s':''} incomplète${incomplete>1?'s':''} : renseigne la désignation et une quantité supérieure à zéro.`);
+  const unchecked=lines.filter(l=>!l.ok).length;if(unchecked)problems.push(`${unchecked} ligne${unchecked>1?'s':''} encadrée${unchecked>1?'s':''} en orange à confirmer après comparaison avec le fichier original.`);
+  if(lines.length){const c=calc(d);
+    if(d.tot.ht!=null&&Math.abs(d.tot.ht-c.ht)>.05)problems.push(`Le total HT lu (${eur(d.tot.ht)}) ne correspond pas au calcul des lignes (${eur(c.ht)}). Corrige les lignes ou la remise.`);
+    if(d.tot.ttc!=null&&Math.abs(d.tot.ttc-c.ttc)>.05)problems.push(`Le TTC lu (${eur(d.tot.ttc)}) ne correspond pas au calcul (${eur(c.ttc)}). Vérifie les lignes, la TVA et la remise.`)}
+  return problems}
 
 /* ---------- adaptation au modèle de données de l'app (détecté sur tes données) ---------- */
 let PR=null,PRsig='';
@@ -516,7 +533,10 @@ function mkRapport(it,K,cid,out){const s=SS(),R=s.rep||(s.rep=[]),d=it.data,y=ne
   const a=d.addrs?.[it.addr||0]||{addr:d.cli.addr,cp:d.cli.cp,ville:d.cli.ville},num=d.num||'RAP-'+y+'-'+String(s.seq[seqKey]).padStart(3,'0'),o=Object.assign(emptyLike(R[R.length-1]||{}),{id:uid(),num,date:d.date||today(),ty:d.reportType||'Autre',cn:d.cli.name||'',ca:a.addr||d.cli.addr||'',cc:[a.cp||d.cli.cp,a.ville||d.cli.ville].filter(Boolean).join(' '),ct:d.cli.tel||'',ass:'',sn:'',mo:'',co:'',org:'',tr:d.txt||'',pr:''});
   if(K.r.date!=='date')o[K.r.date]=d.date||today();if(K.r.ti!=='ty')o[K.r.ti]='Rapport';if(K.r.txt!=='tr')o[K.r.txt]=d.txt||'';if(K.r.cli!=='cn'&&cid)o[K.r.cli]=cid;
   R.unshift(o);out.push('Rapport créé');return o}
-function commit(it){const s=SS();if(!s)return say('Application non prête');const K=probe(),d=it.data,sc=it.sc,out=[];snap();
+function commit(it){const s=SS();if(!s)return say('Application non prête');const d=it.data,sc=it.sc;
+  if(sc.all){const problems=transferProblems(it);if(problems.length)return say('Transfert complet bloqué : '+problems[0])}
+  else if(sc.pre||sc.fou){const lines=d.lines.filter(l=>(sc.pre&&l.kind!=='F')||(sc.fou&&l.kind==='F'));if(lines.some(l=>!l.ok))return say('Vérifie ou confirme les lignes orange avant de les ajouter à Mes tarifs')}
+  const K=probe(),out=[];snap();
   try{let cid=null;
     if((sc.all||sc.cli)&&d.cli.name)cid=upCli(it,K,out);
     const kinds=[];if(sc.pre||(sc.all&&it.opt.keep))kinds.push('M');if(sc.fou||(sc.all&&it.opt.keep))kinds.push('F');
@@ -555,7 +575,7 @@ const CSS=`.imp svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-
 .imp-opt input{position:absolute;opacity:0;pointer-events:none}.imp-ck{width:26px;height:26px;border-radius:8px;border:2px solid var(--mu);display:grid;place-items:center;color:transparent;flex:none}.imp-ck svg{width:16px;height:16px;stroke-width:3}
 .imp-opt.on{border-color:var(--cu);background:color-mix(in srgb,var(--cu) 10%,var(--in))}.imp-opt.on .imp-ck{background:var(--cu);border-color:var(--cu);color:#fff}.imp-opt.o2{font-weight:500;font-size:15px}
 .imp pre{white-space:pre-wrap;word-break:break-word;font-size:12px;max-height:260px;overflow:auto;background:var(--in);padding:10px;border-radius:10px}
-.imp-pv{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;flex-direction:column}.imp-pv>div:first-child{display:flex;gap:8px;align-items:center;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 10px}.imp-pv>div:first-child b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.imp-pv>div:last-child{flex:1;overflow:auto;padding:0 12px 16px}.imp-pv iframe,.imp-pv img{width:100%;border:0;min-height:70vh;object-fit:contain}`;
+body.imp-preview-open{overflow:hidden;overscroll-behavior:none}.imp-pv{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;flex-direction:column}.imp-pv>div:first-child{display:flex;gap:8px;align-items:center;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 10px}.imp-pv>div:first-child b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.imp-pv-content{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 12px calc(16px + env(safe-area-inset-bottom,0px))}.imp-pv-pages{display:grid;justify-items:center;gap:12px}.imp-pv-page-wrap{width:100%;max-width:100%;overflow:hidden;background:#fff;box-shadow:0 2px 12px #0002}.imp-pv-page{display:block;width:100%;height:100%}.imp-pv-status{padding:12px;color:var(--mu);text-align:center}.imp-pv img{display:block;width:100%;height:auto;object-fit:contain}.imp-pv-text{margin-top:12px}.imp-pv-text summary{font-weight:600}`;
 function css(){if(document.getElementById('imp-css'))return;const s=document.createElement('style');s.id='imp-css';s.textContent=CSS;document.head.appendChild(s)}
 const LAB={wait:'En attente',run:'Analyse…',ok:'Prêt',warn:'À vérifier',err:'Erreur',done:'Transféré'};
 const field=(lab,path,val,o)=>`<label class="imp-f ${o&&o.w?'w':''}">${lab}<input data-f="${path}" value="${H(val)}" ${o&&o.t?'type="'+o.t+'"':''} ${o&&o.m?'inputmode="'+o.m+'"':''} autocomplete="off"></label>`;
@@ -563,19 +583,20 @@ function itemRow(it){return`<div class="imp-it ${it.id===ST.sel?'sel':''}" data-
   <div class="imp-nm"><b>${H(it.name)}</b><small>${fsz(it.size||0)}</small>${it.status==='run'?`<div class="imp-bar"><i id="bar-${it.id}" style="width:${Math.round((it.prog||0)*100)}%"></i></div>`:''}${it.err?`<span class="imp-er">${H(it.err)}</span>`:''}</div>
   <span class="imp-st ${it.status}">${LAB[it.status]||''}</span>
   <div class="imp-ac"><button data-a="pv" aria-label="Aperçu">${IC.eye}</button><button data-a="re" aria-label="Réanalyser">${IC.re}</button><button data-a="rm" aria-label="Supprimer">${IC.tr}</button></div></div>`}
-function lineCard(l,i){return`<div class="imp-ln ${l.ok?'':'w'}" data-i="${i}"><input data-l="des" value="${H(l.des)}" aria-label="Désignation">
+function lineCard(l,i){return`<div class="imp-ln ${l.ok&&!lineIncomplete(l)?'':'w'}" data-i="${i}"><input data-l="des" value="${H(l.des)}" aria-label="Désignation">
   <div class="imp-g"><label class="imp-f">Qté<input data-l="q" inputmode="decimal" value="${H(l.q)}"></label><label class="imp-f">Unité<input data-l="u" value="${H(l.u)}"></label><label class="imp-f">P.U. HT<input data-l="pu" inputmode="decimal" value="${H(l.pu)}"></label></div>
   <div class="imp-row"><span class="imp-tt">Total ligne</span><b data-lt>${eur(nv(l.q)*nv(l.pu))}</b></div>
-  <div class="imp-la"><button data-a="kind">${l.kind==='F'?'→ Prestations':'→ Fournitures'}</button><button data-a="dl">Supprimer</button></div></div>`}
+  <div class="imp-la"><button data-a="kind">${l.kind==='F'?'→ Prestations':'→ Fournitures'}</button>${l.ok?'':`<button data-a="confirm-line">Confirmer la ligne</button>`}<button data-a="dl">Supprimer</button></div></div>`}
 function plan(it){const d=it.data,sc=it.sc,p=[];if(sc.all)p.push((d.type==='x'?'Rapport':d.type==='f'?'Facture':'Devis')+' complet'+(d.num?' '+d.num:'')+' dans ta mise en page');else{if(sc.cli)p.push('client');if(sc.pre)p.push('prestations → Mes tarifs');if(sc.fou)p.push('fournitures → Mes tarifs')}
   return p.length?'Sera enregistré : '+p.join(' · '):'Choisis au moins une catégorie.'}
+function reviewWarnings(it){const d=it.data,base=(d.warns||[]).filter(w=>!/^Écart entre le (?:total lu|TTC lu)/.test(w)&&!/^Certaines lignes sont à vérifier/.test(w)&&!/^Aucune ligne de prestation ou fourniture reconnue/.test(w));return base.concat(transferProblems(it))}
 function review(it){const d=it.data,c=calc(d),sc=it.sc,K=probe();
   if(it.status==='done'&&it.res)return`<div class="c imp"><h3>Transfert terminé</h3>${it.res.msg.map(m=>`<div class="imp-w ok">${H(m)}</div>`).join('')}
     ${it.res.id?`<button class="b cu" data-a="open"><span>Ouvrir dans l'app</span></button>`:''}<button class="b gh" data-a="un"><span>Annuler ce transfert</span></button></div>`;
-  const cands=clientCands(d.cli),dup=dupDoc(it),M=d.lines.map((l,i)=>[l,i]).filter(x=>x[0].kind!=='F'),F=d.lines.map((l,i)=>[l,i]).filter(x=>x[0].kind==='F');
+  const cands=clientCands(d.cli),dup=dupDoc(it),issues=transferProblems(it),M=d.lines.map((l,i)=>[l,i]).filter(x=>x[0].kind!=='F'),F=d.lines.map((l,i)=>[l,i]).filter(x=>x[0].kind==='F');
   const grp=(t,a)=>`<div class="imp-sub">${t} (${a.length})</div>${a.map(x=>lineCard(x[0],x[1])).join('')}`;
   return`<div class="c imp"><h3>Données extraites</h3>
-  ${d.warns.map(w=>`<div class="imp-w">${H(w)}</div>`).join('')}
+  <div data-review-warnings>${reviewWarnings(it).map(w=>`<div class="imp-w">${H(w)}</div>`).join('')}</div>
   <div class="imp-seg">${[['d','Devis'],['f','Facture'],['x','Rapport']].map(t=>`<button data-a="ty" data-t="${t[0]}" class="${d.type===t[0]?'on':''}">${t[1]}</button>`).join('')}</div>
   <div class="imp-g">${field('N° du document','num',d.num)}${field('Date','date',d.date||'',{t:'date'})}</div>
   ${dup?`<div class="imp-w">Ce numéro existe déjà dans l'app.<label class="imp-f">Que faire ?<select data-dup><option value="copy" ${it.dup!=='replace'?'selected':''}>Créer une copie (nouveau numéro)</option><option value="replace" ${it.dup==='replace'?'selected':''}>Remplacer le contenu de l'existant</option></select></label></div>`:''}
@@ -593,7 +614,7 @@ function review(it){const d=it.data,c=calc(d),sc=it.sc,K=probe();
   ${[['cli','Client uniquement'],['pre','Prestations'],['fou','Fournitures'],['all','Tout le document']].map(o=>`<label class="imp-opt ${sc[o[0]]?'on':''}"><input type="checkbox" data-s="${o[0]}" ${sc[o[0]]?'checked':''}><i class="imp-ck">${IC.ok}</i><span>${o[1]}</span></label>`).join('')}
   <label class="imp-opt o2 ${it.opt.keep?'on':''}"><input type="checkbox" data-o="keep" ${it.opt.keep?'checked':''}><i class="imp-ck">${IC.ok}</i><span>Conserver les prix dans « Mes tarifs »</span></label>
   <label class="imp-opt o2 ${it.opt.num?'on':''}"><input type="checkbox" data-o="num" ${it.opt.num?'checked':''}><i class="imp-ck">${IC.ok}</i><span>Détecter et enregistrer le numéro du devis / facture</span></label>
-  <p class="imp-p" id="imp-plan">${H(plan(it))}</p><button class="b cu" data-a="tr"><span>Valider le transfert</span></button>
+  <p class="imp-p" id="imp-plan">${H(plan(it))}</p><div class="imp-w ${issues.length?'':'ok'}" data-transfer-state ${sc.all&&issues.length?'':'hidden'}>${issues.length?'Transfert complet bloqué : corrige les points signalés ci-dessus.':'Lignes et totaux vérifiés.'}</div><button class="b cu" data-a="tr" ${sc.all&&issues.length?'disabled':''}><span>Valider le transfert</span></button>
   <details style="margin-top:12px"><summary class="mu">Détails techniques</summary><pre>${H(JSON.stringify({numero:K.dNum,date:K.dDate,client:K.dCli,ligne:[K.lDes,K.lUnit],clients:K.c,tarifs:K.cat},null,1))}</pre></details></div>`}
 function view(){restore();const it=cur();
   return`<div class="c imp"><h3>Importer des documents</h3><p class="imp-p">Dépose un devis, une facture ou un rapport (PDF, photo, Word). Les données sont lues et rangées par catégorie, puis transférées dans ta mise en page.</p>
@@ -606,13 +627,31 @@ function view(){restore();const it=cur();
   ${it&&it.data?review(it):''}${UNDO&&!(it&&it.status==='done')?`<div class="c imp"><button class="b gh" data-a="un"><span>Annuler le dernier transfert</span></button></div>`:''}`}
 function paint(){const r=document.getElementById('imp-root');if(r)r.innerHTML=view()}
 function bar(it){const e=document.getElementById('bar-'+it.id);if(e)e.style.width=Math.round((it.prog||0)*100)+'%'}
+function updateReviewStatus(it){const r=document.getElementById('imp-root');if(!r||!it.data)return;const problems=transferProblems(it),warnings=reviewWarnings(it),list=r.querySelector('[data-review-warnings]'),state=r.querySelector('[data-transfer-state]'),btn=r.querySelector('[data-a="tr"]');
+  if(list)list.innerHTML=warnings.map(w=>`<div class="imp-w">${H(w)}</div>`).join('');if(state){state.hidden=!(it.sc&&it.sc.all);state.classList.toggle('ok',!problems.length);state.textContent=problems.length?'Transfert complet bloqué : corrige les points signalés ci-dessus.':'Lignes et totaux vérifiés.'}
+  if(btn)btn.disabled=!!(it.sc&&it.sc.all&&problems.length);
+  r.querySelectorAll('.imp-ln[data-i]').forEach(box=>{const l=it.data.lines[+box.dataset.i];if(l)box.classList.toggle('w',!l.ok||lineIncomplete(l))})}
 function updTot(it){const r=document.getElementById('imp-root');if(!r||!it.data||it.data.type==='x')return;const c=calc(it.data);
-  [['ht',c.ht],['tva',c.tva],['ttc',c.ttc]].forEach(a=>{const e=r.querySelector('[data-t="'+a[0]+'"]');if(e)e.textContent=eur(a[1])})}
+  [['ht',c.ht],['tva',c.tva],['ttc',c.ttc]].forEach(a=>{const e=r.querySelector('[data-t="'+a[0]+'"]');if(e)e.textContent=eur(a[1])});updateReviewStatus(it)}
 function setPath(o,p,v){const k=p.split('.');let t=o;while(k.length>1)t=t[k.shift()];t[k[0]]=v}
+async function renderPdfPreview(it,host,modal){const status=document.createElement('div'),pages=document.createElement('div');status.className='imp-pv-status';status.textContent='Chargement du PDF…';pages.className='imp-pv-pages';host.append(status,pages);modal._pdfRenders=new Set();
+  try{await loadLib(CDN.pdf,()=>G.pdfjsLib);if(!modal.isConnected)return;const task=G.pdfjsLib.getDocument({url:it.url});modal._pdfTask=task;const pdf=await task.promise;if(!modal.isConnected)return;
+    status.textContent=`${pdf.numPages} page${pdf.numPages>1?'s':''} · fais défiler pour les parcourir`;
+    const draw=async(holder)=>{if(!modal.isConnected||holder._drawing||holder.querySelector('canvas'))return;holder._drawing=true;
+      try{const page=await pdf.getPage(+holder.dataset.page),base=page.getViewport({scale:1}),fit=Math.min(1.5,(holder.clientWidth||host.clientWidth-24)/base.width),dpr=Math.min(2,window.devicePixelRatio||1),vp=page.getViewport({scale:fit*dpr}),canvas=document.createElement('canvas'),ctx=canvas.getContext('2d',{alpha:false});
+        canvas.className='imp-pv-page';canvas.width=Math.ceil(vp.width);canvas.height=Math.ceil(vp.height);canvas.setAttribute('aria-label',`Page ${holder.dataset.page} sur ${pdf.numPages}`);holder.appendChild(canvas);
+        const render=page.render({canvasContext:ctx,viewport:vp});modal._pdfRenders.add(render);try{await render.promise}finally{modal._pdfRenders.delete(render)}
+      }catch(e){if(e&&e.name!=='RenderingCancelledException'&&modal.isConnected)status.textContent='Une page du PDF n’a pas pu être affichée : '+(e.message||'erreur de lecture')}finally{holder._drawing=false}};
+    for(let i=1;i<=pdf.numPages;i++){if(!modal.isConnected)return;const page=await pdf.getPage(i),base=page.getViewport({scale:1}),holder=document.createElement('div');holder.className='imp-pv-page-wrap';holder.dataset.page=String(i);holder.style.aspectRatio=`${base.width} / ${base.height}`;pages.appendChild(holder)}
+    if('IntersectionObserver' in G){modal._pdfObserver=new IntersectionObserver(entries=>entries.forEach(e=>{const holder=e.target;if(e.isIntersecting)draw(holder);else if(holder.querySelector('canvas')&&!holder._drawing){const canvas=holder.querySelector('canvas');canvas.width=0;canvas.height=0;canvas.remove()}}),{root:host,rootMargin:'800px 0px'});pages.querySelectorAll('.imp-pv-page-wrap').forEach(holder=>modal._pdfObserver.observe(holder))}
+    else for(const holder of pages.children)await draw(holder);
+  }catch(e){if(modal.isConnected)status.textContent='Aperçu PDF indisponible : '+((e&&e.message)||'erreur de lecture')}}
 function preview(it){const m=document.createElement('div');m.className='imp-pv imp';
-  const orig=it.url?(it.kind==='img'?`<img src="${it.url}" alt="">`:it.kind==='pdf'?`<iframe src="${it.url}"></iframe>`:''):'';
-  m.innerHTML=`<div><b>${H(it.name)}</b><button class="b gh sm" style="width:auto;margin:0" data-x><span>Fermer</span></button></div><div>${orig}<pre>${H(it.raw||'(texte indisponible)')}</pre></div>`;
-  m.addEventListener('click',e=>{if(e.target.closest('[data-x]'))m.remove()});document.body.appendChild(m)}
+  m.innerHTML=`<div><b>${H(it.name)}</b><button class="b gh sm" style="width:auto;margin:0" data-x><span>Fermer</span></button></div><div class="imp-pv-content" data-preview-content></div>`;
+  const host=m.querySelector('[data-preview-content]');document.body.classList.add('imp-preview-open');if(it.kind==='img'&&it.url){const img=document.createElement('img');img.src=it.url;img.alt='Aperçu de '+it.name;host.appendChild(img)}
+  else if(it.kind==='pdf'&&it.url)renderPdfPreview(it,host,m);
+  const details=document.createElement('details');details.className='imp-pv-text';details.innerHTML=`<summary>Texte extrait du fichier</summary><pre>${H(it.raw||'(texte indisponible)')}</pre>`;host.appendChild(details);
+  m.addEventListener('click',e=>{if(e.target.closest('[data-x]')){try{m._pdfObserver&&m._pdfObserver.disconnect();m._pdfRenders&&m._pdfRenders.forEach(r=>r.cancel());m._pdfTask&&m._pdfTask.destroy()}catch(_){}m.remove();document.body.classList.remove('imp-preview-open')}});document.body.appendChild(m)}
 function onClick(e){const a=e.target.closest('[data-a]');if(!a)return;const act=a.dataset.a,row=e.target.closest('[data-id]'),it=row?ST.items.find(i=>i.id===row.dataset.id):cur();
   if(act==='supplier'){if(typeof G.go==='function')G.go('sf');return}
   if(act==='sel'){if(e.target.closest('.imp-ac'))return;ST.sel=row.dataset.id;paint();return}
@@ -623,6 +662,7 @@ function onClick(e){const a=e.target.closest('[data-a]');if(!a)return;const act=
   if(!it||!it.data)return;const d=it.data;
   if(act==='ty'){d.type=a.dataset.t;if(d.type==='x'&&!d.txt)d.txt=(it.raw||'').slice(0,6000)}
   else if(act==='kind'){const l=d.lines[+a.closest('[data-i]').dataset.i];l.kind=l.kind==='F'?'M':'F'}
+  else if(act==='confirm-line'){const l=d.lines[+a.closest('[data-i]').dataset.i];if(l)l.ok=true}
   else if(act==='dl'){d.lines.splice(+a.closest('[data-i]').dataset.i,1)}
   else if(act==='add'){d.lines.push({id:uid(),des:'',q:1,u:'',pu:0,ok:true,kind:a.dataset.k})}
   else if(act==='tr'){const s=it.sc;if(!(s.all||s.cli||s.pre||s.fou))return say('Choisis au moins une catégorie');return commit(it)}
@@ -631,7 +671,7 @@ function onClick(e){const a=e.target.closest('[data-a]');if(!a)return;const act=
   persist();paint()}
 function onInput(e){const t=e.target,it=cur();if(!it||!it.data)return;
   if(t.dataset.f){let v=t.value;if(t.dataset.f==='tot.rmPct'||t.dataset.f==='tot.rate')v=v===''?(t.dataset.f==='tot.rate'?null:0):nv(v);setPath(it.data,t.dataset.f,v);updTot(it);persist()}
-  else if(t.dataset.l){const box=t.closest('[data-i]'),l=it.data.lines[+box.dataset.i];l[t.dataset.l]=(t.dataset.l==='q'||t.dataset.l==='pu')?nv(t.value):t.value;l.ok=true;
+  else if(t.dataset.l){const box=t.closest('[data-i]'),l=it.data.lines[+box.dataset.i];l[t.dataset.l]=(t.dataset.l==='q'||t.dataset.l==='pu')?nv(t.value):t.value;
     const lt=box.querySelector('[data-lt]');if(lt)lt.textContent=eur(nv(l.q)*nv(l.pu));updTot(it);persist()}}
 function onChange(e){const t=e.target,it=cur();
   if(t.id==='imp-file'||t.id==='imp-cam'){if(t.files&&t.files.length)addFiles(t.files);t.value='';return}
@@ -651,7 +691,7 @@ function initImportPage(){const r=document.getElementById('imp-root');if(!r)retu
   if(ST.items.some(i=>i.status==='wait'))runQueue()}
 function impHash(){try{if(/^#(import|importation)/i.test(location.hash)&&typeof G.go==='function')G.go('i')}catch(e){}}
 
-const API={parse,parseItems,lineItem,pn,classify,calc,probe,toRows,extractText};
+const API={parse,parseItems,lineItem,pn,classify,calc,probe,toRows,extractText,transferProblems};
 G.importPage=importPage;G.getImportHTML=importPage;G.initImportPage=initImportPage;if(typeof G.impHash!=='function')G.impHash=impHash;G.IMP=API;
 if(typeof module!=='undefined'&&module.exports)module.exports=API;
 })();
