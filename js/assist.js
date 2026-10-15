@@ -172,7 +172,7 @@ chatV = function () {
   const t = TH(), d = DEM[t.k], msgs = t.msgs.slice(-80), off = t.msgs.length - msgs.length;
   const doc = d.mod ? S.docs.find(x => x.id === t.doc) : null;
   const welcome = t.ai === 'loc'
-    ? `<div class="bub a"><b>Assistant local activé · sans IA générative</b><br>Je cherche dans tes devis, factures, clients, tarifs, planning et achats. Je peux faire des calculs et lire des listes déjà chiffrées. Tes demandes restent sur cet appareil.<br><br>Essaie : « factures impayées », « dépenses de septembre », « cherche mitigeur », « ouvre FAC-2026-001 », ou colle tes lignes de matériel.</div>`
+    ? `<div class="bub a"><b>Assistant local activé · sans IA générative</b><br>Je cherche dans tes devis, factures, clients, tarifs, planning et achats. Je peux faire des calculs, lire des listes déjà chiffrées et reconnaître localement les coordonnées d’un client sur une photo. Tes demandes restent sur cet appareil.<br><br>Essaie : « factures impayées », « dépenses de septembre », « cherche mitigeur », « ouvre FAC-2026-001 », ou joins une photo de coordonnées.</div>`
     : `<div class="bub a">${esc(d.l)}. ${d.mod ? (doc ? esc(doc.num) + (doc.cn ? ' · ' + esc(doc.cn) : '') : 'Choisis le document.') : 'Écris, ou joins une photo.'}</div>`;
   const typing = ASBUSY ? `<div class="bub a"><span class="typing"><i></i><i></i><i></i></span></div>` : '';
   return `<div class="ash"><button class="icb" onclick="sheetOpen('fils')" aria-label="Conversations">☰</button><div class="ttl" onclick="thRename()">${esc(thTitle(t))}</div><button class="icb" onclick="thNew();render()" aria-label="Nouvelle conversation">✎</button></div>
@@ -261,7 +261,7 @@ function sheetRender() {
     const n = Math.max(1, Math.min(16, Number(c.ps) || 6));
     h = `<h2>Moteur de l’assistant<button data-a="close">OK</button></h2>`;
     h += `<div class="gl">Moteur</div><div class="grp">
-      <button class="it" data-a="eng" data-v="loc"><span class="ic">🔒</span><span class="tx"><b>Assistant local · gratuit</b><small>Sans IA générative ni clé API · recherche et calculs sur cet appareil, même hors connexion</small></span>${t.ai === 'loc' ? '<span class="ck">✓</span>' : ''}</button>
+      <button class="it" data-a="eng" data-v="loc"><span class="ic">🔒</span><span class="tx"><b>Assistant local · gratuit</b><small>Recherche, calculs et lecture OCR locale des photos · sans clé API</small></span>${t.ai === 'loc' ? '<span class="ck">✓</span>' : ''}</button>
       <button class="it" data-a="eng" data-v="api"><span class="ic">⚡</span><span class="tx"><b>Perplexity API</b><small>Réponses en ligne · clé API requise</small></span>${t.ai !== 'loc' ? '<span class="ck">✓</span>' : ''}</button>
     </div>`;
     if (t.ai === 'loc') {
@@ -677,7 +677,7 @@ function pxSheet(){
  h+="<button class='px-mode "+(engine==="loc"?"on":"")+"' data-a='eng' data-v='loc'><span><b>Assistant local · gratuit</b><small>Sans clé API ni IA générative : recherche, calculs et lecture de listes sur cet appareil.</small></span><strong>"+(engine==="loc"?"✓":"")+"</strong></button>";
  h+="<button class='px-mode "+(engine==="api"?"on":"")+"' data-a='eng' data-v='api'><span><b>Perplexity API</b><small>Réponses générées en ligne · clé API requise.</small></span><strong>"+(engine==="api"?"✓":"")+"</strong></button></div>";
  if(engine==="loc"){
-   h+="<p class='note'>L’assistant local consulte les données de cette application et traite les demandes compatibles sur cet appareil. Aucun message n’est envoyé à une API. Choisis Perplexity API ci-dessus pour utiliser une clé.</p>";
+   h+="<p class='note'>L’assistant local consulte les données de cette application et lit les photos sur cet appareil. Les coordonnées reconnues sont enregistrées dans Clients. Aucun message ni photo n’est envoyé à une API. Choisis Perplexity API ci-dessus pour utiliser une clé.</p>";
  }else{
    h+="<div class='px-card'><div class='px-title'><b>Perplexity API</b><small>Recherche et réponses en ligne dans l’application</small><span>✓</span></div>";
    h+="<div class='px-row'><div><b>Aide de l’armée</b><small>Pyramide d’agents : travail parallèle, vérification et consolidation.</small></div><button class='px-switch "+(army?"on":"")+"' onclick='pxArmySet("+(army?"false":"true")+")'><i></i></button></div></div>";
@@ -760,8 +760,9 @@ var css=document.createElement("style");css.textContent=".px-card{background:var
 /* === VERSION 7.6.0 === */
 (function(){
 "use strict";
-var APP_VERSION="7.6.0",APP_RELEASE="Coordonnées client extraites des photos avec l’API, lignes de devis reclassables et synchronisation chiffrée entre téléphones.";
+var APP_VERSION="7.7.0",APP_RELEASE="L’assistant local lit les coordonnées sur les photos et crée les fiches client. Catégories de lignes reclassables et synchronisation chiffrée entre téléphones.";
 window.APP_VERSION=APP_VERSION;
+var appVersionLabel=document.getElementById("appver");if(appVersionLabel)appVersionLabel.textContent="v"+APP_VERSION.split(".").slice(0,2).join(".");
 window.newsShow=function(){var d=document.createElement("div");d.className="news";d.innerHTML="<div><h2>Version "+APP_VERSION+"</h2><p>"+APP_RELEASE+"</p><button class='b' style='width:100%;margin-top:10px' onclick='this.closest(\".news\").remove()'><span>Compris</span></button></div>";d.addEventListener("click",function(e){if(e.target===d)d.remove()});document.body.appendChild(d)};
 var oldBoot=boot;boot=async function(){var r=await oldBoot.apply(this,arguments);try{if(S.cfg&&S.cfg.appVersionSeen!==APP_VERSION){S.cfg.appVersionSeen=APP_VERSION;save("cfg");setTimeout(newsShow,900)}}catch(e){}return r};
 })();

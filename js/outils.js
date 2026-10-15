@@ -75,7 +75,7 @@ const OUTILS = {
         assurance: {type: 'string'}, sinistre: {type: 'string'}, motif: {type: 'string'}, constatations: {type: 'string'},
         origine: {type: 'string'}, travaux: {type: 'string'}, preconisations: {type: 'string'}
       }, ['motif']),
-      fn('client', 'Crée ou met à jour une fiche client à partir des coordonnées lisibles dans un message, une photo ou un document.', {nom: {type: 'string'}, adresse: {type: 'string'}, cp_ville: {type: 'string'}, tel: {type: 'string'}, email: {type: 'string'}}, ['nom']),
+      fn('client', 'Enregistre ou met à jour un client.', {nom: {type: 'string'}, adresse: {type: 'string'}, cp_ville: {type: 'string'}, tel: {type: 'string'}, email: {type: 'string'}}, ['nom']),
       fn('planning', 'Ajoute une intervention au planning.', {date: {type: 'string'}, debut: {type: 'string'}, fin: {type: 'string'}, client: {type: 'string'}, adresse: {type: 'string'}, objet: {type: 'string'}, notes: {type: 'string'}}, ['date', 'objet']),
       fn('tarif', 'Ajoute une ligne à Mes tarifs.', {designation: {type: 'string'}, prix_achat: {type: 'number'}, marge: {type: 'number'}, fournisseur: {type: 'string'}, type: {type: 'string'}}, ['designation', 'prix_achat']),
       fn('marquer_paye', 'Marque une facture payée ou non payée.', {numero: {type: 'string'}, paye: {type: 'boolean'}}, ['numero', 'paye']),
@@ -441,7 +441,6 @@ async function outilsBoucle(t, eff, userText, content, hist) {
     '\n\nOUTILS DE L\'APPLI — tu les appelles, tu ne décris pas comment faire à la place.\n' +
     'aller, lister, ouvrir, creer_document, modifier_document, creer_rapport, client, planning, tarif, marquer_paye, calculer, memoriser, etat.\n' +
     'Une action dans l\'appli = un appel d\'outil, puis tu confirmes le numéro créé. Tu ne dis jamais que tu ne peux pas. ' +
-    'Si une photo ou un document joint contient clairement les coordonnées d\'un client (nom et adresse, téléphone ou e-mail), relève uniquement les informations lisibles et appelle l\'outil client pour les enregistrer, même si la demande est simplement de les extraire ou de préparer un devis. Ne déduis et n\'invente aucune donnée. Si le nom n\'est pas lisible, ne crée pas de fiche et demande le nom. Une photo de chantier sans coordonnées visibles ne suffit pas.\n' +
     'Recherche web, pages et dépôt GitHub : outils Perplexity, pas une excuse.\n' +
     (mem ? '\n' + mem : '');
   const builtin = [];
