@@ -460,7 +460,7 @@ async function _apiPostOnce(body) {
   /* Perplexity API directe via le proxy Vercel. Sur iPhone/GitHub Pages,
      il ne faut jamais dépendre du serveur local Computer/localhost. */
   const host = String(location.hostname || '');
-  const endpoint = /github\\.io$/i.test(host)
+  const endpoint = /github\.io$/i.test(host)
     ? 'https://devis-ms-plomberie-chauffage.vercel.app/api/perplexity'
     : (location.protocol === 'file:' ? 'https://devis-ms-plomberie-chauffage.vercel.app/api/perplexity' : '/api/perplexity');
   const payload = Object.assign({}, body);
