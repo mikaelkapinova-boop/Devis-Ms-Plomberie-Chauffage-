@@ -75,9 +75,9 @@ function kindOf(f){const e=ext(f.name),t=f.type||'';
   if(/^image\//.test(t)||/^(png|jpe?g|webp|gif|bmp|heic|heif|tiff?)$/.test(e))return'img';
   if(e==='docx')return'docx';if(e==='doc')return'doc';
   if(/^(txt|csv|tsv|md|html?)$/.test(e)||/^text\//.test(t))return'txt';return'other'}
-function rowsOf(items){ // items:{s,x,y,w,h} ; y décroissant = haut → bas
+function rowsOf(items,yFactor=.5){ // items:{s,x,y,w,h} ; y décroissant = haut → bas
   const its=items.filter(i=>i.s&&i.s.trim()).sort((a,b)=>b.y-a.y||a.x-b.x),rs=[];
-  for(const it of its){const r=rs[rs.length-1];if(r&&Math.abs(r.y-it.y)<=Math.max(2.5,it.h*.5))r.it.push(it);else rs.push({y:it.y,it:[it]})}
+  for(const it of its){const r=rs[rs.length-1];if(r&&Math.abs(r.y-it.y)<=Math.max(2.5,it.h*yFactor))r.it.push(it);else rs.push({y:it.y,it:[it]})}
   return rs.map(r=>{
     r.it.sort((a,b)=>a.x-b.x);
     // Some PDFs expose the same visual text twice at the same coordinates.
@@ -98,13 +98,40 @@ function rowsOf(items){ // items:{s,x,y,w,h} ; y décroissant = haut → bas
     return{c:f.map(c=>c.s),xs:f.map(c=>c.x)}}).filter(r=>r.c.length)}
 const rowsText=rows=>rows.map(r=>r.c.join('  ')).join('\n');
 const toRows=t=>String(t||'').split(/\r?\n/).map(s=>s.replace(/\u00a0/g,' ').trim()).filter(Boolean).map(s=>({c:s.split(/\s{2,}|\t+/).map(x=>x.trim()).filter(Boolean),xs:null}));
-async function ocr(src,prog){
+async function ocr(src,prog,mode){
   await loadLib(CDN.ocr,()=>G.Tesseract);
-  const r=await G.Tesseract.recognize(src,'fra+eng',{logger:m=>{if(m.status==='recognizing text'&&prog)prog(m.progress)}});
+  const worker=await G.Tesseract.createWorker('fra+eng',1,{logger:m=>{if(m.status==='recognizing text'&&prog)prog(m.progress)}});
+  let r;
+  try{
+    if(mode==='pdf')await worker.setParameters({tessedit_pageseg_mode:G.Tesseract.PSM&&G.Tesseract.PSM.AUTO||'3',preserve_interword_spaces:'1'});
+    r=await worker.recognize(src);
+  }finally{await worker.terminate()}
   const d=r.data;
-  // Tesseract already groups words into reading-order lines. Re-clustering every word
-  // only by its vertical coordinate breaks tilted scans into fragments and scrambles tables.
-  const lineRows=(d.lines||[]).map(l=>({c:[dedupeRepeatedPhrase(l.text||'')],xs:null,y:l.bbox?-((l.bbox.y0+l.bbox.y1)/2):undefined})).filter(l=>l.c[0]);
+  if(mode==='pdf'){
+    const lines=d.lines||[],noisy=new Set(lines.filter(l=>lines.some(o=>o!==l&&o.bbox&&l.bbox
+      &&Math.max(0,Math.min(o.bbox.y1,l.bbox.y1)-Math.max(o.bbox.y0,l.bbox.y0))/Math.max(1,Math.min(o.bbox.y1-o.bbox.y0,l.bbox.y1-l.bbox.y0))>.65
+      &&Math.max(0,Math.min(o.bbox.x1,l.bbox.x1)-Math.max(o.bbox.x0,l.bbox.x0))/Math.max(1,Math.min(o.bbox.x1-o.bbox.x0,l.bbox.x1-l.bbox.x0))>.35
+      &&String(o.text||'').length>String(l.text||'').length&&(o.confidence||0)>=(l.confidence||0)-5)));
+    const items=[];
+    for(const l of lines)for(const w of l.words||[]){
+      if(!w||!w.text||!w.bbox)continue;
+      if(noisy.has(l)&&!/[0-9]/.test(w.text))continue;
+      if((w.confidence||0)<65&&/[A-Za-zÀ-ÿ]/.test(w.text)&&!/[0-9]/.test(w.text))continue;
+      items.push({s:w.text,x:w.bbox.x0,y:-(w.bbox.y0+w.bbox.y1)/2,w:w.bbox.x1-w.bbox.x0,h:w.bbox.y1-w.bbox.y0});
+    }
+    if(items.length){const rows=rowsOf(items,1.05);if(rows.length)return{text:rowsText(rows),rows}}
+  }
+  // Keep Tesseract's line grouping, but split large horizontal gaps into table/address columns.
+  // This preserves tilted lines while separating side-by-side client blocks and table cells.
+  const lineRows=(d.lines||[]).map(l=>{
+    const words=(l.words||[]).filter(w=>w&&w.text&&w.bbox).sort((a,b)=>a.bbox.x0-b.bbox.x0),groups=[];
+    if(words.length){let g=[],end=null;const heights=words.map(w=>w.bbox.y1-w.bbox.y0);if(l.bbox)heights.push(l.bbox.y1-l.bbox.y0);const lh=Math.max(8,...heights);
+      for(const w of words){if(g.length&&w.bbox.x0-end>Math.max(28,lh*1.6)){groups.push(g);g=[]}g.push(w);end=w.bbox.x1}
+      if(g.length)groups.push(g);
+      return{c:groups.map(a=>dedupeRepeatedPhrase(a.map(w=>w.text).join(' '))).filter(Boolean),xs:groups.map(a=>a[0].bbox.x0),y:l.bbox?-((l.bbox.y0+l.bbox.y1)/2):undefined};
+    }
+    return{c:[dedupeRepeatedPhrase(l.text||'')],xs:null,y:l.bbox?-((l.bbox.y0+l.bbox.y1)/2):undefined};
+  }).filter(l=>l.c.some(Boolean));
   if(lineRows.length)return{text:rowsText(lineRows),rows:lineRows};
   let ws=d.words;
   if((!ws||!ws.length)&&d.lines)ws=[].concat(...d.lines.map(l=>l.words||[]));
@@ -123,6 +150,9 @@ async function pdfExtract(f,prog){
     const textRows=rowsOf(tc.items.map(i=>({s:i.str,x:i.transform[4],y:i.transform[5]+(N-p)*2000,w:i.width||0,h:Math.abs(i.height||i.transform[3]||10)})));
     allRows.push(...textRows);
     // OCR every page as well: text PDFs may contain handwriting added over the digital text layer.
+    // Digital text is more reliable than a second OCR pass over the same table.
+    // Keep OCR for scanned/image pages where the PDF has no usable text layer.
+    if(rowsText(textRows).replace(/\s/g,'').length>=80){prog(p/N);continue}
     const vp=pg.getViewport({scale:2.8}),cv=document.createElement('canvas');
     cv.width=vp.width;cv.height=vp.height;
     const g=cv.getContext('2d',{willReadFrequently:true});
@@ -138,7 +168,7 @@ async function pdfExtract(f,prog){
       g.putImageData(im,0,0);
     }catch(_){}
     let scanned=null;
-    try{scanned=await ocr(cv,q=>prog(((p-1)+q)/N));}catch(_){}
+    try{scanned=await ocr(cv,q=>prog(((p-1)+q)/N),'pdf');}catch(_){}
     if(scanned&&scanned.rows){
       const ocrRows=scanned.rows.map(r=>({
         c:r.c,xs:r.xs,
@@ -184,7 +214,7 @@ async function docxExtract(f){
 async function extractText(it){
   const f=it.file,prog=q=>{it.prog=Math.min(.98,q);bar(it)};
   if(it.kind==='pdf')return pdfExtract(f,prog);
-  if(it.kind==='img'){const r=await ocr(await imgCanvas(f),prog);return r}
+  if(it.kind==='img'){const r=await ocr(await imgCanvas(f),prog,'image');return r}
   if(it.kind==='docx')return docxExtract(f);
   if(it.kind==='txt'){let t=await f.text();if(/html?$/.test(ext(f.name)))t=new DOMParser().parseFromString(t,'text/html').body.textContent;
     t=t.replace(/[;\t]/g,'  ');return{text:t,rows:null}}
@@ -197,7 +227,7 @@ const PHONE=/(?:(?:\+|00)33[\s.]?|\b0)[1-9](?:[\s.\-]?\d{2}){4}\b/;
 const NUM2=/^-?\d+(?:[.,]\d+)?$|^-?\d{1,3}(?:\.\d{3})+(?:,\d+)?$|^-?\d{1,3}(?:,\d{3})+(?:\.\d+)?$/;
 const UNIT_RX=/^(h|hr|hrs|heures?|u|un|unit[ée]s?|pce|pcs|pi[èe]ces?|m|ml|m2|m²|m3|kg|l|lot|ens|ensemble|forfait|ff|jours?|j)\.?$/i;
 const UNIT_GLUE=/^(\d+(?:[.,]\d+)?)(h|u|m|ml|m2|m²|kg|l|j)$/i;
-const META=/siret|siren|\biban\b|\bbic\b|\bt[ée]l\b|t[ée]l[ée]phone|tva\s*intra|\bpage\s*\d|\brcs\b|capital\s|www\.|@|\bnaf\b|\bape\b|assurance|d[ée]cennale|mentions/i;
+const META=/siret|siren|\biban\b|\bbic\b|\bt[ée]l\b|t[ée]l[ée]phone|tva\s*intra|\bpage\s*\d|\brcs\b|capital\s|www\.|[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}|\bnaf\b|\bape\b|assurance|d[ée]cennale|mentions/i;
 const ADDR=/^\d{1,4}\s*(?:bis|ter)?[, ]+\s*(?:rue|avenue|av\.?|bd|boulevard|chemin|impasse|all[ée]e|place|route|r[ée]sidence|quai|cours|passage|square|lotissement)\b|\b\d{5}\s+[A-ZÀ-Ý][A-Za-zÀ-ÿ' \-]+$/i;
 const END=/^(?:total\s*(?:h\.?t|ttc|net|g[ée]n[ée]ral|due)|net\s*(?:[àa]\s*payer|h\.?t)|montant\s*(?:h\.?t|ttc|total|tva)|base\s*h\.?t|tva\b|gst\b|sales\s+tax\b|subtotal\b|conditions|bon\s*pour\s*accord|reste\s*(?:[àa]\s*payer|d[ûu])|acompte|r[èe]glement|mode\s*de\s*paiement|rib\b|iban)/i;
 const SKIP=/^(?:sous[- ]?total|sous\s+total|subtotal|report|suite|page\s*\d|(?:total|montant)\b.*\b(?:main[- ]?d['’]?\s?(?:œ|oe)uvre|m\.?o\.?|prestations?|fournitures?|mat[ée]riels?|services?|travaux|pose)\b|(?:main[- ]?d['’]?\s?(?:œ|oe)uvre|m\.?o\.?|prestations?|fournitures?|mat[ée]riels?|services?|travaux|pose)\b.*\b(?:sous[- ]?total|total|montant)\b)/i;
@@ -207,7 +237,9 @@ const CLI_LBL=/^(?:nom\s+du\s+)?(?:c[l1i]{1,2}[eo]nt|destinataire|factur[ée]e?\
 const SITE_LBL=/^(?:adresse\s*(?:du\s*)?chantier|chantier|lieu\s*(?:d['’]\s*)?intervention|adresse\s*d['’]\s*intervention)\s*[:\-]?\s*(.*)$/i;
 const STOP_LBL=/^(?:d[ée]signation|description|libell[ée]|date\b|n[°o]\b|num[ée]ro|objet|motif|observations?|constatations?|travaux\s+r[ée]alis[ée]s?|pr[ée]conisations?|origine|cause|validit[ée]|[ée]ch[ée]ance|r[ée]f[ée]rence|qt[ée]|quantit|total|conditions|paiement|mode\s+de|[ée]metteur|exp[ée]diteur|prestataire|fournisseur|main[- ]d|fournitures?|devis\b|facture\b|rapport\b)/i;
 const MOIS={janvier:1,fevrier:2,février:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,août:8,septembre:9,octobre:10,novembre:11,decembre:12,décembre:12,january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12};
-const RX_MV=/^(pose|installation|d[ée]pose|remplacement|r[ée]paration|d[ée]pannage|mise en|raccordement|entretien|recherche|d[ée]placement|main|forfait|intervention|nettoyage|d[ée]sembouage|ramonage|contr[ôo]le|diagnostic|purge|vidange|[ée]tude|essai|ouverture|percement|saign[ée]e)/i;
+const RX_TRAVEL=/^(?:frais\s+(?:de\s+)?)?d[ée]placement\b/i;
+const RX_MV=/^(pose|installation|d[ée]pose|d[ée]coupe|remplacement|r[ée]paration|d[ée]pannage|mise en|raccordement|entretien|recherche|d[ée]placement|main|forfait|intervention|nettoyage|d[ée]sembouage|ramonage|contr[ôo]le|diagnostic|purge|vidange|[ée]tude|essai|ouverture|percement|saign[ée]e)/i;
+const RX_ITEM_START=/^(?:pose|installation|d[ée]pose|d[ée]coupe|remplacement|r[ée]paration|d[ée]pannage|mise en|raccordement|entretien|recherche|d[ée]placement|main|forfait|intervention|nettoyage|d[ée]sembouage|ramonage|contr[ôo]le|diagnostic|purge|vidange|[ée]tude|essai|ouverture|percement|saign[ée]e|tube|tuyau|raccord|coude|manchon|vanne|robinet|mitigeur|radiateur|siphon|t[êe]te|filtre|chaudi[èe]re|ballon|cumulus|chauffe[- ]eau|joint|multicouche|pot à boue|t[êe]te|fourniture|mat[ée]riel)/i;
 const RX_M=/main[- ]d.?[œo]euvre|\bm\.?o\.?\b|\bpose\b|installation|d[ée]pose|d[ée]pannage|d[ée]placement|intervention|recherche de fuite|mise en service|r[ée]glage|entretien|ramonage|d[ée]sembouage|nettoyage|diagnostic|raccordement|r[ée]paration|forfait|heure|visite|essai|manutention|[ée]vacuation|mise en (?:route|eau)|percement|prestation/i;
 const RX_F=/tube|tuyau|raccord|coude|manchon|r[ée]duction|vanne|robinet|mitigeur|radiateur|s[èe]che[- ]serviettes?|chaudi[èe]re|ballon|cumulus|chauffe[- ]eau|joint|cuivre|\bper\b|multicouche|\bvis\b|collier|siphon|flexible|\bwc\b|cuvette|lavabo|vasque|douche|receveur|baignoire|pompe|circulateur|groupe de s[ée]curit[ée]|vase d.expansion|thermostat|sonde|fourniture|mat[ée]riel|pi[èe]ce|\bkit\b|clapet|filtre|purgeur|d[ée]tendeur|compteur|bonde|r[ée]servoir|cartouche|collecteur|nourrice|isolant|gaine|conduit|ventouse|br[uû]leur|inhibiteur|glycol|t[ée]flon|filasse|soudure|brasure|silicone|colle\b|baguette|console|fixation|visserie|consommable/i;
 
@@ -225,7 +257,7 @@ function isMine(s){const S_=SS();s=String(s||'');if(/ms\s*plomberie|plomberie\s*
     const ph=s.match(PHONE);if(ph){const d=ph[0].replace(/\D/g,'').slice(-9);if(d&&cfg.replace(/\D/g,'').includes(d))return true}}catch(e){}return false}
 
 function lineItem(r,strict){
-  const cm=r.c.length>=2,cs=(cm?r.c.flatMap(cell=>{const x=String(cell||'').trim(),m=x.match(/^(\d+(?:[.,]\d+)?)\s+([^\s]+)$/);return m&&UNIT_RX.test(m[2])?[m[1],m[2]]:[x]}):(r.c[0]||'').split(/\s+/)).filter(x=>! /^[\s"'‘’“”`~;:,|©]+$/.test(x)),tail=[];let i=cs.length;
+  const cm=r.c.length>=2,cs=(cm?r.c.flatMap(cell=>String(cell||'').trim().split(/\s+/)):(r.c[0]||'').split(/\s+/)).filter(x=>! /^[\s"'‘’“”`~;:,|©]+$/.test(x)),tail=[];let i=cs.length;
   while(i>0){const raw=cs[i-1].trim();if(!raw){i--;continue}
     let c=raw.replace(/[€₹¥$£©“”]|\beuros?\b|\beur\b/ig,'').trim();
     if(/^\d+\.$/.test(c))c=c.slice(0,-1); // OCR often leaves a sentence dot after an integer quantity.
@@ -264,10 +296,17 @@ function lineItem(r,strict){
   const description=des.replace(/^\d{1,3}[.)\,"'’‘]?\s+/,'');
   return{id:uid(),des:description,q,u:unit,pu,ok:valid,ocrRepaired:!!(t&&t.repaired)}}
 function classify(l,ctx,docType){
-  if(ctx)return ctx;let f=0,m=0;const d=l.des;
+  if(RX_TRAVEL.test(l.des))return'T';if(ctx)return ctx;let f=0,m=0;const d=l.des;
   if(RX_MV.test(d))m+=3;if(l.u==='h')m+=3;if(RX_M.test(d))m+=1;if(RX_F.test(d))f+=2;if(/^fourniture/i.test(d)&&!/pose/i.test(d))f+=2;
   if(/^(u|m|ml|kg|l|m²)$/.test(l.u))f+=1;
   if(m!==f)return m>f?'M':'F';if(docType==='f')return'F';return /^(u|m|ml|kg|l|m²)$/.test(l.u)?'F':'M'}
+function discountLine(value){return /^\s*(?:remise|r[ée]duction|escompte)\b(?!\s+(?:en|à|a)\s)/i.test(String(value||'').trim())}
+function sectionKind(value){return /^[-–•*#\s]*d[ée]placements?\b/i.test(value)?'T':/fourn|mat[ée]ri/i.test(value)?'F':'M'}
+function numericOnlyRow(r){return r.c.length>1&&r.c.every(v=>{const s=String(v||'').replace(/[€₹¥$£©\s]/g,'');return !/[A-Za-zÀ-ÿ]{2}/.test(s)&&(!s||NUM2.test(s)||/^[-.,]+$/.test(s))})&&r.c.some(v=>NUM2.test(String(v||'').replace(/[€₹¥$£©\s]/g,'')))}
+function freeTravelItem(r){const text=String(r.t||r.c.join(' ')).trim();if(!RX_TRAVEL.test(text)||!/(offert|gratuit|inclus|compris)/i.test(text))return null;
+  const c=String(r.c[0]||text).trim(),des=/offert|gratuit|inclus|compris/i.test(c)?c:c+' (offert)';
+  return{id:uid(),des,q:1,u:'forfait',pu:0,ok:true,kind:'T'}
+}
 function isSummaryLine(value){
   const t=norm(value).replace(/[^a-z0-9]+/g,' ').trim();
   const hasTotal=/^(?:sous total|total|totale|montant|cumul)\b/.test(t);
@@ -284,40 +323,54 @@ function parseItems(L,docType){
       if(/^(?:total ht|total ttc|total net|total general|total due|net a payer|montant total|montant tva|base ht|tva|gst|sales tax|subtotal|conditions|bon pour accord|reste a payer|acompte|reglement|mode de paiement|rib|iban)\b/.test(tn)){e=i;break}
     }
   }
-  const items=[];let ctx=null,last=null,cont=0,sawSupplySubtotal=false,recap=false;
-  for(let k=Math.max(0,s-3);k<s;k++){const h=L[k];if(h&&h.c.length===1&&HEADING.test(h.t))ctx=/fourn|mat[ée]ri/i.test(h.t)?'F':'M'}
+  const items=[];let ctx=null,last=null,cont=0,sawSupplySubtotal=false,recap=false,pending=[];
+  const flushPending=()=>{if(last&&pending.length&&cont<4){const add=pending.slice(0,4-cont);last.des+=' – '+add.join(' – ');cont+=add.length}pending=[]};
+  for(let k=Math.max(0,s-3);k<s;k++){const h=L[k];if(h&&h.c.length===1&&HEADING.test(h.t))ctx=sectionKind(h.t)}
   for(let i=Math.max(0,s+1);i<e;i++){
     const r=L[i],t=r.t,tn=norm(t).replace(/[^a-z0-9]+/g,' ').trim();
-    // The second supplies subtotal is the final recap; keep all actual rows before it.
     if(/^sous total fournitures?\b/.test(tn)){
-      if(sawSupplySubtotal){recap=true;last=null;continue}
-      sawSupplySubtotal=true;last=null;continue;
+      if(sawSupplySubtotal){recap=true;last=null;pending=[];continue}
+      sawSupplySubtotal=true;last=null;pending=[];continue;
     }
     if(recap)continue;
-    if(SKIP.test(t)||isSummaryLine(t))continue;
-    if(HEAD.test(t)&&HEAD2.test(t)&&t.length<140){last=null;continue}
-    if(r.c.length===1&&HEADING.test(t)){ctx=/fourn|mat[ée]ri/i.test(t)?'F':'M';last=null;continue}
-    const it=lineItem(r,strict);
+    if(discountLine(t)){last=null;pending=[];continue}
+    if(SKIP.test(t)||isSummaryLine(t)){last=null;pending=[];continue}
+    if(META.test(t)||/^(?:[i1l][)\].:]?\s*)?(?:devis|facture|rapport)\b/i.test(t)||/\b(?:n[°ºo]\s*)(?:DEV|FAC|FACT|RAP)[-/ ]\d/i.test(t)){last=null;pending=[];continue}
+    if(HEAD.test(t)&&HEAD2.test(t)&&t.length<140){last=null;pending=[];continue}
+    if(r.c.length===1&&HEADING.test(t)){ctx=sectionKind(t);last=null;pending=[];continue}
+    const it=freeTravelItem(r)||lineItem(r,strict);
     if(it){
+      flushPending();
       if(isSummaryLine(it.des))continue;
       it.ctx=ctx;items.push(it);last=it;cont=0;continue;
     }
-    if(last&&cont<2&&t.length<100&&!STOP_LBL.test(t)&&!META.test(t)&&!ADDR.test(t)&&!/\d{2}\s?[\/.]\s?\d{2}/.test(t)&&/[a-zà-ÿ]{3}/i.test(t)){
-      last.des+=' – '+t.replace(/^[-–•*\s]+/,'');cont++;
+    if(numericOnlyRow(r)&&pending.length){
+      let start=0;for(let j=0;j<pending.length;j++)if(RX_ITEM_START.test(pending[j]))start=j;
+      if(last&&start>0){last.des+=' – '+pending.slice(0,start).join(' – ');cont+=start}
+      const desc=pending.slice(start).join(' ');pending=[];
+      const combined=lineItem({c:[desc,...r.c],xs:null},strict);
+      if(combined){combined.ctx=ctx;items.push(combined);last=combined;cont=0}
+      continue
     }
+    if(t.length<120&&!STOP_LBL.test(t)&&!META.test(t)&&!ADDR.test(t)&&!/\d{2}\s?[\/.]\s?\d{2}/.test(t)&&/[a-zà-ÿ]{3}/i.test(t)){if(pending.length<4)pending.push(t.replace(/^[-–•*\s]+/,''));continue}
+    flushPending();
   }
-  items.forEach(l=>{l.kind=classify(l,l.ctx,docType)});return items;
+  flushPending();
+  items.forEach(l=>{
+    l.des=String(l.des||'').replace(/^écoupe\b/i,'Découpe').replace(/\bpo\s*(?:[–—-]\s*)?à\s*C?\s*boue\b/i,'pot à boue').replace(/\bmise:\s+/i,'mise ').replace(/@(?=\d)/g,'Ø').replace(/\bmuttiblock\b/ig,'Multiblock').replace(/\s+/g,' ').trim();
+    l.kind=classify(l,l.ctx,docType)
+  });return items;
 }
 function money(t){const s=String(t||'').replace(/[;:|,'"’]+\s*$/,'');const m=s.match(/(?:[€₹¥$£©]\s*)?(-?\d[\d\s.,]*)\s*(?:€|₹|¥|\$|£|©|eur\w*)?\s*$/i);return m?pn(m[1]):NaN}
 function parseTotals(L){const T={ht:null,ttc:null,tva:null,rate:null,rmPct:null,rm:null};
   for(const r of L){
     const t=r.t.trim(),tn=norm(t),m=money(t),pc=(t.match(/(\d{1,2}(?:[.,]\d+)?)\s*%/)||[])[1];
     // Only accept document-level totals, not line totals or section subtotals.
-    if(/^(?:net\s*[àa]\s*payer|total\s*ttc|montant\s*ttc|total\s*t\.?t\.?c|total\s+due)\b/i.test(t)){if(!isNaN(m))T.ttc=m}
-    else if(/^(?:total|montant)\s*(?:net\s*)?h\.?t\.?\b|^total\s+net\s+du\s+devis\b|^total\s+g[ée]n[ée]ral\s+h\.?t\.?\b|^sub\s*total\b|^subtotal\b/i.test(t)){if(!isNaN(m))T.ht=m}
+    if(/^(?:net\s*[àa]\s*payer|total\s*ttc|montant\s*ttc|total\s*t\.?t\.?c|total\s+due|total\s+net\s+de\s+la\s+(?:facture|invoice))\b/i.test(t)){if(!isNaN(m))T.ttc=m}
+    else if(/^(?:total|montant)\s*(?:net\s*)?h\.?t\.?\b|^total\s+net(?:\s+du\s+devis)?\b|^total\s+g[ée]n[ée]ral\s+h\.?t\.?\b|^sub\s*total\b|^subtotal\b/i.test(t)){if(!isNaN(m))T.ht=m}
     else if(/non\s+applicable|293\s*b/i.test(t)){T.rate=0}
     else if(/^\s*(?:tva|t\.v\.a|gst(?:\s+at\s+\d+(?:[.,]\d+)?\s*%)?|sales\s+tax)\b/i.test(t)&&!/intra|n°/i.test(t)){if(pc)T.rate=pn(pc);if(!isNaN(m)&&!/%\s*$/.test(t))T.tva=Math.abs(m)}
-    else if(/^\\W*(?:remise|r[ée]duction|escompte)\b(?!\s+(?:en|à|a)\s)/i.test(t)){if(pc)T.rmPct=pn(pc);else if(!isNaN(m))T.rm=Math.abs(m)}
+    else if(discountLine(t)){if(pc)T.rmPct=pn(pc);else if(!isNaN(m))T.rm=Math.abs(m)}
   }
   if(T.rate==null){const snap=x=>{for(const a of[0,2.1,5.5,8.5,10,20])if(Math.abs(x-a)<.7)return a;return r2(x)};
     if(T.tva!=null&&T.ht>0)T.rate=snap(T.tva/T.ht*100);else if(T.ttc>0&&T.ht>0)T.rate=snap((T.ttc/T.ht-1)*100)}
@@ -333,7 +386,7 @@ function clientFrom(block){const c={name:'',addr:'',cp:'',ville:'',tel:'',email:
   for(const raw of block){let s=dedupeRepeatedPhrase(String(raw).trim());if(!s||isMine(s))continue;
     const em=s.match(EMAIL);if(em&&!c.email){c.email=em[0];s=s.replace(em[0],'').replace(/e-?mail\s*:?/i,'').trim()}
     const ph=s.match(PHONE);if(ph&&!c.tel){c.tel=fmtTel(ph[0]);s=s.replace(ph[0],'').replace(/(t[ée]l[ée]?(?:phone)?|mob(?:ile)?|port(?:able)?)\.?\s*:?/i,'').trim()}
-    s=dedupeRepeatedPhrase(s.replace(/^(?:nom|adresse|adr\.?|ville|code\s*postal(?:\s+(?:du\s+)?chantier)?)\s*:\s*/i,'').replace(/^[:\-–\s]+|[:\-–\s]+$/g,''));if(!s)continue;
+    s=dedupeRepeatedPhrase(s.replace(/^(?:nom|adresse|adr\.?|ville|code\s*postal(?:\s+(?:du\s+)?(?:chantier|ville))?)\s*:\s*/i,'').replace(/^[:\-–\s]+|[:\-–\s]+$/g,''));if(!s)continue;
     if(c.name&&norm(s)===norm(c.name))continue;
     const cv=s.match(/\b(\d{5})\s+([A-Za-zÀ-ÿ'’\- ]{2,})$/);
     if(cv&&!c.cp){c.cp=cv[1];c.ville=cv[2].trim();s=s.replace(cv[0],'').trim();if(s)c.addr=appendUniqueText(c.addr,s);continue}
@@ -353,6 +406,7 @@ function blockAfter(L,i,ci,max){
     else s=r.c[0];
     s=(s||'').trim();if(!s){if(++miss>2)break;continue}
     if(STOP_LBL.test(s)||CLI_LBL.test(s)||SITE_LBL.test(s))break;
+    if(out.some(x=>/\b\d{5}\b/.test(x))&&!PHONE.test(s)&&!EMAIL.test(s)&&!/^(?:t[ée]l[ée]?phone|mobile|portable|e-?mail)\b/i.test(s))break;
     out.push(s);
   }
   return out;
@@ -379,7 +433,7 @@ function detectType(L,name){const head=L.slice(0,18).map(r=>r.t).join('\n')+'\n'
 function reportCategory(text){const t=norm(text);if(/degat des eaux|inondation|sinistre.*eau/.test(t))return'Dégât des eaux';if(/recherche.*fuite|fuite|infiltration/.test(t))return'Recherche de fuite';if(/panne.*chauffage|chaudiere|chauffage/.test(t))return'Panne de chauffage';if(/diagnostic.*plomberie|diagnostic plomberie/.test(t))return'Diagnostic plomberie';return'Autre'}
 function detectNum(L,name){const head=L.slice(0,30).map(r=>r.t).join('\n'),file=String(name||'').replace(/\.[^.]+$/,'');
   const rx=[
-    /\b((?:DEV|FAC|FACT|FA|RAP|RI|DE|INV)[-_/ ]?\d{4}[-_/ ]?\d{1,6})\b/i,
+    /\b((?:DEV|FAC|FACT|FA|RAP|RI|DE|INV)[-_/ ]?\d{4}[-_/ ]?\d{1,6}(?:[-_/](?:R\d+|[A-Z]{1,3}\d*))?)\b/i,
     /(?:devis|facture|rapport|invoice|receipt)\s*(?:n[°o]|no\.?|num[ée]ro|number|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-_/.]{2,})/i,
     /(?:n[°o]|no\.?|num[ée]ro|number|#)\s*(?:(?:de\s*)?(?:devis|facture|rapport|invoice|receipt)\s*)?[:\-]?\s*([A-Z0-9][A-Z0-9\-_/.]*\d[A-Z0-9\-_/.]*)/i
   ];
@@ -405,7 +459,7 @@ function parse(text,name,rowsIn){
   }
   if(lines.some(l=>l.ocrRepaired))repairs.push('prix de ligne');
   if(repairs.length)warns.push('Caractères OCR corrigés par rapprochement des calculs ('+repairs.join(', ')+'). Vérifiez les montants sur le document original.');
-  if(tot.rmPct==null&&tot.rm&&sum>0)tot.rmPct=r2(tot.rm/sum*100);
+  if(tot.rmPct==null&&tot.rm&&sum>0)tot.rmPct=Math.round(tot.rm/sum*100*10000)/10000;
   const ht=r2(sum*(1-(tot.rmPct||0)/100));
   if(type!=='x'&&!lines.length)warns.push('Aucune ligne de prestation ou fourniture reconnue : ajoutez-les à la main ou réessayez avec un meilleur scan.');
   if(tot.ht!=null&&lines.length&&Math.abs(tot.ht-ht)>.05)warns.push('Écart entre le total lu ('+eur(tot.ht)+') et la somme des lignes ('+eur(ht)+') : vérifiez les quantités et prix.');
@@ -509,7 +563,7 @@ function upCli(it,K,out){const s=SS(),C=s.clients||(s.clients=[]),c=it.data.cli,
   if(t){let n=0;for(const r in v)if(v[r]&&K.c[r]&&!t[K.c[r]]){t[K.c[r]]=v[r];n++}out.push('Client existant complété ('+(t[K.c.name]||'')+')');return t.id}
   const o=Object.assign(emptyLike(C[C.length-1]||{}),{id:uid()});for(const r in v)if(v[r]&&K.c[r])o[K.c[r]]=v[r];C.push(o);out.push('Nouveau client : '+c.name);return o.id}
 function upTarifs(ls,K,out){const s=SS(),C=s.cat||(s.cat=[]);let add=0,skip=0;
-  for(const l of ls){const ex=C.find(x=>norm(x[K.cat.name])===norm(l.des));if(ex){if(!nv(ex[K.cat.price])&&l.pu)ex[K.cat.price]=l.pu;skip++;continue}
+  for(const l of ls){if(l.kind==='T')continue;const ex=C.find(x=>norm(x[K.cat.name])===norm(l.des));if(ex){if(!nv(ex[K.cat.price])&&l.pu)ex[K.cat.price]=l.pu;skip++;continue}
     const o=Object.assign(emptyLike(C[C.length-1]||{}),{id:uid()});o[K.cat.name]=l.des;o[K.cat.price]=l.pu;
     if(K.cat.unit&&l.u)o[K.cat.unit]=l.u;if(K.cat.type)o[K.cat.type]=K.catT[l.kind];
     if(K.cat.buy&&K.cat.mrg&&K.cat.f){const m=K.cat.mv||0;o[K.cat.mrg]=m;o[K.cat.buy]=r2(K.cat.f===1?l.pu/(1+m/100):l.pu*(1-m/100))}
@@ -518,15 +572,15 @@ function upTarifs(ls,K,out){const s=SS(),C=s.cat||(s.cat=[]);let add=0,skip=0;
 function mkLine(l,K){const o={};if(K.lId)o.id=uid();o[K.lDes]=l.des;o.q=l.q;o.p=l.pu;if(K.lUnit&&l.u)o[K.lUnit]=l.u;return o}
 function mkDoc(it,K,cid,out){const s=SS(),d=it.data,t=d.type==='f'?'f':'d',docs=s.docs||(s.docs=[]),dup=dupDoc(it);
   const tpl=docs.slice().reverse().find(x=>x&&x.t===t)||docs[docs.length-1]||{};
-  const F=d.lines.filter(l=>l.kind==='F').map(l=>mkLine(l,K)),M=d.lines.filter(l=>l.kind!=='F').map(l=>mkLine(l,K));
+  const F=d.lines.filter(l=>l.kind==='F').map(l=>mkLine(l,K)),M=d.lines.filter(l=>l.kind==='M').map(l=>mkLine(l,K)),travel=d.lines.filter(l=>l.kind==='T'),travelAmount=r2(travel.reduce((sum,l)=>sum+nv(l.q)*nv(l.pu),0));
   const rate=d.tot.rate!=null?d.tot.rate:(tpl.tva!=null?tpl.tva:10);
-  if(dup&&it.dup==='replace'){dup.F=F;dup.M=M;dup.rm=d.tot.rmPct||0;dup.tva=rate;if(cid)dup[K.dCli]=cid;out.push('Document '+dup[K.dNum]+' remis dans ta mise en page');return dup}
+  if(dup&&it.dup==='replace'){dup.F=F;dup.M=M;dup.travelOn=travel.length>0;dup.travelAmount=travelAmount;dup.rm=d.tot.rmPct||0;dup.tva=rate;if(cid)dup[K.dCli]=cid;out.push('Document '+dup[K.dNum]+' remis dans ta mise en page');return dup}
   const o=emptyLike(tpl);o.id=uid();o.t=t;
   let no=it.opt.num&&d.num?d.num:'';if(!no||dup)no=nextNo(t,K,no||'');
   o[K.dNum]=no;o[K.dDate]=d.date||today();if(cid)o[K.dCli]=cid;
   const c=d.cli;if(c.name){const emb={name:c.name,tel:c.tel,email:c.email,addr:c.addr,postalCity:[c.cp,c.ville].filter(Boolean).join(' ')};for(const r in K.dEmb)if(emb[r])o[K.dEmb[r]]=emb[r]}
   const site=(d.addrs||[]).find(a=>/chantier|intervention/i.test(a.t||''));if(site){o.sa=site.addr||'';o.sc=[site.cp,site.ville].filter(Boolean).join(' ')}
-  o.F=F;o.M=M;o.rm=d.tot.rmPct||0;o.tva=rate;o.acc=tpl.acc!=null?tpl.acc:((s.cfg&&s.cfg.acc)||40);o.paid=!!(t==='f'&&d.paid);o.ap=false;o.st='';
+  o.F=F;o.M=M;o.travelOn=travel.length>0;o.travelAmount=travelAmount;o.rm=d.tot.rmPct||0;o.tva=rate;o.acc=tpl.acc!=null?tpl.acc:((s.cfg&&s.cfg.acc)||40);o.paid=!!(t==='f'&&d.paid);o.ap=false;o.st='';
   if(K.first)docs.unshift(o);else docs.push(o);out.push((t==='f'?'Facture ':'Devis ')+no+' créé'+(t==='f'?'e':'')+' ('+d.lines.length+' ligne'+(d.lines.length>1?'s':'')+')');return o}
 function mkRapport(it,K,cid,out){const s=SS(),R=s.rep||(s.rep=[]),d=it.data,y=new Date().getFullYear(),seqKey='r'+y;
   if(!d.num)s.seq[seqKey]=(s.seq[seqKey]||0)+1;
@@ -586,14 +640,14 @@ function itemRow(it){return`<div class="imp-it ${it.id===ST.sel?'sel':''}" data-
 function lineCard(l,i){return`<div class="imp-ln ${l.ok&&!lineIncomplete(l)?'':'w'}" data-i="${i}"><input data-l="des" value="${H(l.des)}" aria-label="Désignation">
   <div class="imp-g"><label class="imp-f">Qté<input data-l="q" inputmode="decimal" value="${H(l.q)}"></label><label class="imp-f">Unité<input data-l="u" value="${H(l.u)}"></label><label class="imp-f">P.U. HT<input data-l="pu" inputmode="decimal" value="${H(l.pu)}"></label></div>
   <div class="imp-row"><span class="imp-tt">Total ligne</span><b data-lt>${eur(nv(l.q)*nv(l.pu))}</b></div>
-  <div class="imp-la"><button data-a="kind">${l.kind==='F'?'→ Prestations':'→ Fournitures'}</button>${l.ok?'':`<button data-a="confirm-line">Confirmer la ligne</button>`}<button data-a="dl">Supprimer</button></div></div>`}
+  <div class="imp-la"><button data-a="kind">${l.kind==='M'?'→ Fournitures':'→ Prestations'}</button>${l.ok?'':`<button data-a="confirm-line">Confirmer la ligne</button>`}<button data-a="dl">Supprimer</button></div></div>`}
 function plan(it){const d=it.data,sc=it.sc,p=[];if(sc.all)p.push((d.type==='x'?'Rapport':d.type==='f'?'Facture':'Devis')+' complet'+(d.num?' '+d.num:'')+' dans ta mise en page');else{if(sc.cli)p.push('client');if(sc.pre)p.push('prestations → Mes tarifs');if(sc.fou)p.push('fournitures → Mes tarifs')}
   return p.length?'Sera enregistré : '+p.join(' · '):'Choisis au moins une catégorie.'}
 function reviewWarnings(it){const d=it.data,base=(d.warns||[]).filter(w=>!/^Écart entre le (?:total lu|TTC lu)/.test(w)&&!/^Certaines lignes sont à vérifier/.test(w)&&!/^Aucune ligne de prestation ou fourniture reconnue/.test(w));return base.concat(transferProblems(it))}
 function review(it){const d=it.data,c=calc(d),sc=it.sc,K=probe();
   if(it.status==='done'&&it.res)return`<div class="c imp"><h3>Transfert terminé</h3>${it.res.msg.map(m=>`<div class="imp-w ok">${H(m)}</div>`).join('')}
     ${it.res.id?`<button class="b cu" data-a="open"><span>Ouvrir dans l'app</span></button>`:''}<button class="b gh" data-a="un"><span>Annuler ce transfert</span></button></div>`;
-  const cands=clientCands(d.cli),dup=dupDoc(it),issues=transferProblems(it),M=d.lines.map((l,i)=>[l,i]).filter(x=>x[0].kind!=='F'),F=d.lines.map((l,i)=>[l,i]).filter(x=>x[0].kind==='F');
+  const cands=clientCands(d.cli),dup=dupDoc(it),issues=transferProblems(it),M=d.lines.map((l,i)=>[l,i]).filter(x=>x[0].kind==='M'),F=d.lines.map((l,i)=>[l,i]).filter(x=>x[0].kind==='F'),T=d.lines.map((l,i)=>[l,i]).filter(x=>x[0].kind==='T');
   const grp=(t,a)=>`<div class="imp-sub">${t} (${a.length})</div>${a.map(x=>lineCard(x[0],x[1])).join('')}`;
   return`<div class="c imp"><h3>Données extraites</h3>
   <div data-review-warnings>${reviewWarnings(it).map(w=>`<div class="imp-w">${H(w)}</div>`).join('')}</div>
@@ -605,6 +659,7 @@ function review(it){const d=it.data,c=calc(d),sc=it.sc,K=probe();
   ${cands.length||(SS()&&(SS().clients||[]).length)?`<label class="imp-f">Client dans l'app<select data-match><option value="new" ${it.match==='new'?'selected':''}>Créer un nouveau client</option>${cands.map(x=>`<option value="${x.c.id}" ${it.match===x.c.id?'selected':''}>Utiliser : ${H(x.n)}</option>`).join('')}</select></label>`:''}
   ${d.type==='x'?`<div class="imp-sub">Texte du rapport</div><label class="imp-f"><textarea data-f="txt" rows="8">${H(d.txt)}</textarea></label>`:`
   ${grp('Prestations',M)}<button class="b gh" data-a="add" data-k="M"><span>+ Ajouter une prestation</span></button>
+  ${grp('Déplacements',T)}
   ${grp('Fournitures',F)}<button class="b gh" data-a="add" data-k="F"><span>+ Ajouter une fourniture</span></button>
   <div class="imp-sub">Totaux</div><div class="imp-g">${field('Remise %','tot.rmPct',d.tot.rmPct||'',{m:'decimal'})}${field('TVA %','tot.rate',d.tot.rate!=null?d.tot.rate:'',{m:'decimal'})}</div>
   <div class="imp-row"><span>Total HT</span><b data-t="ht">${eur(c.ht)}</b></div><div class="imp-row"><span>TVA</span><b data-t="tva">${eur(c.tva)}</b></div><div class="imp-row big"><span>Total TTC</span><b data-t="ttc">${eur(c.ttc)}</b></div>
@@ -661,7 +716,7 @@ function onClick(e){const a=e.target.closest('[data-a]');if(!a)return;const act=
   if(act==='go'){const r=ST.items.find(i=>i.data);if(!r){document.getElementById('imp-file').click();return}ST.sel=r.id;paint();const v=document.getElementById('imp-val');if(v)v.scrollIntoView({behavior:'smooth',block:'start'});return}
   if(!it||!it.data)return;const d=it.data;
   if(act==='ty'){d.type=a.dataset.t;if(d.type==='x'&&!d.txt)d.txt=(it.raw||'').slice(0,6000)}
-  else if(act==='kind'){const l=d.lines[+a.closest('[data-i]').dataset.i];l.kind=l.kind==='F'?'M':'F'}
+  else if(act==='kind'){const l=d.lines[+a.closest('[data-i]').dataset.i];l.kind=l.kind==='M'?'F':'M'}
   else if(act==='confirm-line'){const l=d.lines[+a.closest('[data-i]').dataset.i];if(l)l.ok=true}
   else if(act==='dl'){d.lines.splice(+a.closest('[data-i]').dataset.i,1)}
   else if(act==='add'){d.lines.push({id:uid(),des:'',q:1,u:'',pu:0,ok:true,kind:a.dataset.k})}

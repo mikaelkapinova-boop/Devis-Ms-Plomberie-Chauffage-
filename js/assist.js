@@ -760,7 +760,7 @@ var css=document.createElement("style");css.textContent=".px-card{background:var
 /* === VERSION 7.6.0 === */
 (function(){
 "use strict";
-var APP_VERSION="7.10.0",APP_RELEASE="Les devis et factures permettent maintenant d’ajouter un forfait de déplacement avec un prix libre, compté séparément de la main-d’œuvre et des fournitures. Les boutons PDF, l’extraction locale des coordonnées et la synchronisation entre téléphones restent disponibles.";
+var APP_VERSION="7.11.0",APP_RELEASE="L’import intelligent sépare mieux les lignes des PDF numérisés, conserve les remises et distingue le déplacement des prestations et fournitures. Les devis et factures permettent aussi d’ajouter un forfait de déplacement à prix libre. Les boutons PDF, l’extraction locale des coordonnées et la synchronisation entre téléphones restent disponibles.";
 window.APP_VERSION=APP_VERSION;
 var appVersionLabel=document.getElementById("appver");if(appVersionLabel)appVersionLabel.textContent="v"+APP_VERSION.split(".").slice(0,2).join(".");
 window.newsShow=function(){var d=document.createElement("div");d.className="news";d.innerHTML="<div><h2>Version "+APP_VERSION+"</h2><p>"+APP_RELEASE+"</p><button class='b' style='width:100%;margin-top:10px' onclick='this.closest(\".news\").remove()'><span>Compris</span></button></div>";d.addEventListener("click",function(e){if(e.target===d)d.remove()});document.body.appendChild(d)};
