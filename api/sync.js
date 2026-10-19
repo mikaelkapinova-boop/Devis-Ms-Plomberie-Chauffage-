@@ -54,6 +54,7 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     if (error && (error.name === 'BlobPreconditionFailedError' || error.status === 412 || error.status === 409 || error.statusCode === 412 || error.statusCode === 409 || /Precondition|AlreadyExists|Conflict/i.test(error.name || '') || /already exists|precondition|conflict/i.test(error.message || ''))) {
       console.error('Cloud sync write conflict:', {name: String(error.name || 'UnknownError'), status: Number(error.status || error.statusCode || 0), hasIfMatch: writeIfMatchUsed});
+      await new Promise(resolve => setTimeout(resolve, 180 + Math.floor(Math.random() * 420)));
       return res.status(409).json({error: 'Les données ont changé sur l’autre téléphone. Nouvelle tentative…'});
     }
     const name = String(error && error.name || 'UnknownError');
