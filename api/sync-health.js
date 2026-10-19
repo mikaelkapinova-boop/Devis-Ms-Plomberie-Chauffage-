@@ -10,10 +10,16 @@ module.exports = async function handler(req, res) {
   if (!process.env.BLOB_READ_WRITE_TOKEN) return res.status(503).json({ok: false, code: 'BLOB_TOKEN_MISSING'});
 
   try {
-    const {get} = await import('@vercel/blob');
-    const state = await get(PATHNAME, {access: 'private', useCache: false});
-    if (state && state.stream) await state.stream.cancel();
-    return res.status(200).json({ok: true, stateExists: !!state, stateBytes: Number(state && state.blob && state.blob.size) || 0});
+    const {head, BlobNotFoundError} = await import('@vercel/blob');
+    try {
+      const state = await head(PATHNAME);
+      return res.status(200).json({ok: true, stateExists: true, stateBytes: Number(state && state.size) || 0});
+    } catch (error) {
+      if (error instanceof BlobNotFoundError || error && error.name === 'BlobNotFoundError') {
+        return res.status(200).json({ok: true, stateExists: false, stateBytes: 0});
+      }
+      throw error;
+    }
   } catch (error) {
     const name = String(error && error.name || 'UnknownError');
     const status = Number(error && (error.status || error.statusCode) || 0);
