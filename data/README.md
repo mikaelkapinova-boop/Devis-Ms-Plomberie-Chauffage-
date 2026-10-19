@@ -1,4 +1,3 @@
-# Données synchronisées
+# Synchronisation en ligne
 
-`store.json` est écrit par l'appli (Réglages → Synchronisation GitHub) quand un jeton est renseigné.
-Il contient devis, factures, clients, tarifs, rapports et planning (jamais les clés API ni le jeton).
+Les données partagées sont stockées dans le Blob privé lié au projet Vercel. Elles sont chiffrées par l'application avant l'envoi. Aucun fichier de données personnel n'est versionné dans ce dépôt.

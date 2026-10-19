@@ -1,0 +1,47 @@
+'use strict';
+
+const {setCors, verifyToken} = require('../lib/sync-auth');
+const PATHNAME = 'shared/ms-plomberie-state.json';
+
+module.exports = async function handler(req, res) {
+  setCors(req, res);
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method !== 'GET' && req.method !== 'PUT') return res.status(405).json({error: 'Méthode non autorisée'});
+
+  const auth = verifyToken(req);
+  if (!auth.ok) return res.status(auth.status).json({error: auth.error});
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return res.status(503).json({error: 'Stockage en ligne indisponible'});
+
+  try {
+    const {get, put} = await import('@vercel/blob');
+    if (req.method === 'GET') {
+      const result = await get(PATHNAME, {access: 'private'});
+      if (!result || result.statusCode === 404) return res.status(200).json({pack: null, etag: ''});
+      const contents = await new Response(result.stream).text();
+      const saved = JSON.parse(contents);
+      if (!saved || !saved.pack || saved.pack.enc !== 1) return res.status(500).json({error: 'Sauvegarde en ligne illisible'});
+      return res.status(200).json({pack: saved.pack, etag: result.blob.etag});
+    }
+
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    if (!body.pack || body.pack.enc !== 1 || !body.pack.iv || !body.pack.ct) return res.status(400).json({error: 'Données de synchronisation invalides'});
+    if (Buffer.byteLength(JSON.stringify(body)) > 4 * 1024 * 1024) return res.status(413).json({error: 'Sauvegarde trop volumineuse'});
+
+    const ifMatch = String(req.headers['if-match'] || '').trim();
+    const options = {access: 'private', contentType: 'application/json', cacheControlMaxAge: 60};
+    if (ifMatch) {
+      options.allowOverwrite = true;
+      options.ifMatch = ifMatch;
+    }
+    const saved = await put(PATHNAME, JSON.stringify({pack: body.pack}), options);
+    return res.status(200).json({etag: saved.etag});
+  } catch (error) {
+    if (error && (error.name === 'BlobPreconditionFailedError' || error.status === 412 || error.status === 409 || error.statusCode === 412 || error.statusCode === 409 || /Precondition|AlreadyExists|Conflict/i.test(error.name || '') || /already exists|precondition|conflict/i.test(error.message || ''))) {
+      return res.status(409).json({error: 'Les données ont changé sur l’autre téléphone. Nouvelle tentative…'});
+    }
+    console.error('Cloud sync error:', error && error.message || 'unknown');
+    return res.status(502).json({error: 'Stockage en ligne temporairement indisponible'});
+  }
+};
+
+module.exports.config = {api: {bodyParser: {sizeLimit: '4mb'}}};

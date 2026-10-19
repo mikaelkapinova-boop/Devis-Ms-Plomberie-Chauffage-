@@ -1,1 +1,1 @@
-{"functions":{"api/perplexity.js":{"maxDuration":300}}}
+{"functions":{"api/perplexity.js":{"maxDuration":300},"api/sync.js":{"maxDuration":20},"api/sync-auth.js":{"maxDuration":10}}}

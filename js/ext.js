@@ -11,7 +11,7 @@ pen:"En cas de retard de paiement : pénalités égales à 3 fois le taux d'int�
 cgv:'',sig:true,th:'auto',
 ai:{pv:'pplx',key:'',model:''},
 px:'mikaelkapinova@gmail.com', /* adresse e-mail reliée à Perplexity (assistant sans clé) */
-gh:{tok:'',repo:''}, /* synchronisation GitHub optionnelle */
+gh:{tok:'',repo:''}, /* champs hérités de l'ancienne synchronisation */
 mg:35,            /* marge par défaut sur le prix d'achat (%) */
 inb:[]};          /* identifiants déjà importés depuis la boîte de réception du site */
 
@@ -20,7 +20,7 @@ function applyTheme(){const t=S.cfg.th||'auto';if(t==='auto')delete document.doc
 const m=document.querySelector('meta[name=theme-color]');if(m)m.content=(t==='dark'||(t==='auto'&&matchMedia('(prefers-color-scheme:dark)').matches))?'#0e141a':'#3b556a'}
 function cs(k,v){const p=k.split('.');let o=S.cfg;while(p.length>1)o=o[p.shift()];o[p[0]]=v;save('cfg');if(k==='th')applyTheme()}
 const enc=encodeURIComponent;
-function repoInfo(){const r=(S.cfg.gh.repo||'').trim();if(r.includes('/'))return r;const m=location.hostname.match(/^([^.]+)\.github\.io$/),p=location.pathname.split('/').filter(Boolean)[0];return m&&p?m[1]+'/'+p:''}
+function repoInfo(){return 'ms-plomberie-partage-v1'}
 
 /* ---------- Vue Réglages ---------- */
 function setV(){const c=S.cfg,I=(l,k,ty='text',ph='')=>{const p=k.split('.');let v=c;p.forEach(x=>v=v?.[x]);return `<label>${l}<input type="${ty}" placeholder="${esc(ph)}" value="${esc(v??'')}" oninput="cs('${k}',this.value)"></label>`},
@@ -34,13 +34,13 @@ return `<div class="c"><h3>Mon entreprise (en-tête des documents)</h3>${I('Rais
 <div class="c"><h3>Micro-entreprise (calcul des bénéfices)</h3><div class="g2">${N('Cotisations (%)','cot')}${N('Impôt libératoire (%)','imp')}</div></div>
 <div class="c"><h3>Apparence</h3><label>Thème<select onchange="cs('th',this.value)"><option value="auto" ${c.th==='auto'?'selected':''}>Automatique</option><option value="light" ${c.th==='light'?'selected':''}>Clair</option><option value="dark" ${c.th==='dark'?'selected':''}>Sombre</option></select></label></div>
 <div class="c"><h3>Clé API</h3><label>Clé Perplexity<input type="password" placeholder="pplx-…" value="${esc(c.pk||'')}" oninput="cs('pk',this.value)" autocomplete="off"></label><button class="b gh sm" onclick="go('k')">Connecteurs</button></div>
-	<div class="c"><h3>Synchronisation entre téléphones</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Pour partager les mêmes données, utilise le même identifiant, le même mot de passe et le même jeton GitHub sur les deux iPhones. Le jeton doit autoriser la lecture et l’écriture du dépôt de l’application. Devis, factures, clients, tarifs, achats, rapports, planning et photos sont chiffrés avant l’envoi et se synchronisent automatiquement toutes les 3 secondes lorsque l’application est ouverte et connectée. Le jeton reste sur chaque appareil. Sans jeton sur le téléphone de ton ami, il ne recevra pas les créations.</p>${I('Même jeton GitHub sur chaque téléphone','gh.tok','password','github_pat_…')}<button class="b gh sm" type="button" onclick="ghPush(1)">Synchroniser maintenant</button><small id="ghst" class="mu" style="display:block;margin-top:8px">${esc(ghLastStatus)}</small></div>
+	<div class="c"><h3>Synchronisation en ligne</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les devis, factures, clients, tarifs, achats, rapports, planning et photos se sauvegardent dans un espace en ligne privé et chiffré. Les appareils connectés avec le même identifiant et le même mot de passe partagent les mêmes données. La synchronisation se fait automatiquement à l’ouverture, après chaque modification et pendant que l’application reste ouverte.</p><button class="b gh sm" type="button" onclick="ghPush(1)">Synchroniser maintenant</button><small id="ghst" class="mu" style="display:block;margin-top:8px">${esc(ghLastStatus)}</small></div>
 	<div class="c"><h3>Sauvegarde</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Toutes tes données restent enregistrées dans l'appli (devis, factures, clients, tarifs, rapports) jusqu'à suppression manuelle. Fais une sauvegarde régulière.</p><div class="g2"><button class="b" onclick="bkExp()">Exporter (fichier .json)</button><label class="b gh" style="text-align:center;display:flex;align-items:center;justify-content:center"><span>Restaurer une sauvegarde</span><input type="file" accept=".json,application/json" style="display:none" onchange="bkImp(this.files[0])"></label></div><p class="mu" style="font-size:12px;margin:8px 0 0">${S.docs.length} document(s) · ${S.clients.length} client(s) · ${S.cat.length} tarif(s) · ${S.rep.length} rapport(s)</p></div>
-<div class="c"><h3>Accès</h3><p class="mu" style="margin:0 0 8px;font-size:13px">L'appli est protégée par identifiant et mot de passe. Les données envoyées hors de l'appareil (GitHub, boîte de réception) sont chiffrées avec ce mot de passe.</p><button class="b gh sm" onclick="authLogout()">Se déconnecter</button></div>
+<div class="c"><h3>Accès</h3><p class="mu" style="margin:0 0 8px;font-size:13px">L'appli est protégée par identifiant et mot de passe. Les données synchronisées en ligne sont chiffrées sur le téléphone avant leur envoi.</p><button class="b gh sm" onclick="authLogout()">Se déconnecter</button></div>
 <div class="c"><h3>Zone sensible</h3><button class="b rd sm" data-t="Tout effacer sur cet appareil" onclick="arm2(this,wipe)">Tout effacer sur cet appareil</button></div>
 <p class="mu" style="text-align:center;font-size:12px">Version ${APPV}</p>`}
-const APPV='7.15.0';
-function wipe(){for(const k in S)localStorage.removeItem('ms_'+k);localStorage.removeItem('ms_stamp');localStorage.removeItem('ms_key');sessionStorage.removeItem('ms_key');idbPut('pack',null);location.reload()}
+const APPV='7.16.0';
+function wipe(){for(const k in S)localStorage.removeItem('ms_'+k);localStorage.removeItem('ms_stamp');localStorage.removeItem('ms_key');sessionStorage.removeItem('ms_key');localStorage.removeItem('ms_cloud_token');sessionStorage.removeItem('ms_cloud_token');idbPut('pack',null);location.reload()}
 
 /* ---------- Sauvegarde / restauration ---------- */
 function dlBlob(b,nm){const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=nm;document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(u)},1500)}
@@ -48,20 +48,20 @@ function bkExp(){const pack={};for(const k in S)pack[k]=S[k];pack._v=APPV;pack._
 function bkImp(f){if(!f)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);if(!p.docs&&!p.clients)throw 0;const keep={ai:S.cfg.ai,gh:S.cfg.gh};for(const k of ['clients','cat','docs','cfg','seq','rep','ph','chat'])if(p[k]!=null)S[k]=p[k];cfgInit();if(!S.cfg.ai.key)S.cfg.ai=keep.ai;if(!S.cfg.gh.tok)S.cfg.gh=keep.gh;for(const k in S)save(k);toast('Sauvegarde restaurée');go('h')}catch(e){toast('Fichier de sauvegarde invalide')}};r.readAsText(f)}
 
 /* ---------- Synchronisation chiffrée multi-appareils ---------- */
-const GH_REPO_DEFAULT = 'mikaelkapinova-boop/Devis-Ms-Plomberie-Chauffage-';
+const CLOUD_SYNC_API = 'https://devis-ms-plomberie-chauffage.vercel.app';
 const GH_ARRAYS = ['clients', 'cat', 'docs', 'achats', 'rep', 'chat', 'plan'];
 let ghSha = null, ghT = null, ghPoll = null, ghInFlight = null, ghEventsBound = false;
-let ghLastStatus = 'Ajoute le même jeton GitHub sur les deux téléphones pour activer la synchronisation.';
+let ghLastStatus = 'Connecte-toi avec le même compte sur chaque appareil pour synchroniser tes données.';
 let ghMeta = {v: 1, deleted: {}};
-function ghApi(p, o = {}) {
-  const repo = repoInfo();
-  if (!repo || !S.cfg.gh.tok) return Promise.reject(new Error('Jeton GitHub non configuré'));
-  const opts = Object.assign({method: 'GET'}, o);
-  opts.headers = Object.assign({Authorization: 'Bearer ' + S.cfg.gh.tok, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json'}, o.headers || {});
-  return fetch('https://api.github.com/repos/' + repo + '/contents/' + p, opts).then(async x => {
-    if (!x.ok && x.status !== 404) { const e = new Error('GitHub ' + x.status); e.status = x.status; throw e; }
-    return x.status === 404 ? null : x.json();
-  });
+async function cloudApi(method='GET',body=null,etag=''){
+  if(!CLOUD_SYNC_TOKEN)throw new Error('Reconnecte-toi pour activer la synchronisation en ligne');
+  const headers={Authorization:'Bearer '+CLOUD_SYNC_TOKEN};
+  if(body){headers['Content-Type']='application/json'}
+  if(etag)headers['If-Match']=etag;
+  const response=await fetch(CLOUD_SYNC_API+'/api/sync',{method,headers,body:body?JSON.stringify(body):undefined,cache:'no-store'});
+  let result={};try{result=await response.json()}catch(e){}
+  if(!response.ok){const error=new Error(result.error||'Synchronisation en ligne · '+response.status);error.status=response.status===412?409:response.status;throw error}
+  return result;
 }
 function ghClone(v) { return v == null ? v : JSON.parse(JSON.stringify(v)); }
 function ghStable(v) {
@@ -120,7 +120,7 @@ function ghPack() {
   const c = ghClone(S.cfg || {});
   c.pk = '';
   if (c.ai) c.ai.key = '';
-  c.gh = Object.assign({}, c.gh || {}, {tok: '', repo: c.gh && c.gh.repo || ''});
+  c.gh = {};
   p.cfg = c;
   return p;
 }
@@ -230,33 +230,22 @@ function ghStatus(message) {
   const el = $('#ghst'); if (el) el.textContent = message;
 }
 function repoInfo() {
-  const r = String(S.cfg.gh.repo || '').trim();
-  return r.includes('/') ? r : GH_REPO_DEFAULT;
+  return 'ms-plomberie-partage-v1';
 }
 async function ghReadStore() {
-  const file = await ghApi('data/store.json');
-  if (!file) return {sha: '', pack: null};
-  let contents = String(file.content || '').trim();
-  if (contents) contents = d8(contents);
-  else if (file.download_url) {
-    const response = await fetch(file.download_url, {headers: {Authorization: 'Bearer ' + S.cfg.gh.tok}, cache: 'no-store'});
-    if (!response.ok) throw new Error('Lecture GitHub ' + response.status);
-    contents = await response.text();
-  } else throw new Error('Fichier de synchronisation illisible');
-  return {sha: file.sha, pack: await decJSON(JSON.parse(contents))};
+  const remote = await cloudApi('GET');
+  return {sha: remote.etag || '', pack: remote.pack ? await decJSON(remote.pack) : null};
 }
 async function ghWriteStore(pack, sha) {
-  const body = {message: 'sync: données chiffrées ' + new Date().toLocaleString('fr-FR'), content: u8(JSON.stringify(await encJSON(pack)))};
-  if (sha) body.sha = sha;
-  const response = await ghApi('data/store.json', {method: 'PUT', body: JSON.stringify(body)});
-  return response && response.content && response.content.sha || '';
+  const response = await cloudApi('PUT', {pack: await encJSON(pack)}, sha);
+  return response.etag || '';
 }
 function ghVisibleState() {
-  const c = ghClone(S.cfg || {}); c.pk = ''; if (c.ai) c.ai.key = ''; c.gh = Object.assign({}, c.gh || {}, {tok: ''});
+  const c = ghClone(S.cfg || {}); c.pk = ''; if (c.ai) c.ai.key = ''; c.gh = {};
   return ghStable({clients: S.clients, cat: S.cat, docs: S.docs, achats: S.achats, rep: S.rep, chat: S.chat, plan: S.plan, ph: S.ph, seq: S.seq, cfg: c});
 }
 function ghApplyPack(pack) {
-  const before = ghVisibleState(), keep = {pk: S.cfg.pk, gh: ghClone(S.cfg.gh), ai: ghClone(S.cfg.ai)};
+  const before = ghVisibleState(), keep = {pk: S.cfg.pk, gh: {}, ai: ghClone(S.cfg.ai)};
   GH_ARRAYS.forEach(k => { if (Array.isArray(pack[k])) S[k] = ghClone(pack[k]); });
   if (pack.seq) S.seq = ghClone(pack.seq);
   if (pack.ph) S.ph = ghClone(pack.ph);
@@ -271,8 +260,8 @@ function ghApplyPack(pack) {
   if (before !== ghVisibleState()) render();
 }
 function ghStartAuto() {
-  if (!S.cfg.gh.tok) return;
-  if (!ghPoll) ghPoll = setInterval(() => { if (!document.hidden) ghSync(false); }, 3000);
+  if (!CLOUD_SYNC_TOKEN) return;
+  if (!ghPoll) ghPoll = setInterval(() => { if (!document.hidden) ghSync(false); }, 120000);
   if (ghEventsBound) return;
   ghEventsBound = true;
   window.addEventListener('focus', () => { if (!document.hidden) ghSync(false); });
@@ -280,7 +269,7 @@ function ghStartAuto() {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) ghSync(false); });
 }
 async function ghSync(manual) {
-  if (!S.cfg.gh.tok) { ghStatus('Ajoute le même jeton GitHub sur les deux téléphones pour activer la synchronisation.'); if (manual) toast('Ajoute le même jeton GitHub dans les réglages des deux appareils'); return; }
+  if (!CLOUD_SYNC_TOKEN) { const message = AUTH_SYNC_ERROR ? 'Connexion en ligne impossible · ' + AUTH_SYNC_ERROR : 'Reconnecte-toi sur cet appareil pour activer la synchronisation en ligne.'; ghStatus(message); if (manual) toast(message); return; }
   ghStartAuto();
   if (ghInFlight) {
     try { const result = await ghInFlight; if (manual && result && result.ok) toast('Données synchronisées entre les appareils'); return result; }
@@ -315,7 +304,8 @@ async function ghSync(manual) {
   ghInFlight = job;
   try { return await job; }
   catch (e) {
-    ghStatus('Échec de synchronisation · ' + (e && e.message || 'erreur réseau'));
+    if (e && e.status === 401) { ghStatus('Session en ligne expirée · reconnecte-toi.'); if (typeof authLogout === 'function') setTimeout(authLogout, 0); }
+    else ghStatus('Échec de synchronisation · ' + (e && e.message || 'erreur réseau'));
     if (manual) toast('Synchronisation impossible : ' + (e && e.message || 'erreur réseau'));
     return {ok: false, error: e};
   }
@@ -323,7 +313,7 @@ async function ghSync(manual) {
 }
 function ghPush(manual) { return ghSync(!!manual); }
 function ghPull(manual) { return ghSync(!!manual); }
-function ghSched() { if (!S.cfg || !S.cfg.gh || !S.cfg.gh.tok) return; ghStartAuto(); clearTimeout(ghT); ghT = setTimeout(() => ghSync(false), 1400); }
+function ghSched() { if (!CLOUD_SYNC_TOKEN) return; ghStartAuto(); clearTimeout(ghT); ghT = setTimeout(() => ghSync(false), 1400); }
 
 /* ---------- Partage & e-mail ---------- */
 function pdfMeta(d){const C=S.cfg||{},lab=d.t==='f'?'FACTURE':d.t==='d'?'DEVIS':'RAPPORT';return{lab,num:d.num||'',date:fd(d.date),client:d.cn||'',co:C.co||'',nm:C.nm||'',siret:C.siret||'',tel:C.tel||'',logo:typeof LGT!=='undefined'?LGT:''}}
