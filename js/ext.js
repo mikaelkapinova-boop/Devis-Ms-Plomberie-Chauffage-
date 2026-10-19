@@ -38,7 +38,7 @@ return `<div class="c"><h3>Mon entreprise (en-tête des documents)</h3>${I('Rais
 	<div class="c"><h3>Données partagées</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les documents et réglages sont enregistrés dans le stockage en ligne privé. Les copies de travail ne restent pas sur ce téléphone.</p><p class="mu" style="font-size:12px;margin:8px 0 0">${S.docs.length} document(s) · ${S.clients.length} client(s) · ${S.cat.length} tarif(s) · ${S.rep.length} rapport(s)</p></div><div class="c"><h3>Accès</h3><p class="mu" style="margin:0 0 8px;font-size:13px">L'appli est protégée par identifiant et mot de passe. Les données synchronisées en ligne sont chiffrées sur le téléphone avant leur envoi.</p><button class="b gh sm" onclick="authLogout()">Se déconnecter</button></div>
 <div class="c"><h3>Appareil</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les documents restent dans l’espace partagé en ligne. Cette action déconnecte uniquement cet appareil.</p><button class="b rd sm" data-t="Déconnecter cet appareil" onclick="arm2(this,wipe)">Déconnecter cet appareil</button></div>
 <p class="mu" style="text-align:center;font-size:12px">Version ${APPV}</p>`}
-const APPV='7.18.4';
+const APPV='7.18.5';
 async function wipe(){await clearLocalBusinessData();authLogout()}
 
 function dlBlob(b,nm){const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=nm;document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(u)},1500)}
@@ -251,7 +251,7 @@ async function ghReadStore() {
 }
 async function ghWriteStore(pack, sha) {
   try {
-    const response = await cloudApi('PUT', {pack: await encJSON(pack)}, sha);
+    const response = await cloudApi('PUT', {pack: await encJSON(pack), ifMatch: sha || ''}, sha);
     return response.etag || '';
   } catch (error) { throw ghStageError(error, 'write'); }
 }
@@ -303,7 +303,7 @@ async function ghSync(manual) {
   }
   const job = (async () => {
     const repo = repoInfo();
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < 6; attempt++) {
       const [remoteState, savedBase] = await Promise.all([ghReadStore(), ghBaseRead(repo)]);
       const base = remoteState.pack ? savedBase : null;
       ghMeta = ghMergeDeleted(base, remoteState.pack, {__sync: ghMeta});
@@ -317,7 +317,15 @@ async function ghSync(manual) {
       const changed = !remoteState.pack || ghComparable(merged) !== ghComparable(remoteState.pack);
       if (changed) {
         try { sha = await ghWriteStore(merged, sha); }
-        catch (e) { if ((e.status === 409 || e.status === 422) && attempt < 3) continue; throw e; }
+        catch (e) {
+          if ((e.status === 409 || e.status === 422) && attempt < 5) {
+            ghStatus('Modifications simultanées : fusion des changements en cours…');
+            const delay = Math.min(3200, 180 * (2 ** attempt)) + Math.floor(Math.random() * 300);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+          throw e;
+        }
       }
       ghSha = sha;
       const live = ghPack();
@@ -334,7 +342,7 @@ async function ghSync(manual) {
       if (manual) toast(morePending ? 'Synchronisation des dernières modifications…' : 'Données synchronisées entre les appareils');
       return {ok: true};
     }
-    throw new Error('Les deux téléphones ont modifié les données en même temps. Réessaie dans quelques secondes.');
+    throw new Error('Les deux téléphones modifient encore les données en même temps. Garde l’application ouverte pour réessayer.');
   })();
   ghInFlight = job;
   try { return await job; }
