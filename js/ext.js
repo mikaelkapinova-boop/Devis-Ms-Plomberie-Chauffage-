@@ -38,7 +38,7 @@ return `<div class="c"><h3>Mon entreprise (en-tête des documents)</h3>${I('Rais
 	<div class="c"><h3>Données partagées</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les documents et réglages sont enregistrés dans le stockage en ligne privé. Les copies de travail ne restent pas sur ce téléphone.</p><p class="mu" style="font-size:12px;margin:8px 0 0">${S.docs.length} document(s) · ${S.clients.length} client(s) · ${S.cat.length} tarif(s) · ${S.rep.length} rapport(s)</p></div><div class="c"><h3>Accès</h3><p class="mu" style="margin:0 0 8px;font-size:13px">L'appli est protégée par identifiant et mot de passe. Les données synchronisées en ligne sont chiffrées sur le téléphone avant leur envoi.</p><button class="b gh sm" onclick="authLogout()">Se déconnecter</button></div>
 <div class="c"><h3>Appareil</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les documents restent dans l’espace partagé en ligne. Cette action déconnecte uniquement cet appareil.</p><button class="b rd sm" data-t="Déconnecter cet appareil" onclick="arm2(this,wipe)">Déconnecter cet appareil</button></div>
 <p class="mu" style="text-align:center;font-size:12px">Version ${APPV}</p>`}
-const APPV='7.18.1';
+const APPV='7.18.2';
 async function wipe(){await clearLocalBusinessData();authLogout()}
 
 function dlBlob(b,nm){const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=nm;document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(u)},1500)}
@@ -243,12 +243,30 @@ function repoInfo() {
   return 'ms-plomberie-partage-v1';
 }
 async function ghReadStore() {
-  const remote = await cloudApi('GET');
-  return {sha: remote.etag || '', pack: remote.pack ? await decJSON(remote.pack) : null};
+  let remote;
+  try { remote = await cloudApi('GET'); }
+  catch (error) { throw ghStageError(error, 'read'); }
+  try { return {sha: remote.etag || '', pack: remote.pack ? await decJSON(remote.pack) : null}; }
+  catch (error) { throw ghStageError(error, 'decrypt'); }
 }
 async function ghWriteStore(pack, sha) {
-  const response = await cloudApi('PUT', {pack: await encJSON(pack)}, sha);
-  return response.etag || '';
+  try {
+    const response = await cloudApi('PUT', {pack: await encJSON(pack)}, sha);
+    return response.etag || '';
+  } catch (error) { throw ghStageError(error, 'write'); }
+}
+function ghStageError(error, stage) {
+  const wrapped = new Error(error && error.message || 'erreur réseau');
+  wrapped.name = error && error.name || 'Error';
+  wrapped.status = Number(error && error.status) || 0;
+  wrapped.cloudStage = stage;
+  return wrapped;
+}
+function ghReportClientFailure(error) {
+  if (!CLOUD_SYNC_TOKEN) return;
+  const name = String(error && error.name || 'Error');
+  const body = {stage: String(error && error.cloudStage || 'sync'), code: /^[A-Za-z][A-Za-z0-9]{0,31}$/.test(name) ? name : 'Error', status: Number(error && error.status) || 0};
+  fetch(CLOUD_SYNC_API + '/api/sync-diagnostic', {method: 'POST', headers: {Authorization: 'Bearer ' + CLOUD_SYNC_TOKEN, 'Content-Type': 'application/json'}, body: JSON.stringify(body), cache: 'no-store', keepalive: true}).catch(() => {});
 }
 function ghVisibleState() {
   const c = ghClone(S.cfg || {}); c.pk = ''; if (c.ai) c.ai.key = ''; c.gh = {};
@@ -321,8 +339,13 @@ async function ghSync(manual) {
   ghInFlight = job;
   try { return await job; }
   catch (e) {
+    ghReportClientFailure(e);
     if (e && e.status === 401) { ghStatus('Session en ligne expirée · reconnecte-toi.'); if (typeof authLogout === 'function') setTimeout(authLogout, 0); }
-    else { ghStatus('Échec de synchronisation · ' + (e && e.message || 'erreur réseau')); if (appStartupReady && Date.now() - ghLastErrorToast > 15000) { ghLastErrorToast = Date.now(); toast('Non enregistré en ligne. Garde l’application ouverte et vérifie Internet.'); } }
+    else {
+      const reason = e && e.name === 'OperationError' ? 'Les données partagées ne peuvent pas être déchiffrées sur cet appareil. Vérifie que les deux téléphones utilisent le même identifiant et le même mot de passe.' : e && e.message || 'erreur réseau';
+      ghStatus('Échec de synchronisation · ' + reason);
+      if (appStartupReady && Date.now() - ghLastErrorToast > 15000) { ghLastErrorToast = Date.now(); toast('Non enregistré en ligne. Garde l’application ouverte et vérifie Internet.'); }
+    }
     if (manual) toast('Synchronisation impossible : ' + (e && e.message || 'erreur réseau'));
     return {ok: false, error: e};
   }

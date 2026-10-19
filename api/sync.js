@@ -9,7 +9,10 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'PUT') return res.status(405).json({error: 'Méthode non autorisée'});
 
   const auth = verifyToken(req);
-  if (!auth.ok) return res.status(auth.status).json({error: auth.error});
+  if (!auth.ok) {
+    console.error('Cloud sync authorization failure:', {method: req.method, status: auth.status, code: auth.error});
+    return res.status(auth.status).json({error: auth.error});
+  }
   if (!process.env.BLOB_READ_WRITE_TOKEN) return res.status(503).json({error: 'Stockage en ligne indisponible'});
 
   try {
