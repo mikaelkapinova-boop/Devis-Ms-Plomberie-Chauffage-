@@ -13,7 +13,7 @@ module.exports = async function handler(req, res) {
     const {get} = await import('@vercel/blob');
     const state = await get(PATHNAME, {access: 'private', useCache: false});
     if (state && state.stream) await state.stream.cancel();
-    return res.status(200).json({ok: true, stateExists: !!state});
+    return res.status(200).json({ok: true, stateExists: !!state, stateBytes: Number(state && state.blob && state.blob.size) || 0});
   } catch (error) {
     const name = String(error && error.name || 'UnknownError');
     const status = Number(error && (error.status || error.statusCode) || 0);
