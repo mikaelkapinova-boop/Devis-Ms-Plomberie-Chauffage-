@@ -35,22 +35,19 @@ return `<div class="c"><h3>Mon entreprise (en-tête des documents)</h3>${I('Rais
 <div class="c"><h3>Apparence</h3><label>Thème<select onchange="cs('th',this.value)"><option value="auto" ${c.th==='auto'?'selected':''}>Automatique</option><option value="light" ${c.th==='light'?'selected':''}>Clair</option><option value="dark" ${c.th==='dark'?'selected':''}>Sombre</option></select></label></div>
 <div class="c"><h3>Clé API</h3><label>Clé Perplexity<input type="password" placeholder="pplx-…" value="${esc(c.pk||'')}" oninput="cs('pk',this.value)" autocomplete="off"></label><button class="b gh sm" onclick="go('k')">Connecteurs</button></div>
 	<div class="c"><h3>Synchronisation en ligne</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les devis, factures, clients, tarifs, achats, rapports, planning, photos, conversations et corbeille se sauvegardent dans un espace en ligne privé et chiffré. Les appareils connectés avec le même identifiant et le même mot de passe partagent les mêmes données. La synchronisation se fait automatiquement à l’ouverture, après chaque modification et pendant que l’application reste ouverte.</p><button class="b gh sm" type="button" onclick="ghPush(1)">Synchroniser maintenant</button><small id="ghst" class="mu" style="display:block;margin-top:8px">${esc(ghLastStatus)}</small></div>
-	<div class="c"><h3>Sauvegarde</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Toutes tes données restent enregistrées dans l'appli (devis, factures, clients, tarifs, rapports) jusqu'à suppression manuelle. Fais une sauvegarde régulière.</p><div class="g2"><button class="b" onclick="bkExp()">Exporter (fichier .json)</button><label class="b gh" style="text-align:center;display:flex;align-items:center;justify-content:center"><span>Restaurer une sauvegarde</span><input type="file" accept=".json,application/json" style="display:none" onchange="bkImp(this.files[0])"></label></div><p class="mu" style="font-size:12px;margin:8px 0 0">${S.docs.length} document(s) · ${S.clients.length} client(s) · ${S.cat.length} tarif(s) · ${S.rep.length} rapport(s)</p></div>
-<div class="c"><h3>Accès</h3><p class="mu" style="margin:0 0 8px;font-size:13px">L'appli est protégée par identifiant et mot de passe. Les données synchronisées en ligne sont chiffrées sur le téléphone avant leur envoi.</p><button class="b gh sm" onclick="authLogout()">Se déconnecter</button></div>
-<div class="c"><h3>Zone sensible</h3><button class="b rd sm" data-t="Tout effacer sur cet appareil" onclick="arm2(this,wipe)">Tout effacer sur cet appareil</button></div>
+	<div class="c"><h3>Données partagées</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les documents et réglages sont enregistrés dans le stockage en ligne privé. Les copies de travail ne restent pas sur ce téléphone.</p><p class="mu" style="font-size:12px;margin:8px 0 0">${S.docs.length} document(s) · ${S.clients.length} client(s) · ${S.cat.length} tarif(s) · ${S.rep.length} rapport(s)</p></div><div class="c"><h3>Accès</h3><p class="mu" style="margin:0 0 8px;font-size:13px">L'appli est protégée par identifiant et mot de passe. Les données synchronisées en ligne sont chiffrées sur le téléphone avant leur envoi.</p><button class="b gh sm" onclick="authLogout()">Se déconnecter</button></div>
+<div class="c"><h3>Appareil</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les documents restent dans l’espace partagé en ligne. Cette action déconnecte uniquement cet appareil.</p><button class="b rd sm" data-t="Déconnecter cet appareil" onclick="arm2(this,wipe)">Déconnecter cet appareil</button></div>
 <p class="mu" style="text-align:center;font-size:12px">Version ${APPV}</p>`}
-const APPV='7.17.0';
-function wipe(){for(const k in S)localStorage.removeItem('ms_'+k);localStorage.removeItem('ms_stamp');localStorage.removeItem('ms_key');sessionStorage.removeItem('ms_key');localStorage.removeItem('ms_cloud_token');sessionStorage.removeItem('ms_cloud_token');idbPut('pack',null);location.reload()}
+const APPV='7.18.0';
+async function wipe(){await clearLocalBusinessData();authLogout()}
 
-/* ---------- Sauvegarde / restauration ---------- */
 function dlBlob(b,nm){const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=nm;document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(u)},1500)}
-function bkExp(){const pack={};for(const k in S)pack[k]=S[k];pack._v=APPV;pack._t=Date.now();const c=JSON.parse(JSON.stringify(pack.cfg));c.ai={...c.ai,key:''};c.gh={...c.gh,tok:''};pack.cfg=c;dlBlob(new Blob([JSON.stringify(pack)],{type:'application/json'}),'sauvegarde-msplomberie-'+td()+'.json');toast('Sauvegarde exportée')}
-function bkImp(f){if(!f)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);if(!p.docs&&!p.clients)throw 0;const keep={ai:S.cfg.ai,gh:S.cfg.gh};for(const k of ['clients','cat','docs','cfg','seq','rep','ph','chat'])if(p[k]!=null)S[k]=p[k];cfgInit();if(!S.cfg.ai.key)S.cfg.ai=keep.ai;if(!S.cfg.gh.tok)S.cfg.gh=keep.gh;for(const k in S)save(k);toast('Sauvegarde restaurée');go('h')}catch(e){toast('Fichier de sauvegarde invalide')}};r.readAsText(f)}
 
 /* ---------- Synchronisation chiffrée multi-appareils ---------- */
 const CLOUD_SYNC_API = 'https://devis-ms-plomberie-chauffage.vercel.app';
 const GH_ARRAYS = ['clients', 'cat', 'docs', 'achats', 'rep', 'chat', 'plan', 'threads', 'trash'];
 let ghSha = null, ghT = null, ghPoll = null, ghInFlight = null, ghEventsBound = false;
+let ghQueued = false, ghBasePack = null, ghLastErrorToast = 0;
 let ghLastStatus = 'Connecte-toi avec le même compte sur chaque appareil pour synchroniser tes données.';
 let ghMeta = {v: 1, deleted: {}};
 async function cloudApi(method='GET',body=null,etag=''){
@@ -110,16 +107,13 @@ function ghMergeDeleted(...packs) {
   return deleted;
 }
 async function ghBaseRead(repo) {
-  try { const v = await idbGet('gh_sync_base'); if (v && v.repo === repo) return v.pack; } catch (e) {}
-  try { const v = JSON.parse(localStorage.getItem('ms_gh_sync_base') || 'null'); return v && v.repo === repo ? v.pack : null; } catch (e) { return null; }
+  return ghBasePack && ghBasePack.repo === repo ? ghClone(ghBasePack.pack) : null;
 }
 async function ghBaseWrite(repo, pack) {
-  const value = {repo, pack: ghClone(pack)};
-  try { await idbPut('gh_sync_base', value); }
-  catch (e) { try { localStorage.setItem('ms_gh_sync_base', JSON.stringify(value)); } catch (x) {} }
+  ghBasePack = {repo, pack: ghClone(pack)};
 }
 function ghPack() {
-  const p = {__sync: ghClone(ghMeta || {v: 1, deleted: {}}), _t: Number(localStorage.getItem('ms_stamp') || Date.now())};
+  const p = {__sync: ghClone(ghMeta || {v: 1, deleted: {}}), _t: Date.now()};
   GH_ARRAYS.forEach(k => { p[k] = ghClone(Array.isArray(S[k]) ? S[k] : []); });
   p.seq = ghClone(S.seq || {}); p.ph = ghClone(S.ph || {});
   const c = ghClone(S.cfg || {});
@@ -227,6 +221,17 @@ function ghMergePack(base, local, remote) {
   [base && base.seq, lp.seq, rp.seq].forEach(seq => Object.keys(seq || {}).forEach(k => { merged.seq[k] = Math.max(Number(merged.seq[k]) || 0, Number(seq[k]) || 0); }));
   merged.ph = ghMergePhotos(base && base.ph, lp.ph, rp.ph, bp, lp, rp);
   merged.cfg = ghMergeObject(base && base.cfg, lp.cfg, rp.cfg, bp, Number(lp._t) || 0, Number(rp._t) || 0);
+  (merged.trash || []).forEach(entry => {
+    const collection = entry && entry.k, item = entry && entry.it;
+    if (!['docs', 'rep'].includes(collection) || !item || item.id == null) return;
+    const id = ghRecordId(collection, item, 0);
+    entry.syncDeleteAt = Number(entry.syncDeleteAt) || Math.max(Date.now(), Number(entry.at) || 0);
+    deleted[collection] = deleted[collection] || {};
+    deleted[collection][id] = Math.max(Number(deleted[collection][id]) || 0, entry.syncDeleteAt);
+    merged[collection] = (merged[collection] || []).filter(record => ghRecordId(collection, record, 0) !== id);
+    if (collection === 'rep') delete merged.ph[id];
+  });
+  merged.__sync.deleted = deleted;
   return merged;
 }
 function ghComparable(pack) { const copy = ghClone(pack); if (copy) delete copy._t; return ghStable(copy); }
@@ -259,14 +264,11 @@ function ghApplyPack(pack) {
     S.cfg.pk = keep.pk; S.cfg.gh = keep.gh; S.cfg.ai = keep.ai;
   }
   cfgInit();
-  [...GH_ARRAYS, 'seq', 'ph', 'cfg'].forEach(k => { try { localStorage.setItem('ms_' + k, JSON.stringify(S[k])); } catch (e) {} });
-  localStorage.setItem('ms_stamp', String(Math.max(Number(pack._t) || 0, Date.now())));
-  persistAll();
   if (appStartupReady && before !== ghVisibleState()) render();
 }
 function ghStartAuto() {
   if (!CLOUD_SYNC_TOKEN) return;
-  if (!ghPoll) ghPoll = setInterval(() => { if (!document.hidden) ghSync(false); }, 120000);
+  if (!ghPoll) ghPoll = setInterval(() => { if (!document.hidden) ghSync(false); }, 15000);
   if (ghEventsBound) return;
   ghEventsBound = true;
   window.addEventListener('focus', () => { if (!document.hidden) ghSync(false); });
@@ -277,6 +279,7 @@ async function ghSync(manual) {
   if (!CLOUD_SYNC_TOKEN) { const message = AUTH_SYNC_ERROR ? 'Connexion en ligne impossible · ' + AUTH_SYNC_ERROR : 'Reconnecte-toi sur cet appareil pour activer la synchronisation en ligne.'; ghStatus(message); if (manual) toast(message); return; }
   ghStartAuto();
   if (ghInFlight) {
+    ghQueued = true;
     try { const result = await ghInFlight; if (manual && result && result.ok) toast('Données synchronisées entre les appareils'); return result; }
     catch (e) { ghStatus('Échec de synchronisation · ' + (e && e.message || 'erreur réseau')); if (manual) toast('Synchronisation impossible : ' + (e && e.message || 'erreur réseau')); return {ok: false, error: e}; }
   }
@@ -288,6 +291,8 @@ async function ghSync(manual) {
       ghMeta = ghMergeDeleted(base, remoteState.pack, {__sync: ghMeta});
       ghMeta = {v: 1, deleted: ghMeta};
       const local = ghPack();
+      const legacyStamp = Number(legacyLocalStamp || localStorage.getItem('ms_stamp') || 0);
+      if (!base && legacyStamp) local._t = legacyStamp;
       ghStampLocalChanges(base, local);
       const merged = ghMergePack(base, local, remoteState.pack);
       let sha = remoteState.sha;
@@ -297,11 +302,18 @@ async function ghSync(manual) {
         catch (e) { if ((e.status === 409 || e.status === 422) && attempt < 3) continue; throw e; }
       }
       ghSha = sha;
-      ghApplyPack(merged);
-      ghMeta = ghClone(merged.__sync || {v: 1, deleted: {}});
+      const live = ghPack();
+      ghStampLocalChanges(local, live);
+      const latest = ghMergePack(local, live, merged);
+      const morePending = ghComparable(latest) !== ghComparable(merged);
+      ghApplyPack(latest);
+      ghMeta = ghClone(latest.__sync || {v: 1, deleted: {}});
       await ghBaseWrite(repo, merged);
-      ghStatus('Synchronisé automatiquement · ' + new Date().toLocaleTimeString('fr-FR'));
-      if (manual) toast('Données synchronisées entre les appareils');
+      if (morePending) ghQueued = true;
+      const localClean = await clearLocalBusinessData();
+      ghStatus(!localClean ? 'En ligne, mais certaines données de cache n’ont pas pu être effacées de cet appareil.' : morePending ? 'Dernières modifications en cours d’enregistrement…' : 'Enregistré en ligne · ' + new Date().toLocaleTimeString('fr-FR'));
+      if (!localClean && appStartupReady) toast('Données en ligne, mais cache local à effacer.');
+      if (manual) toast(morePending ? 'Synchronisation des dernières modifications…' : 'Données synchronisées entre les appareils');
       return {ok: true};
     }
     throw new Error('Les deux téléphones ont modifié les données en même temps. Réessaie dans quelques secondes.');
@@ -310,15 +322,15 @@ async function ghSync(manual) {
   try { return await job; }
   catch (e) {
     if (e && e.status === 401) { ghStatus('Session en ligne expirée · reconnecte-toi.'); if (typeof authLogout === 'function') setTimeout(authLogout, 0); }
-    else ghStatus('Échec de synchronisation · ' + (e && e.message || 'erreur réseau'));
+    else { ghStatus('Échec de synchronisation · ' + (e && e.message || 'erreur réseau')); if (appStartupReady && Date.now() - ghLastErrorToast > 15000) { ghLastErrorToast = Date.now(); toast('Non enregistré en ligne. Garde l’application ouverte et vérifie Internet.'); } }
     if (manual) toast('Synchronisation impossible : ' + (e && e.message || 'erreur réseau'));
     return {ok: false, error: e};
   }
-  finally { ghInFlight = null; }
+  finally { ghInFlight = null; if (ghQueued) { ghQueued = false; if (appStartupReady) setTimeout(() => ghSync(false), 0); } }
 }
 function ghPush(manual) { return ghSync(!!manual); }
 function ghPull(manual) { return ghSync(!!manual); }
-function ghSched() { if (!CLOUD_SYNC_TOKEN || !appStartupReady) return; ghStartAuto(); clearTimeout(ghT); ghT = setTimeout(() => ghSync(false), 700); }
+function ghSched() { if (!CLOUD_SYNC_TOKEN || !appStartupReady) return; ghStartAuto(); clearTimeout(ghT); ghT = setTimeout(() => ghSync(false), 350); }
 
 /* ---------- Partage & e-mail ---------- */
 function pdfMeta(d){const C=S.cfg||{},lab=d.t==='f'?'FACTURE':d.t==='d'?'DEVIS':'RAPPORT';return{lab,num:d.num||'',date:fd(d.date),client:d.cn||'',co:C.co||'',nm:C.nm||'',siret:C.siret||'',tel:C.tel||'',logo:typeof LGT!=='undefined'?LGT:''}}

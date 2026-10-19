@@ -183,9 +183,9 @@ chatV = function () {
 <input type="file" id="fpick" accept="image/*,application/pdf" multiple hidden onchange="attAdd(this.files)"><input type="file" id="fcam" accept="image/*" capture="environment" hidden onchange="attAdd(this.files)">
 </div>`;
 };
-function cinGrow(e) { e.style.height = 'auto'; e.style.height = Math.min(e.scrollHeight, innerHeight * .45) + 'px'; try { localStorage.setItem(DR('cin'), e.value); } catch (x) {} }
+function cinGrow(e) { e.style.height = 'auto'; e.style.height = Math.min(e.scrollHeight, innerHeight * .45) + 'px'; }
 function asAfter() {
-  const e = $('#cin'); if (e) { const v = localStorage.getItem(DR('cin')); if (v && !e.value) e.value = v; cinGrow(e); }
+  const e = $('#cin'); if (e) cinGrow(e);
   const t = TH(); if (t.ai === 'cmp' && !ASBUSY) setTimeout(mcStatus, 0);
   if (SHEET) sheetRender();
 }

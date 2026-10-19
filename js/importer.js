@@ -522,8 +522,8 @@ const emptyLike=o=>{const r={};for(const k in o){const v=o[k];r[k]=Array.isArray
 /* ---------- état ---------- */
 const ST={items:[],sel:null,loaded:false,q:false};let UNDO=null;
 const cur=()=>ST.items.find(i=>i.id===ST.sel)||null;
-function persist(){try{localStorage.setItem(LS,JSON.stringify(ST.items.slice(-15).map(i=>({id:i.id,name:i.name,size:i.size,kind:i.kind,status:i.status,err:i.err,raw:(i.raw||'').slice(0,20000),data:i.data,sc:i.sc,opt:i.opt,match:i.match,dup:i.dup,addr:i.addr,res:i.res}))))}catch(e){}}
-function restore(){if(ST.loaded)return;ST.loaded=true;try{const a=JSON.parse(localStorage.getItem(LS)||'[]');a.forEach(i=>{if(i.status==='run'||i.status==='wait')i.status='err',i.err='Interrompu : réimportez le fichier.';ST.items.push(i)});ST.sel=(ST.items.find(i=>i.data)||{}).id||null}catch(e){}}
+function persist(){}
+function restore(){if(ST.loaded)return;ST.loaded=true}
 
 /* ---------- analyse d'un fichier ---------- */
 function clientCands(cli){const s=SS(),K=probe(),out=[];if(!s||!cli.name)return out;const n1=norm(cli.name),t1=n1.split(' ').filter(Boolean),dg=x=>String(x||'').replace(/\D/g,'').slice(-9);

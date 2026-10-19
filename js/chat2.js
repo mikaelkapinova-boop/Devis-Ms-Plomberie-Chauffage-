@@ -3,7 +3,7 @@
       en plus des modes existants (Computer par e-mail, Perplexity chat normal).
    2. Type de demande : Documents (devis, facture, rapport, modification, prix) / Application (amélioration, projet IA, autre).
    3. Glisser vers la gauche pour supprimer, corbeille (restaurer / vider), sélection multiple.
-   4. Brouillons : les zones de saisie libres sont sauvegardées automatiquement.
+   4. Brouillons conservés uniquement pendant l'ouverture de l'application.
    Ce fichier ne remplace aucune fonction existante sans la rappeler : il les enveloppe. */
 'use strict';
 
@@ -186,17 +186,9 @@ function closeOthers(me) { document.querySelectorAll('.sww').forEach(w => { if (
    2. BROUILLONS : sauvegarde automatique des zones de saisie libres
    ===================================================================== */
 const DR = id => 'ms_dr_' + id;
-function draftsHook() {
-  document.querySelectorAll('#app textarea[id], #app input[id]').forEach(el => {
-    if (el.hasAttribute('oninput') || el.hasAttribute('onchange') || ['file', 'checkbox', 'radio', 'range', 'search', 'password'].includes(el.type)) return;
-    if (el.dataset.dr) return; el.dataset.dr = '1';
-    const v = localStorage.getItem(DR(el.id)); if (v && !el.value) el.value = v;
-    el.addEventListener('input', () => { try { localStorage.setItem(DR(el.id), el.value); } catch (e) {} });
-  });
-}
-function draftClear(id) { localStorage.removeItem(DR(id)); }
-addEventListener('pagehide', () => { const e = $('#cin'); if (e) try { localStorage.setItem(DR('cin'), e.value); } catch (x) {} });
-document.addEventListener('visibilitychange', () => { if (document.hidden) { const e = $('#cin'); if (e) try { localStorage.setItem(DR('cin'), e.value); } catch (x) {} } else if (V.v === 'a' && typeof mcStatus === 'function') mcStatus(); });
+function draftsHook() {}
+function draftClear(id) {}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && V.v === 'a' && typeof mcStatus === 'function') mcStatus(); });
 
 /* =====================================================================
    4. Branchements sur le rendu et la navigation existants
@@ -205,7 +197,6 @@ const _go = go;
 go = function (v, id) { if (v !== V.v) { TRV = null; SELM = false; SELS.clear(); } return _go(v, id); };
 const _render = render;
 render = function () {
-  const ci = $('#cin'); if (ci && ci.value) try { localStorage.setItem(DR('cin'), ci.value); } catch (e) {}
   _render.apply(this, arguments);
   if (TRV && (TRV === V.v || TRV === 'all')) { $('#app').innerHTML = trV(); $('#ad').style.display = 'none'; if (TRV === 'all') { $('#ttl').textContent = 'Corbeille'; document.querySelectorAll('.ni').forEach(b => b.classList.toggle('a', b.dataset.v === 't')); } }
   else listDecorate();
