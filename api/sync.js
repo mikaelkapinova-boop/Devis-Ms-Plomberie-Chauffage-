@@ -15,6 +15,7 @@ module.exports = async function handler(req, res) {
   }
   if (!process.env.BLOB_READ_WRITE_TOKEN) return res.status(503).json({error: 'Stockage en ligne indisponible'});
 
+  let writeIfMatchUsed = false;
   try {
     const {get, put, BlobNotFoundError} = await import('@vercel/blob');
     if (req.method === 'GET') {
@@ -40,7 +41,9 @@ module.exports = async function handler(req, res) {
     if (!body.pack || body.pack.enc !== 1 || !body.pack.iv || !body.pack.ct) return res.status(400).json({error: 'Données de synchronisation invalides'});
     if (Buffer.byteLength(JSON.stringify(body)) > 4 * 1024 * 1024) return res.status(413).json({error: 'Sauvegarde trop volumineuse'});
 
-    const ifMatch = String(req.headers['if-match'] || '').trim();
+    const headerIfMatch = req.headers['if-match'];
+    const ifMatch = String((Array.isArray(headerIfMatch) ? headerIfMatch[0] : headerIfMatch) || body.ifMatch || '').trim();
+    writeIfMatchUsed = !!ifMatch;
     const options = {access: 'private', contentType: 'application/json', cacheControlMaxAge: 60, addRandomSuffix: false};
     if (ifMatch) {
       options.allowOverwrite = true;
@@ -50,6 +53,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({etag: saved.etag});
   } catch (error) {
     if (error && (error.name === 'BlobPreconditionFailedError' || error.status === 412 || error.status === 409 || error.statusCode === 412 || error.statusCode === 409 || /Precondition|AlreadyExists|Conflict/i.test(error.name || '') || /already exists|precondition|conflict/i.test(error.message || ''))) {
+      console.error('Cloud sync write conflict:', {name: String(error.name || 'UnknownError'), status: Number(error.status || error.statusCode || 0), hasIfMatch: writeIfMatchUsed});
       return res.status(409).json({error: 'Les données ont changé sur l’autre téléphone. Nouvelle tentative…'});
     }
     const name = String(error && error.name || 'UnknownError');
