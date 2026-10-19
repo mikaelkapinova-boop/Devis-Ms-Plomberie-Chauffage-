@@ -1000,7 +1000,7 @@ for(const k of keys)if(pack[k]!=null)S[k]=pack[k];
 }catch(e){}
 cfgInit();cliBackfill();applyTheme();pwa();
 const synced=await ghPull(0);
-if(!synced||!synced.ok){const msg=$('#syncbootmsg');if(msg)msg.textContent='Impossible de charger les données partagées. Vérifie la connexion Internet puis réessaie.';if(retry){retry.hidden=false;retry.disabled=false}return false}
+if(!synced||!synced.ok){const msg=$('#syncbootmsg'),detail=String(ghLastStatus||'').trim();if(msg)msg.textContent='Impossible de charger les données partagées. '+(detail||'Vérifie la connexion Internet puis réessaie.');if(retry){retry.hidden=false;retry.disabled=false}return false}
 appStartupReady=true;render();if(typeof impHash==='function')impHash();inbxLoad().then(()=>{inbxRender();homeInbx()});
 return true
 }

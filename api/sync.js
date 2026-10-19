@@ -49,8 +49,16 @@ module.exports = async function handler(req, res) {
     if (error && (error.name === 'BlobPreconditionFailedError' || error.status === 412 || error.status === 409 || error.statusCode === 412 || error.statusCode === 409 || /Precondition|AlreadyExists|Conflict/i.test(error.name || '') || /already exists|precondition|conflict/i.test(error.message || ''))) {
       return res.status(409).json({error: 'Les données ont changé sur l’autre téléphone. Nouvelle tentative…'});
     }
-    console.error('Cloud sync error:', error && error.message || 'unknown');
-    return res.status(502).json({error: 'Stockage en ligne temporairement indisponible'});
+    const name = String(error && error.name || 'UnknownError');
+    const status = Number(error && (error.status || error.statusCode) || 0);
+    console.error('Cloud sync error:', {method: req.method, name, status});
+    if (status === 401 || status === 403 || /BlobAccess|InvalidToken/i.test(name)) {
+      return res.status(503).json({error: 'Accès au stockage en ligne refusé. La configuration du stockage Vercel Blob est à vérifier.'});
+    }
+    if (/BlobStoreNotFound|Suspended/i.test(name)) {
+      return res.status(503).json({error: 'Le stockage Vercel Blob est introuvable ou suspendu.'});
+    }
+    return res.status(502).json({error: 'Stockage en ligne temporairement indisponible. Le serveur a enregistré le motif.'});
   }
 };
 
