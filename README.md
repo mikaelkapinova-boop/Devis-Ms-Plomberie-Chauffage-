@@ -10,7 +10,11 @@ Site : https://mikaelkapinova-boop.github.io/Devis-Ms-Plomberie-Chauffage-/
 - `serveur.py` + `lancer.bat` — pont local vers  (OAuth avec ton compte, sans clé API).
 - `img/` — logo et icônes ; `manifest.webmanifest` + `sw.js` — mode application / hors-ligne.
 - `inbox/` — éléments déposés par Perplexity (devis, tarifs, planning) à importer dans l'appli. Voir `inbox/README.md`.
-- `data/store.json` — sauvegarde synchronisée (optionnelle, via jeton GitHub).
+- `data/store.json` — sauvegarde chiffrée partagée (via jeton GitHub).
+
+## Synchronisation entre téléphones
+
+Ouvre **Réglages → Synchronisation entre téléphones** sur les deux iPhones. Connecte-les avec le même identifiant et le même mot de passe, puis saisis sur chacun le même jeton GitHub avec l’autorisation **Contents : lecture et écriture** pour ce dépôt. Les devis, factures, clients, tarifs, achats, rapports, planning et pièces jointes sont chiffrés avant l’envoi et se synchronisent automatiquement toutes les 3 secondes quand l’application est ouverte et en ligne. Le jeton reste enregistré uniquement sur chaque appareil.
 
 ## Passerelle Perplexity
 Depuis l'onglet ****, « Envoyer à Perplexity » envoie la demande par e-mail (sujet `[DEVIS]`).
