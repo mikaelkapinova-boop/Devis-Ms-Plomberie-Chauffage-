@@ -72,8 +72,6 @@ function thTitle(t) { return t.ti || (t.msgs.find(m => m.r === 'u') || {}).t?.sl
 /* chatPush / chatClear : fil courant */
 chatPush = function (m) { m.ts = now(); const t = TH(); t.msgs.push(m); if (t.msgs.length > 300) t.msgs.splice(0, t.msgs.length - 300); S.chat = t.msgs; if (!t.ti && m.r === 'u' && m.t && m.t[0] !== '(') t.ti = m.t.replace(/\s+/g, ' ').slice(0, 48); thSave(); save('chat'); };
 chatClear = function () { thNew(); render(); };
-const _ghPack = ghPack; ghPack = function () { const p = _ghPack(); p.threads = S.threads.map(t => ({...t, msgs: t.msgs.slice(-80)})); return p; };
-
 /* ---------- Styles iOS ---------- */
 (function () {
   const st = document.createElement('style');

@@ -13,9 +13,19 @@ module.exports = async function handler(req, res) {
   if (!process.env.BLOB_READ_WRITE_TOKEN) return res.status(503).json({error: 'Stockage en ligne indisponible'});
 
   try {
-    const {get, put} = await import('@vercel/blob');
+    const {get, put, BlobNotFoundError} = await import('@vercel/blob');
     if (req.method === 'GET') {
-      const result = await get(PATHNAME, {access: 'private'});
+      let result;
+      try {
+        result = await get(PATHNAME, {access: 'private', useCache: false});
+      } catch (error) {
+        // The first device has no shared file yet. Treat that as an empty
+        // account so its first sync can create the private Blob.
+        if (error instanceof BlobNotFoundError || error?.name === 'BlobNotFoundError' || error?.status === 404 || error?.statusCode === 404) {
+          return res.status(200).json({pack: null, etag: ''});
+        }
+        throw error;
+      }
       if (!result || result.statusCode === 404) return res.status(200).json({pack: null, etag: ''});
       const contents = await new Response(result.stream).text();
       const saved = JSON.parse(contents);
@@ -28,7 +38,7 @@ module.exports = async function handler(req, res) {
     if (Buffer.byteLength(JSON.stringify(body)) > 4 * 1024 * 1024) return res.status(413).json({error: 'Sauvegarde trop volumineuse'});
 
     const ifMatch = String(req.headers['if-match'] || '').trim();
-    const options = {access: 'private', contentType: 'application/json', cacheControlMaxAge: 60};
+    const options = {access: 'private', contentType: 'application/json', cacheControlMaxAge: 60, addRandomSuffix: false};
     if (ifMatch) {
       options.allowOverwrite = true;
       options.ifMatch = ifMatch;

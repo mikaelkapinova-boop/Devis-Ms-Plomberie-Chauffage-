@@ -34,12 +34,12 @@ return `<div class="c"><h3>Mon entreprise (en-tête des documents)</h3>${I('Rais
 <div class="c"><h3>Micro-entreprise (calcul des bénéfices)</h3><div class="g2">${N('Cotisations (%)','cot')}${N('Impôt libératoire (%)','imp')}</div></div>
 <div class="c"><h3>Apparence</h3><label>Thème<select onchange="cs('th',this.value)"><option value="auto" ${c.th==='auto'?'selected':''}>Automatique</option><option value="light" ${c.th==='light'?'selected':''}>Clair</option><option value="dark" ${c.th==='dark'?'selected':''}>Sombre</option></select></label></div>
 <div class="c"><h3>Clé API</h3><label>Clé Perplexity<input type="password" placeholder="pplx-…" value="${esc(c.pk||'')}" oninput="cs('pk',this.value)" autocomplete="off"></label><button class="b gh sm" onclick="go('k')">Connecteurs</button></div>
-	<div class="c"><h3>Synchronisation en ligne</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les devis, factures, clients, tarifs, achats, rapports, planning et photos se sauvegardent dans un espace en ligne privé et chiffré. Les appareils connectés avec le même identifiant et le même mot de passe partagent les mêmes données. La synchronisation se fait automatiquement à l’ouverture, après chaque modification et pendant que l’application reste ouverte.</p><button class="b gh sm" type="button" onclick="ghPush(1)">Synchroniser maintenant</button><small id="ghst" class="mu" style="display:block;margin-top:8px">${esc(ghLastStatus)}</small></div>
+	<div class="c"><h3>Synchronisation en ligne</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les devis, factures, clients, tarifs, achats, rapports, planning, photos, conversations et corbeille se sauvegardent dans un espace en ligne privé et chiffré. Les appareils connectés avec le même identifiant et le même mot de passe partagent les mêmes données. La synchronisation se fait automatiquement à l’ouverture, après chaque modification et pendant que l’application reste ouverte.</p><button class="b gh sm" type="button" onclick="ghPush(1)">Synchroniser maintenant</button><small id="ghst" class="mu" style="display:block;margin-top:8px">${esc(ghLastStatus)}</small></div>
 	<div class="c"><h3>Sauvegarde</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Toutes tes données restent enregistrées dans l'appli (devis, factures, clients, tarifs, rapports) jusqu'à suppression manuelle. Fais une sauvegarde régulière.</p><div class="g2"><button class="b" onclick="bkExp()">Exporter (fichier .json)</button><label class="b gh" style="text-align:center;display:flex;align-items:center;justify-content:center"><span>Restaurer une sauvegarde</span><input type="file" accept=".json,application/json" style="display:none" onchange="bkImp(this.files[0])"></label></div><p class="mu" style="font-size:12px;margin:8px 0 0">${S.docs.length} document(s) · ${S.clients.length} client(s) · ${S.cat.length} tarif(s) · ${S.rep.length} rapport(s)</p></div>
 <div class="c"><h3>Accès</h3><p class="mu" style="margin:0 0 8px;font-size:13px">L'appli est protégée par identifiant et mot de passe. Les données synchronisées en ligne sont chiffrées sur le téléphone avant leur envoi.</p><button class="b gh sm" onclick="authLogout()">Se déconnecter</button></div>
 <div class="c"><h3>Zone sensible</h3><button class="b rd sm" data-t="Tout effacer sur cet appareil" onclick="arm2(this,wipe)">Tout effacer sur cet appareil</button></div>
 <p class="mu" style="text-align:center;font-size:12px">Version ${APPV}</p>`}
-const APPV='7.16.0';
+const APPV='7.17.0';
 function wipe(){for(const k in S)localStorage.removeItem('ms_'+k);localStorage.removeItem('ms_stamp');localStorage.removeItem('ms_key');sessionStorage.removeItem('ms_key');localStorage.removeItem('ms_cloud_token');sessionStorage.removeItem('ms_cloud_token');idbPut('pack',null);location.reload()}
 
 /* ---------- Sauvegarde / restauration ---------- */
@@ -49,7 +49,7 @@ function bkImp(f){if(!f)return;const r=new FileReader();r.onload=()=>{try{const 
 
 /* ---------- Synchronisation chiffrée multi-appareils ---------- */
 const CLOUD_SYNC_API = 'https://devis-ms-plomberie-chauffage.vercel.app';
-const GH_ARRAYS = ['clients', 'cat', 'docs', 'achats', 'rep', 'chat', 'plan'];
+const GH_ARRAYS = ['clients', 'cat', 'docs', 'achats', 'rep', 'chat', 'plan', 'threads', 'trash'];
 let ghSha = null, ghT = null, ghPoll = null, ghInFlight = null, ghEventsBound = false;
 let ghLastStatus = 'Connecte-toi avec le même compte sur chaque appareil pour synchroniser tes données.';
 let ghMeta = {v: 1, deleted: {}};
@@ -58,7 +58,11 @@ async function cloudApi(method='GET',body=null,etag=''){
   const headers={Authorization:'Bearer '+CLOUD_SYNC_TOKEN};
   if(body){headers['Content-Type']='application/json'}
   if(etag)headers['If-Match']=etag;
-  const response=await fetch(CLOUD_SYNC_API+'/api/sync',{method,headers,body:body?JSON.stringify(body):undefined,cache:'no-store'});
+  const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 15000);
+  let response;
+  try { response=await fetch(CLOUD_SYNC_API+'/api/sync',{method,headers,body:body?JSON.stringify(body):undefined,cache:'no-store',signal:controller.signal}); }
+  catch (error) { if (error && error.name === 'AbortError') throw new Error('Le serveur de synchronisation ne répond pas.'); throw error; }
+  finally { clearTimeout(timeout); }
   let result={};try{result=await response.json()}catch(e){}
   if(!response.ok){const error=new Error(result.error||'Synchronisation en ligne · '+response.status);error.status=response.status===412?409:response.status;throw error}
   return result;
@@ -82,6 +86,7 @@ function ghHash(value) {
 }
 function ghRecordId(k, item, i) {
   if (item && item.id != null && String(item.id)) return String(item.id);
+  if (k === 'trash' && item && item.it && item.it.id != null) return 'trash:' + String(item.k || 'docs') + ':' + String(item.it.id);
   if (k === 'cat') return 'cat:' + String(item && item.d || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() + '|' + String(item && item.t || 'F') + '|' + String(item && item.ref || '');
   if (k === 'chat' && item && item.ts) return 'chat:' + item.ts + ':' + String(item.r || '') + ':' + ghHash(item.t || '');
   if (k === 'achats') return 'achat:' + ghHash([item && (item.invoice || item.num), item && (item.supplier || item.fo), item && item.date, item && item.total].join('|'));
@@ -242,7 +247,7 @@ async function ghWriteStore(pack, sha) {
 }
 function ghVisibleState() {
   const c = ghClone(S.cfg || {}); c.pk = ''; if (c.ai) c.ai.key = ''; c.gh = {};
-  return ghStable({clients: S.clients, cat: S.cat, docs: S.docs, achats: S.achats, rep: S.rep, chat: S.chat, plan: S.plan, ph: S.ph, seq: S.seq, cfg: c});
+  return ghStable({clients: S.clients, cat: S.cat, docs: S.docs, achats: S.achats, rep: S.rep, chat: S.chat, plan: S.plan, threads: S.threads, trash: S.trash, ph: S.ph, seq: S.seq, cfg: c});
 }
 function ghApplyPack(pack) {
   const before = ghVisibleState(), keep = {pk: S.cfg.pk, gh: {}, ai: ghClone(S.cfg.ai)};
@@ -257,7 +262,7 @@ function ghApplyPack(pack) {
   [...GH_ARRAYS, 'seq', 'ph', 'cfg'].forEach(k => { try { localStorage.setItem('ms_' + k, JSON.stringify(S[k])); } catch (e) {} });
   localStorage.setItem('ms_stamp', String(Math.max(Number(pack._t) || 0, Date.now())));
   persistAll();
-  if (before !== ghVisibleState()) render();
+  if (appStartupReady && before !== ghVisibleState()) render();
 }
 function ghStartAuto() {
   if (!CLOUD_SYNC_TOKEN) return;
@@ -313,7 +318,7 @@ async function ghSync(manual) {
 }
 function ghPush(manual) { return ghSync(!!manual); }
 function ghPull(manual) { return ghSync(!!manual); }
-function ghSched() { if (!CLOUD_SYNC_TOKEN) return; ghStartAuto(); clearTimeout(ghT); ghT = setTimeout(() => ghSync(false), 1400); }
+function ghSched() { if (!CLOUD_SYNC_TOKEN || !appStartupReady) return; ghStartAuto(); clearTimeout(ghT); ghT = setTimeout(() => ghSync(false), 700); }
 
 /* ---------- Partage & e-mail ---------- */
 function pdfMeta(d){const C=S.cfg||{},lab=d.t==='f'?'FACTURE':d.t==='d'?'DEVIS':'RAPPORT';return{lab,num:d.num||'',date:fd(d.date),client:d.cn||'',co:C.co||'',nm:C.nm||'',siret:C.siret||'',tel:C.tel||'',logo:typeof LGT!=='undefined'?LGT:''}}
