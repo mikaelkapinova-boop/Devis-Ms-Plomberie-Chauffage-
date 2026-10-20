@@ -38,7 +38,19 @@ return `<div class="c"><h3>Mon entreprise (en-tête des documents)</h3>${I('Rais
 	<div class="c"><h3>Données partagées</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les documents et réglages sont enregistrés dans le stockage en ligne privé commun aux appareils connectés.</p><p class="mu" style="font-size:12px;margin:8px 0 0">${S.docs.length} document(s) · ${S.clients.length} client(s) · ${S.cat.length} tarif(s) · ${S.rep.length} rapport(s)</p></div><div class="c"><h3>Accès</h3><p class="mu" style="margin:0 0 8px;font-size:13px">L'appli est protégée par identifiant et mot de passe. Les données sont chiffrées sur l’appareil avant leur envoi au stockage en ligne.</p><button class="b gh sm" onclick="authLogout()">Se déconnecter</button></div>
 <div class="c"><h3>Appareil</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les documents restent dans l’espace partagé en ligne. Cette action déconnecte uniquement cet appareil.</p><button class="b rd sm" data-t="Déconnecter cet appareil" onclick="arm2(this,wipe)">Déconnecter cet appareil</button></div>
 <p class="mu" style="text-align:center;font-size:12px">Version ${APPV}</p>`}
-const APPV='7.18.7';
+const APPV='7.19.1';
+const setVBase=setV;
+function archivePanel(){
+  const index=S.cfg&&S.cfg.archiveIndex&&typeof S.cfg.archiveIndex==='object'?S.cfg.archiveIndex:{},files=Object.values(index);
+  return `<div class="c"><h3>PDF archivés en ligne</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les PDF originaux et leur texte extrait sont conservés dans l’espace commun. Recherche par nom, numéro, client ou contenu.</p><input id="archive-q" type="search" placeholder="Rechercher dans les PDF archivés…" oninput="archiveFilter()"><div id="archive-items" style="margin-top:8px">${files.length?files.map(f=>`<div class="r archive-row" data-archive-id="${esc(f.id)}" style="display:flex;align-items:center;gap:8px"><div style="flex:1;min-width:0"><b>${esc(f.number||f.name||'PDF')}</b><br><small class="mu">${esc(f.client||'Client non identifié')} · ${esc(f.date||'Date non identifiée')} · ${Math.max(1,Math.round((Number(f.size)||0)/1024))} Ko</small></div><button type="button" class="b gh sm" style="width:auto;margin:0;white-space:nowrap" onclick="event.stopPropagation();openArchivedPdf('${esc(f.id)}')">Ouvrir PDF</button></div>`).join(''):'<p class="mu">Aucun PDF archivé. Importe les fichiers depuis Importation pour les enregistrer ici.</p>'}</div><small class="mu" id="archive-count" style="display:block;margin-top:8px">${files.length} fichier(s)</small></div>`;
+}
+setV=function(){return setVBase()+archivePanel()};
+function archiveFilter(){
+  const q=String($('#archive-q')?.value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(),index=S.cfg&&S.cfg.archiveIndex&&typeof S.cfg.archiveIndex==='object'?S.cfg.archiveIndex:{},files=Object.values(index);let count=0;
+  document.querySelectorAll('#archive-items .archive-row').forEach(row=>{const f=files.find(x=>String(x.id)===row.dataset.archiveId)||{},content=[f.name,f.number,f.client,f.date,f.text,f.kind].join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(),show=!q||content.includes(q);row.style.display=show?'':'none';if(show)count++});
+  const label=$('#archive-count');if(label)label.textContent=count+' fichier(s)';
+}
+function openArchivedPdf(id){const index=S.cfg&&S.cfg.archiveIndex&&typeof S.cfg.archiveIndex==='object'?S.cfg.archiveIndex:{},f=Object.values(index).find(x=>String(x.id)===String(id));return openSourcePdf(f)}
 async function wipe(){await clearLocalBusinessData();authLogout()}
 
 function dlBlob(b,nm){const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=nm;document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(u)},1500)}
@@ -49,6 +61,7 @@ const GH_ARRAYS = ['clients', 'cat', 'docs', 'achats', 'rep', 'chat', 'plan', 't
 let ghSha = null, ghT = null, ghPoll = null, ghInFlight = null, ghEventsBound = false;
 let ghQueued = false, ghBasePack = null, ghLastErrorToast = 0;
 let ghLastStatus = 'Connecte-toi au même espace partagé sur chaque appareil.';
+let ghStorageName='stockage en ligne';
 let ghMeta = {v: 1, deleted: {}};
 async function cloudApi(method='GET',body=null,etag=''){
   if(!CLOUD_SYNC_TOKEN)throw new Error('Reconnecte-toi pour accéder au stockage partagé en ligne');
@@ -64,6 +77,36 @@ async function cloudApi(method='GET',body=null,etag=''){
   if(!response.ok){const error=new Error(result.error||'Synchronisation en ligne · '+response.status);error.status=response.status===412?409:response.status;throw error}
   return result;
 }
+async function uploadSourcePdf(file){
+  if(!CLOUD_SYNC_TOKEN||!KEY)throw new Error('Reconnecte-toi à l’espace partagé avant d’archiver ce PDF.');
+  const bytes=new Uint8Array(await file.arrayBuffer()),iv=crypto.getRandomValues(new Uint8Array(12)),cipher=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},KEY,bytes)),digest=await crypto.subtle.digest('SHA-256',cipher),sha=Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join(''),ivText=btoa(String.fromCharCode(...iv));
+  let binary='';for(let i=0;i<cipher.length;i+=0x8000)binary+=String.fromCharCode(...cipher.subarray(i,Math.min(i+0x8000,cipher.length)));
+  const response=await fetch(CLOUD_SYNC_API+'/api/archive',{method:'PUT',headers:{Authorization:'Bearer '+CLOUD_SYNC_TOKEN,'Content-Type':'application/json'},body:JSON.stringify({sha,iv:ivText,encrypted:true,name:file.name||'document.pdf',data:btoa(binary)}),cache:'no-store'});
+  let result={};try{result=await response.json()}catch(_){}
+  if(!response.ok)throw new Error(result.error||'Le PDF n’a pas été archivé en ligne.');
+  return{sha:result.sha,iv:ivText,encrypted:true,name:result.name||file.name||'document.pdf',size:bytes.length,type:'application/pdf'};
+}
+async function openSourcePdf(archive){
+  if(!archive||!/^[a-f0-9]{64}$/i.test(String(archive.sha||''))){toast('Aucun PDF source n’est associé à ce document.');return}
+  const tab=window.open('about:blank','_blank');
+  try{
+    if(!CLOUD_SYNC_TOKEN||!KEY||!archive.encrypted||!archive.iv)throw new Error('Cette archive ne peut pas être déchiffrée sur cet appareil.');
+    const query=new URLSearchParams({sha:archive.sha,name:archive.name||'document.pdf'}),response=await fetch(CLOUD_SYNC_API+'/api/archive?'+query.toString(),{headers:{Authorization:'Bearer '+CLOUD_SYNC_TOKEN},cache:'no-store'});
+    if(!response.ok){let data={};try{data=await response.json()}catch(_){}throw new Error(data.error||'PDF introuvable dans l’archive en ligne.')}
+    const encrypted=new Uint8Array(await response.arrayBuffer()),iv=Uint8Array.from(atob(archive.iv),c=>c.charCodeAt(0)),plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},KEY,encrypted),url=URL.createObjectURL(new Blob([plain],{type:'application/pdf'}));
+    if(tab)tab.location.href=url;else{
+      const old=document.getElementById('archive-pdf-viewer');if(old)old.remove();
+      const view=document.createElement('div');view.id='archive-pdf-viewer';view.style.cssText='position:fixed;inset:0;z-index:99999;background:var(--bg,#111);display:flex;flex-direction:column;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)';
+      const close=document.createElement('button');close.type='button';close.textContent='Fermer le PDF';close.style.cssText='min-height:48px;border:0;background:var(--cu,#bd7d3d);color:#fff;font:inherit;font-weight:700';
+      const frame=document.createElement('iframe');frame.title=archive.name||'PDF archivé';frame.src=url;frame.style.cssText='border:0;flex:1;width:100%;background:#fff';
+      close.onclick=()=>{view.remove();URL.revokeObjectURL(url)};view.append(close,frame);document.body.appendChild(view);return;
+    }
+    setTimeout(()=>URL.revokeObjectURL(url),120000);
+  }catch(error){if(tab)tab.close();toast(error&&error.message||'Ouverture du PDF impossible.')}
+}
+function openDocPdf(id){const d=S.docs.find(x=>String(x.id)===String(id));return openSourcePdf(d&&d._archive)}
+window.uploadSourcePdf=uploadSourcePdf;
+window.openSourcePdf=openSourcePdf;
 function ghClone(v) { return v == null ? v : JSON.parse(JSON.stringify(v)); }
 function ghStable(v) {
   if (v === undefined) return 'undefined';
@@ -246,7 +289,7 @@ async function ghReadStore() {
   let remote;
   try { remote = await cloudApi('GET'); }
   catch (error) { throw ghStageError(error, 'read'); }
-  try { return {sha: remote.etag || '', pack: remote.pack ? await decJSON(remote.pack) : null}; }
+  try { ghStorageName=remote.storage==='github'?'GitHub privé':remote.storage==='vercel-blob'?'stockage Vercel Blob':'stockage en ligne';return {sha: remote.etag || '', pack: remote.pack ? await decJSON(remote.pack) : null}; }
   catch (error) { throw ghStageError(error, 'decrypt'); }
 }
 async function ghWriteStore(pack, sha) {
@@ -337,7 +380,7 @@ async function ghSync(manual) {
       await ghBaseWrite(repo, merged);
       if (morePending) ghQueued = true;
       const localClean = await clearLocalBusinessData();
-      ghStatus(!localClean ? 'En ligne, mais certaines données de cache n’ont pas pu être effacées de cet appareil.' : morePending ? 'Dernières modifications en cours d’enregistrement…' : 'Enregistré dans l’espace partagé · ' + new Date().toLocaleTimeString('fr-FR'));
+      ghStatus(!localClean ? 'En ligne, mais certaines données de cache n’ont pas pu être effacées de cet appareil.' : morePending ? 'Dernières modifications en cours d’enregistrement…' : 'Enregistré sur '+ghStorageName+' · ' + new Date().toLocaleTimeString('fr-FR'));
       if (!localClean && appStartupReady) toast('Données en ligne, mais cache local à effacer.');
       if (manual) toast(morePending ? 'Enregistrement des dernières modifications…' : 'Données enregistrées en ligne');
       return {ok: true};
@@ -374,7 +417,7 @@ for(let i=0;i<pages.length;i++){const c=await html2canvas(pages[i],{scale:2,back
 const _pvoRaw=pvo;
 pvo=async function(){const d=cur();if(!d)return;$('#pv').classList.add('o');document.body.classList.add('lk');$('#pvs').innerHTML='<p style="padding:28px;color:#666">Mise en page…</p>';pvf();
 try{const stack=await buildPdfPages(cd(d),pdfMeta(d));$('#pvs').replaceChildren(stack);pvf()}catch(e){_pvoRaw()}}
-async function pdf(){const d=cur();toast('Création du PDF…');try{const{P2,nm}=await mkpdf(d);P2.save(nm)}catch(e){toast('PDF impossible ici')}}
+async function pdf(){if(!CLOUD_SYNC_TOKEN){toast('Reconnecte-toi à l’espace partagé pour enregistrer le PDF en ligne.');return}const d=cur(),tab=window.open('about:blank','_blank');toast('Création du PDF et enregistrement en ligne…');try{const{P2,nm}=await mkpdf(d),blob=P2.output('blob'),file=new File([blob],nm,{type:'application/pdf'}),archive=await uploadSourcePdf(file),index=S.cfg.archiveIndex||(S.cfg.archiveIndex={}),collection=V.v==='xe'?'rep':'docs';d._archive=archive;d._sourceFile=nm;index[archive.sha]={id:archive.sha,name:nm,sha:archive.sha,iv:archive.iv,encrypted:true,size:archive.size,client:d.cn||d.client||'',number:d.num||'',date:d.date||'',kind:V.v==='xe'?'rapport':d.t==='f'?'facture':'devis',text:[d.o,d.cn,d.ca,d.cc,d.tr].filter(Boolean).join(' ').slice(0,200000),docId:d.id||''};save(collection);save('cfg');if(tab){const url=URL.createObjectURL(blob);tab.location.href=url;setTimeout(()=>URL.revokeObjectURL(url),120000)}toast(tab?'PDF enregistré en ligne dans l’espace commun.':'PDF enregistré en ligne ; retrouve-le dans Réglages > PDF archivés.')}catch(e){if(tab)tab.close();toast(e&&e.message||'PDF impossible à enregistrer en ligne')}}
 async function shr(){const d=cur();toast('Préparation du PDF…');try{const{blob,nm}=await mkpdf(d),f=new File([blob],nm,{type:'application/pdf'}),lab=d.t==='f'?'Facture':d.t==='d'?'Devis':'Rapport';
 if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f],title:lab+' '+d.num,text:`${lab} ${d.num} — ${S.cfg.co}`});else{dlBlob(blob,nm);toast('Partage indisponible : PDF téléchargé')}}catch(e){if(e&&e.name!=='AbortError')toast('Partage impossible')}}
 function mailC(){const d=cur(),c=S.clients.find(x=>x.id===d.cid)||S.clients.find(x=>x.n===d.cn),to=d.ce||(c&&c.e?c.e:''),lab=d.t==='f'?'facture':'devis',T=tot(d);
@@ -382,10 +425,10 @@ const body=`Bonjour${d.cn?' '+d.cn:''},\n\nVeuillez trouver ci-joint ${lab==='de
 location.href=`mailto:${enc(to)}?subject=${enc((lab==='devis'?'Devis ':'Facture ')+d.num+' — '+S.cfg.co)}&body=${enc(body)}`;toast('Pense à joindre le PDF téléchargé')}
 
 /* ---------- Liste : recherche & filtres ---------- */
-function lflt(){const q=($('#lq')?.value||'').toLowerCase(),f=$('#lf')?.value||'';let n2=0,s=0;document.querySelectorAll('#lst .r').forEach(r=>{const ok=(!q||r.dataset.s.includes(q))&&(!f||r.dataset.f===f);r.style.display=ok?'':'none';if(ok){n2++;s+=Number(r.dataset.t)}});const e=$('#lsum');if(e)e.textContent=n2+' document(s) · '+E(s)}
+function lflt(){const q=($('#lq')?.value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(),f=$('#lf')?.value||'';let n2=0,s=0;document.querySelectorAll('#lst .r-arch').forEach(r=>{const text=(r.dataset.s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(),ok=(!q||text.includes(q))&&(!f||r.dataset.f===f);r.style.display=ok?'':'none';if(ok){n2++;s+=Number(r.dataset.t)}});const e=$('#lsum');if(e)e.textContent=n2+' document(s) · '+E(s)}
 function list(){const t=V.v,L=S.docs.filter(d=>d.t===t),st=d=>d.t==='d'?(d.st==='fac'?'fac':d.st==='ok'?'ok':'att'):d.paid?'paid':d.ap?'ap':'due';
 const opts=t==='d'?[['att','En attente'],['ok','Acceptés'],['fac','Facturés']]:[['due','À encaisser'],['ap','Acompte reçu'],['paid','Payées']];
-return `<div class="flt"><input id="lq" type="search" placeholder="Rechercher (n°, client, objet)…" oninput="lflt()"><select id="lf" onchange="lflt()"><option value="">Tous</option>${opts.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></div><p class="mu" id="lsum" style="margin:0 4px 10px;font-size:12px">${L.length} document(s) · ${E(L.reduce((s,d)=>s+tot(d).t,0))}</p><div id="lst">${L.length?L.map(d=>`<button class="r" data-s="${esc((d.num+' '+(d.cn||'')+' '+(d.o||'')+' '+fd(d.date)).toLowerCase())}" data-f="${st(d)}" data-t="${tot(d).t}" onclick="go('e','${d.id}')"><div><b>${esc(d.num)}</b><br><small class="mu">${esc(d.cn||'Sans client')} · ${fd(d.date)}${d.o?' · '+esc(d.o.slice(0,40)):''}</small></div><div style="text-align:right"><b>${E(tot(d).t)}</b><br>${bdg(d)}</div></button>`).join(''):`<p class="mu">Aucun ${t==='d'?'devis':'facture'} pour l'instant. Appuie sur « Ajouter » pour en créer.</p>`}</div>`}
+return `<div class="flt"><input id="lq" type="search" placeholder="Rechercher (n°, client, objet ou contenu du PDF)…" oninput="lflt()"><select id="lf" onchange="lflt()"><option value="">Tous</option>${opts.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></div><p class="mu" id="lsum" style="margin:0 4px 10px;font-size:12px">${L.length} document(s) · ${E(L.reduce((s,d)=>s+tot(d).t,0))}</p><div id="lst">${L.length?L.map(d=>`<div class="r-arch" data-s="${esc((d.num+' '+(d.cn||'')+' '+(d.o||'')+' '+(d._sourceFile||'')+' '+(d._sourceText||'')+' '+fd(d.date)).toLowerCase())}" data-f="${st(d)}" data-t="${tot(d).t}" style="display:flex;align-items:stretch;gap:8px;margin-bottom:8px"><button class="r" type="button" style="flex:1;margin:0" onclick="go('e','${d.id}')"><div><b>${esc(d.num)}</b><br><small class="mu">${esc(d.cn||'Sans client')} · ${fd(d.date)}${d.o?' · '+esc(d.o.slice(0,40)):''}</small></div><div style="text-align:right"><b>${E(tot(d).t)}</b><br>${bdg(d)}</div></button>${d._archive?`<button class="b gh sm" type="button" style="width:auto;margin:0;padding:8px;white-space:nowrap" onclick="event.stopPropagation();openDocPdf('${esc(d.id)}')">PDF</button>`:''}</div>`).join(''):`<p class="mu">Aucun ${t==='d'?'devis':'facture'} pour l'instant. Appuie sur « Ajouter » pour en créer.</p>`}</div>`}
 
 /* ---------- Lignes depuis Mes tarifs ---------- */
 function addCat(k,i){if(i==='')return;const c=S.cat[Number(i)],d=cur();if(!c)return;const L=d[k],query=$('#tariff-search-'+k)?.value||'',roomId=k==='M'&&d.roomMode?($('#tariff-room-M')?.value||roomsFor(d)[0]?.id||''):'';if(L.length===1&&!L[0].d&&!n(L[0].p))L.length=0;L.push({d:c.d,q:1,u:c.u||(k==='M'?'h':'u'),p:c.p,...(roomId?{rid:roomId}:{})});save('docs');render();const search=$('#tariff-search-'+k);if(search){search.value=query;tariffFilter(k,query);search.focus()}const room=$('#tariff-room-M');if(room&&roomId)room.value=roomId}

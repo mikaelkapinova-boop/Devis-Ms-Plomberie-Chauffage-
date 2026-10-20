@@ -548,6 +548,7 @@ function addFiles(files){[...files].forEach(f=>{const it={id:uid(),name:f.name,s
 /* ---------- transfert vers l'app ---------- */
 function snap(){UNDO={};['clients','cat','docs','rep','seq'].forEach(k=>{try{UNDO[k]=JSON.stringify((SS()||{})[k])}catch(e){}})}
 function undo(){if(!UNDO)return;const s=SS();for(const k in UNDO){if(UNDO[k]===undefined)continue;s[k]=JSON.parse(UNDO[k]);try{G.save&&G.save(k)}catch(e){}}UNDO=null;ST.items.forEach(i=>{if(i.status==='done'){i.status='ok';i.res=null}});persist();paint();say('Transfert annulé')}
+function indexArchive(s,it,archive,doc){const index=s.cfg.archiveIndex||(s.cfg.archiveIndex={}),item=index[archive.sha]||(index[archive.sha]={id:archive.sha,name:archive.name,sha:archive.sha,iv:archive.iv,encrypted:true,size:archive.size});item.client=String(it.data.cli&&it.data.cli.name||'').slice(0,180);item.number=String(it.data.num||'').slice(0,100);item.date=String(it.data.date||'').slice(0,40);item.kind=String(it.data.type||'x').slice(0,20);item.text=String(it.raw||'').slice(0,200000);if(doc)item.docId=doc.id||'';return item}
 function dupDoc(it){const s=SS(),K=probe(),d=it.data;if(!d||!d.num||d.type==='x'||!s)return null;
   return(s.docs||[]).find(x=>x&&x.t===d.type&&norm(x[K.dNum])===norm(d.num))||null}
 function nextNo(t,K,hint){const docs=(SS().docs||[]).filter(x=>x&&x.t===t),yr=new Date().getFullYear();
@@ -587,19 +588,23 @@ function mkRapport(it,K,cid,out){const s=SS(),R=s.rep||(s.rep=[]),d=it.data,y=ne
   const a=d.addrs?.[it.addr||0]||{addr:d.cli.addr,cp:d.cli.cp,ville:d.cli.ville},num=d.num||'RAP-'+y+'-'+String(s.seq[seqKey]).padStart(3,'0'),o=Object.assign(emptyLike(R[R.length-1]||{}),{id:uid(),num,date:d.date||today(),ty:d.reportType||'Autre',cn:d.cli.name||'',ca:a.addr||d.cli.addr||'',cc:[a.cp||d.cli.cp,a.ville||d.cli.ville].filter(Boolean).join(' '),ct:d.cli.tel||'',ass:'',sn:'',mo:'',co:'',org:'',tr:d.txt||'',pr:''});
   if(K.r.date!=='date')o[K.r.date]=d.date||today();if(K.r.ti!=='ty')o[K.r.ti]='Rapport';if(K.r.txt!=='tr')o[K.r.txt]=d.txt||'';if(K.r.cli!=='cn'&&cid)o[K.r.cli]=cid;
   R.unshift(o);out.push('Rapport créé');return o}
-function commit(it){const s=SS();if(!s)return say('Application non prête');const d=it.data,sc=it.sc;
+async function commit(it){const s=SS();if(!s)return say('Application non prête');const d=it.data,sc=it.sc;
+  let archive=it.archive||null;
+  if(it.kind==='pdf'&&it.file&&!archive){try{if(typeof G.uploadSourcePdf!=='function')throw new Error('Le stockage des PDF en ligne n’est pas disponible.');archive=await G.uploadSourcePdf(it.file);it.archive=archive;indexArchive(s,it,archive,null);G.save&&G.save('cfg')}catch(e){it.err='PDF non archivé en ligne : '+e.message;it.status='warn';paint();say(it.err);return}}
   if(sc.all){const problems=transferProblems(it);if(problems.length)return say('Transfert complet bloqué : '+problems[0])}
   else if(sc.pre||sc.fou){const lines=d.lines.filter(l=>(sc.pre&&l.kind!=='F')||(sc.fou&&l.kind==='F'));if(lines.some(l=>!l.ok))return say('Vérifie ou confirme les lignes orange avant de les ajouter à Mes tarifs')}
-  const K=probe(),out=[];snap();
-  try{let cid=null;
+  const K=probe(),out=[];let snapped=false;
+  try{snap();snapped=true;let cid=null;
     if((sc.all||sc.cli)&&d.cli.name)cid=upCli(it,K,out);
     const kinds=[];if(sc.pre||(sc.all&&it.opt.keep))kinds.push('M');if(sc.fou||(sc.all&&it.opt.keep))kinds.push('F');
     if(kinds.length&&d.type!=='x')upTarifs(d.lines.filter(l=>kinds.includes(l.kind==='F'?'F':'M')&&l.des&&l.pu>0),K,out);
     let doc=null;if(sc.all)doc=d.type==='x'?mkRapport(it,K,cid,out):mkDoc(it,K,cid,out);
-    ['clients','cat','docs','rep','seq'].forEach(k=>{try{G.save&&G.save(k)}catch(e){}});
+    if(doc){doc._sourceFile=String(it.name||'').slice(0,180);doc._sourceText=String(it.raw||'').slice(0,200000);if(archive)doc._archive=archive}
+    if(archive)indexArchive(s,it,archive,doc);
+    ['clients','cat','docs','rep','seq'].forEach(k=>{try{G.save&&G.save(k)}catch(e){}});if(archive)try{G.save&&G.save('cfg')}catch(e){}
     if(typeof G.cliBackfill==='function')try{G.cliBackfill()}catch(e){}
     it.status='done';it.res={msg:out,id:doc&&doc.id,rep:d.type==='x'};persist();paint();say('Transfert terminé')}
-  catch(e){undo();it.err='Transfert annulé : '+e.message;it.status='warn';paint();say('Erreur, rien n\'a été modifié')}}
+  catch(e){if(snapped)undo();it.err='Transfert annulé : '+e.message;it.status='warn';paint();say((snapped?'Erreur, rien n\'a été modifié. ':'PDF non archivé en ligne : ')+e.message)}}
 
 /* ---------- interface ---------- */
 const IC={up:'<svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>',file:'<svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg>',
