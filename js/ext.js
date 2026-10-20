@@ -387,8 +387,11 @@ async function ghSync(manual) {
     }
     throw new Error('Le stockage partagé est occupé. Nouvelle tentative automatique dans quelques secondes.');
   };
+  // iOS may suspend a background PWA while it owns this lock. Never leave the
+  // foreground app queued on the splash screen; the API's If-Match retry path
+  // arbitrates concurrent syncs when another tab already has the lock.
   const job = navigator.locks && typeof navigator.locks.request === 'function'
-    ? navigator.locks.request('ms-plomberie-cloud-sync', () => run())
+    ? navigator.locks.request('ms-plomberie-cloud-sync', {ifAvailable: true}, () => run())
     : run();
   ghInFlight = job;
   try { return await job; }

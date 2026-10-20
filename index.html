@@ -965,8 +965,9 @@ cur=()=>(V.v==='xe'?S.rep:S.docs).find(x=>x.id===V.id),
 bdg=d=>d.t==='d'?(d.st==='fac'?'<span class="bd ok">Facturé</span>':d.st==='ok'?'<span class="bd cu">Accepté</span>':'<span class="bd">En attente</span>'):d.paid?'<span class="bd st">PAYÉ</span>':d.ap?`<span class="bd cu">Reste ${E(tot(d).r)}</span>`:'<span class="bd rd">À payer</span>';
 let S={clients:[],cat:[],docs:[],achats:[],cfg:{cot:21.5,imp:0,val:30,acc:40},seq:{},rep:[],ph:{},chat:[],plan:[]},V={v:'h'},R={n:6},CE,tm={},arm,appStartupReady=false,legacyLocalStamp=0;
 function idb(){return new Promise((ok,no)=>{const r=indexedDB.open('msplomberie',1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('kv'))r.result.createObjectStore('kv')};r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}
-function idbGet(key){return idb().then(db=>new Promise((ok,no)=>{const q=db.transaction('kv','readonly').objectStore('kv').get(key);q.onsuccess=()=>ok(q.result);q.onerror=()=>no(q.error)})).catch(()=>null)}
-function idbClear(){return idb().then(db=>new Promise((ok,no)=>{const t=db.transaction('kv','readwrite');t.objectStore('kv').clear();t.oncomplete=()=>ok();t.onerror=()=>no(t.error)}))}
+function idbWithTimeout(promise,operation){let timer;return Promise.race([promise,new Promise((ok,no)=>{timer=setTimeout(()=>{const e=new Error('Le stockage local est trop lent pour '+operation+'.');e.name='IndexedDBTimeoutError';no(e)},10000)})]).finally(()=>clearTimeout(timer))}
+function idbGet(key){return idbWithTimeout(idb().then(db=>new Promise((ok,no)=>{const q=db.transaction('kv','readonly').objectStore('kv').get(key);q.onsuccess=()=>ok(q.result);q.onerror=()=>no(q.error)})),'read').catch(e=>{if(e&&e.name==='IndexedDBTimeoutError')throw e;return null})}
+function idbClear(){return idbWithTimeout(idb().then(db=>new Promise((ok,no)=>{const t=db.transaction('kv','readwrite');t.objectStore('kv').clear();t.oncomplete=()=>ok();t.onerror=()=>no(t.error)})),'clear')}
 let localBusinessDataCleared=false;
 async function clearLocalBusinessData(){
 if(localBusinessDataCleared)return true;
@@ -1002,7 +1003,7 @@ if(packHasData&&(!localHasData||pt>=stamp)){
 for(const k of keys)if(pack[k]!=null)S[k]=pack[k];
 }
 }
-}catch(e){}
+}catch(e){if(e&&e.name==='IndexedDBTimeoutError'){const msg=$('#syncbootmsg');if(msg)msg.textContent='Le stockage de cet appareil ne répond pas. Réessaie dans un instant ; les données n’ont pas été effacées.';if(retry){retry.hidden=false;retry.disabled=false}return false}}
 cfgInit();cliBackfill();applyTheme();pwa();
 const synced=await ghPull(0);
 if(!synced||!synced.ok){const msg=$('#syncbootmsg'),detail=String(ghLastStatus||'').trim();if(msg)msg.textContent='Impossible de charger les données partagées. '+(detail||'Vérifie la connexion Internet puis réessaie.');if(retry){retry.hidden=false;retry.disabled=false}if(reconnect)reconnect.hidden=false;return false}
@@ -1213,10 +1214,10 @@ addEventListener('focusout',()=>setTimeout(()=>{if(!document.activeElement||!doc
 <script src="js/fournisseurs.js?v=7.6"></script>
 <script src="js/importer.js?v=7.18.5"></script>
 <script src="js/pdfpages.js?v=6.0.1"></script>
-<script src="js/ext.js?v=7.19.1"></script>
+<script src="js/ext.js?v=7.22.1"></script>
 <script src="js/chat2.js?v=7.18.5"></script>
 <script src="js/models.js?v=6.0.1"></script>
-<script src="js/assist.js?v=7.22.0"></script>
+<script src="js/assist.js?v=7.22.1"></script>
 <script src="js/call.js?v=6.0.1"></script>
 <script src="js/cam.js?v=6.0.1"></script>
 <script src="js/pro.js?v=6.0.1"></script>

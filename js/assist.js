@@ -743,7 +743,7 @@ var css=document.createElement("style");css.textContent=".px-card{background:var
 /* === VERSION 7.18.5 === */
 (function(){
 "use strict";
-var APP_VERSION="7.22.0",APP_RELEASE="Tableaux libres et objets facturables déplaçables ; montant global au choix HT ou TTC.";
+var APP_VERSION="7.22.1",APP_RELEASE="Démarrage fiabilisé : plus d’attente indéfinie du cache local ou d’une autre fenêtre.";
 window.APP_VERSION=APP_VERSION;
 var appVersionLabel=document.getElementById("appver");if(appVersionLabel)appVersionLabel.textContent="v"+APP_VERSION.split(".").slice(0,2).join(".");
 window.newsShow=function(){var d=document.createElement("div");d.className="news";d.innerHTML="<div><h2>Version "+APP_VERSION+"</h2><p>"+APP_RELEASE+"</p><button class='b' style='width:100%;margin-top:10px' onclick='this.closest(\".news\").remove()'><span>Compris</span></button></div>";d.addEventListener("click",function(e){if(e.target===d)d.remove()});document.body.appendChild(d)};
