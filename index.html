@@ -984,7 +984,7 @@ if(typeof v==='object')return Object.keys(v).length>0;
 return String(v).length>0}
 function save(k){
 ghSched()}
-async function boot(){
+window.boot=async function(){
 appStartupReady=false;
 const retry=$('#syncbootretry'),reconnect=$('#syncbootlogin');if(retry){retry.hidden=true;retry.disabled=true}if(reconnect)reconnect.hidden=true;
 const keys=Object.keys(S);
@@ -1009,7 +1009,7 @@ const synced=await ghPull(0);
 if(!synced||!synced.ok){const msg=$('#syncbootmsg'),detail=String(ghLastStatus||'').trim();if(msg)msg.textContent='Impossible de charger les données partagées. '+(detail||'Vérifie la connexion Internet puis réessaie.');if(retry){retry.hidden=false;retry.disabled=false}if(reconnect)reconnect.hidden=false;return false}
 appStartupReady=true;ghStartAuto();render();if(typeof impHash==='function')impHash();inbxLoad().then(()=>{inbxRender();homeInbx()});
 return true
-}
+};
 window.addEventListener('pagehide',()=>{if(appStartupReady)ghSync(false)});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&appStartupReady)ghSync(false)})
 function toast(m){const t=$('#ts');t.textContent=m;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,2400)}
@@ -1217,7 +1217,7 @@ addEventListener('focusout',()=>setTimeout(()=>{if(!document.activeElement||!doc
 <script src="js/ext.js?v=7.22.1"></script>
 <script src="js/chat2.js?v=7.18.5"></script>
 <script src="js/models.js?v=6.0.1"></script>
-<script src="js/assist.js?v=7.22.1"></script>
+<script src="js/assist.js?v=7.22.2"></script>
 <script src="js/call.js?v=6.0.1"></script>
 <script src="js/cam.js?v=6.0.1"></script>
 <script src="js/pro.js?v=6.0.1"></script>
@@ -1225,6 +1225,6 @@ addEventListener('focusout',()=>setTimeout(()=>{if(!document.activeElement||!doc
 <script src="js/outils.js?v=7.8.0"></script>
 <script src="js/assistant-local.js?v=7.22.0"></script>
 <script src="js/connect.js?v=6.0.1"></script>
-<script src="js/auth.js?v=7.18.5"></script>
+<script src="js/auth.js?v=7.22.2"></script>
 <script>authStart();</script>
 </body></html>
