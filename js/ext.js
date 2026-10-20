@@ -34,11 +34,11 @@ return `<div class="c"><h3>Mon entreprise (en-tête des documents)</h3>${I('Rais
 <div class="c"><h3>Micro-entreprise (calcul des bénéfices)</h3><div class="g2">${N('Cotisations (%)','cot')}${N('Impôt libératoire (%)','imp')}</div></div>
 <div class="c"><h3>Apparence</h3><label>Thème<select onchange="cs('th',this.value)"><option value="auto" ${c.th==='auto'?'selected':''}>Automatique</option><option value="light" ${c.th==='light'?'selected':''}>Clair</option><option value="dark" ${c.th==='dark'?'selected':''}>Sombre</option></select></label></div>
 <div class="c"><h3>Clé API</h3><label>Clé Perplexity<input type="password" placeholder="pplx-…" value="${esc(c.pk||'')}" oninput="cs('pk',this.value)" autocomplete="off"></label><button class="b gh sm" onclick="go('k')">Connecteurs</button></div>
-	<div class="c"><h3>Synchronisation en ligne</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les devis, factures, clients, tarifs, achats, rapports, planning, photos, conversations et corbeille se sauvegardent dans un espace en ligne privé et chiffré. Les appareils connectés avec le même identifiant et le même mot de passe partagent les mêmes données. La synchronisation se fait automatiquement à l’ouverture, après chaque modification et pendant que l’application reste ouverte.</p><button class="b gh sm" type="button" onclick="ghPush(1)">Synchroniser maintenant</button><small id="ghst" class="mu" style="display:block;margin-top:8px">${esc(ghLastStatus)}</small></div>
-	<div class="c"><h3>Données partagées</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les documents et réglages sont enregistrés dans le stockage en ligne privé. Les copies de travail ne restent pas sur ce téléphone.</p><p class="mu" style="font-size:12px;margin:8px 0 0">${S.docs.length} document(s) · ${S.clients.length} client(s) · ${S.cat.length} tarif(s) · ${S.rep.length} rapport(s)</p></div><div class="c"><h3>Accès</h3><p class="mu" style="margin:0 0 8px;font-size:13px">L'appli est protégée par identifiant et mot de passe. Les données synchronisées en ligne sont chiffrées sur le téléphone avant leur envoi.</p><button class="b gh sm" onclick="authLogout()">Se déconnecter</button></div>
+	<div class="c"><h3>Stockage partagé en ligne</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Chaque devis, facture, client, tarif, achat, rapport, planning et photo est enregistré dans le même espace en ligne privé. Tous les appareils connectés avec le même identifiant et le même mot de passe voient les mêmes données. L’enregistrement se fait automatiquement après chaque modification.</p><button class="b gh sm" type="button" onclick="ghPush(1)">Enregistrer maintenant</button><small id="ghst" class="mu" style="display:block;margin-top:8px">${esc(ghLastStatus)}</small></div>
+	<div class="c"><h3>Données partagées</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les documents et réglages sont enregistrés dans le stockage en ligne privé commun aux appareils connectés.</p><p class="mu" style="font-size:12px;margin:8px 0 0">${S.docs.length} document(s) · ${S.clients.length} client(s) · ${S.cat.length} tarif(s) · ${S.rep.length} rapport(s)</p></div><div class="c"><h3>Accès</h3><p class="mu" style="margin:0 0 8px;font-size:13px">L'appli est protégée par identifiant et mot de passe. Les données sont chiffrées sur l’appareil avant leur envoi au stockage en ligne.</p><button class="b gh sm" onclick="authLogout()">Se déconnecter</button></div>
 <div class="c"><h3>Appareil</h3><p class="mu" style="margin:0 0 8px;font-size:13px">Les documents restent dans l’espace partagé en ligne. Cette action déconnecte uniquement cet appareil.</p><button class="b rd sm" data-t="Déconnecter cet appareil" onclick="arm2(this,wipe)">Déconnecter cet appareil</button></div>
 <p class="mu" style="text-align:center;font-size:12px">Version ${APPV}</p>`}
-const APPV='7.18.6';
+const APPV='7.18.7';
 async function wipe(){await clearLocalBusinessData();authLogout()}
 
 function dlBlob(b,nm){const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=nm;document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(u)},1500)}
@@ -48,10 +48,10 @@ const CLOUD_SYNC_API = 'https://devis-ms-plomberie-chauffage.vercel.app';
 const GH_ARRAYS = ['clients', 'cat', 'docs', 'achats', 'rep', 'chat', 'plan', 'threads', 'trash'];
 let ghSha = null, ghT = null, ghPoll = null, ghInFlight = null, ghEventsBound = false;
 let ghQueued = false, ghBasePack = null, ghLastErrorToast = 0;
-let ghLastStatus = 'Connecte-toi avec le même compte sur chaque appareil pour synchroniser tes données.';
+let ghLastStatus = 'Connecte-toi au même espace partagé sur chaque appareil.';
 let ghMeta = {v: 1, deleted: {}};
 async function cloudApi(method='GET',body=null,etag=''){
-  if(!CLOUD_SYNC_TOKEN)throw new Error('Reconnecte-toi pour activer la synchronisation en ligne');
+  if(!CLOUD_SYNC_TOKEN)throw new Error('Reconnecte-toi pour accéder au stockage partagé en ligne');
   const headers={Authorization:'Bearer '+CLOUD_SYNC_TOKEN};
   if(body){headers['Content-Type']='application/json'}
   if(etag)headers['If-Match']=etag;
@@ -285,7 +285,7 @@ function ghApplyPack(pack) {
   if (appStartupReady && before !== ghVisibleState()) render();
 }
 function ghStartAuto() {
-  if (!CLOUD_SYNC_TOKEN) return;
+  if (!CLOUD_SYNC_TOKEN || !appStartupReady) return;
   if (!ghPoll) ghPoll = setInterval(() => { if (!document.hidden) ghSync(false); }, 15000);
   if (ghEventsBound) return;
   ghEventsBound = true;
@@ -294,16 +294,16 @@ function ghStartAuto() {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) ghSync(false); });
 }
 async function ghSync(manual) {
-  if (!CLOUD_SYNC_TOKEN) { const message = AUTH_SYNC_ERROR ? 'Connexion en ligne impossible · ' + AUTH_SYNC_ERROR : 'Reconnecte-toi sur cet appareil pour activer la synchronisation en ligne.'; ghStatus(message); if (manual) toast(message); return; }
-  ghStartAuto();
+  if (!CLOUD_SYNC_TOKEN) { const message = AUTH_SYNC_ERROR ? 'Connexion au stockage en ligne impossible · ' + AUTH_SYNC_ERROR : 'Reconnecte-toi sur cet appareil pour accéder aux données partagées.'; ghStatus(message); if (manual) toast(message); return; }
+  if (appStartupReady) ghStartAuto();
   if (ghInFlight) {
     ghQueued = true;
-    try { const result = await ghInFlight; if (manual && result && result.ok) toast('Données synchronisées entre les appareils'); return result; }
-    catch (e) { ghStatus('Échec de synchronisation · ' + (e && e.message || 'erreur réseau')); if (manual) toast('Synchronisation impossible : ' + (e && e.message || 'erreur réseau')); return {ok: false, error: e}; }
+    try { const result = await ghInFlight; if (manual && result && result.ok) toast('Données enregistrées dans l’espace partagé'); return result; }
+    catch (e) { ghStatus('Échec de l’enregistrement en ligne · ' + (e && e.message || 'erreur réseau')); if (manual) toast('Enregistrement impossible : ' + (e && e.message || 'erreur réseau')); return {ok: false, error: e}; }
   }
   const run = async () => {
     const repo = repoInfo();
-    for (let attempt = 0; attempt < 12; attempt++) {
+    for (let attempt = 0; attempt < 6; attempt++) {
       const [remoteState, savedBase] = await Promise.all([ghReadStore(), ghBaseRead(repo)]);
       const base = remoteState.pack ? savedBase : null;
       ghMeta = ghMergeDeleted(base, remoteState.pack, {__sync: ghMeta});
@@ -318,9 +318,9 @@ async function ghSync(manual) {
       if (changed) {
         try { sha = await ghWriteStore(merged, sha); }
         catch (e) {
-          if ((e.status === 409 || e.status === 422) && attempt < 11) {
-            ghStatus('Modifications simultanées : fusion des changements en cours…');
-            const delay = Math.floor(Math.random() * Math.min(20000, 750 * (2 ** attempt)));
+          if ((e.status === 409 || e.status === 422) && attempt < 5) {
+            ghStatus('Enregistrement simultané détecté, nouvelle tentative…');
+            const delay = 150 + Math.floor(Math.random() * Math.min(1500, 250 * (2 ** attempt)));
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
           }
@@ -337,12 +337,12 @@ async function ghSync(manual) {
       await ghBaseWrite(repo, merged);
       if (morePending) ghQueued = true;
       const localClean = await clearLocalBusinessData();
-      ghStatus(!localClean ? 'En ligne, mais certaines données de cache n’ont pas pu être effacées de cet appareil.' : morePending ? 'Dernières modifications en cours d’enregistrement…' : 'Enregistré en ligne · ' + new Date().toLocaleTimeString('fr-FR'));
+      ghStatus(!localClean ? 'En ligne, mais certaines données de cache n’ont pas pu être effacées de cet appareil.' : morePending ? 'Dernières modifications en cours d’enregistrement…' : 'Enregistré dans l’espace partagé · ' + new Date().toLocaleTimeString('fr-FR'));
       if (!localClean && appStartupReady) toast('Données en ligne, mais cache local à effacer.');
-      if (manual) toast(morePending ? 'Synchronisation des dernières modifications…' : 'Données synchronisées entre les appareils');
+      if (manual) toast(morePending ? 'Enregistrement des dernières modifications…' : 'Données enregistrées en ligne');
       return {ok: true};
     }
-    throw new Error('Les deux téléphones modifient encore les données en même temps. Garde l’application ouverte pour réessayer.');
+    throw new Error('Le stockage partagé est occupé. Nouvelle tentative automatique dans quelques secondes.');
   };
   const job = navigator.locks && typeof navigator.locks.request === 'function'
     ? navigator.locks.request('ms-plomberie-cloud-sync', () => run())
@@ -354,10 +354,10 @@ async function ghSync(manual) {
     if (e && e.status === 401) { ghStatus('Session en ligne expirée · reconnecte-toi.'); if (typeof authLogout === 'function') setTimeout(authLogout, 0); }
     else {
       const reason = e && e.name === 'OperationError' ? 'Les données partagées ne peuvent pas être déchiffrées sur cet appareil. Vérifie que les deux téléphones utilisent le même identifiant et le même mot de passe.' : e && e.message || 'erreur réseau';
-      ghStatus('Échec de synchronisation · ' + reason);
+      ghStatus('Échec de l’enregistrement en ligne · ' + reason);
       if (appStartupReady && Date.now() - ghLastErrorToast > 15000) { ghLastErrorToast = Date.now(); toast('Non enregistré en ligne. Garde l’application ouverte et vérifie Internet.'); }
     }
-    if (manual) toast('Synchronisation impossible : ' + (e && e.message || 'erreur réseau'));
+    if (manual) toast('Enregistrement impossible : ' + (e && e.message || 'erreur réseau'));
     return {ok: false, error: e};
   }
   finally { ghInFlight = null; if (ghQueued) { ghQueued = false; if (appStartupReady) setTimeout(() => ghSync(false), 0); } }
