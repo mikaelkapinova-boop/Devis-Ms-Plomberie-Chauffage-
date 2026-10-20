@@ -419,17 +419,22 @@ async function apiSend(t, txt, clear) {
   chatPush({r: 'u', t: txt || '(fichier joint)', att: prep.names}); ATT = []; clear();
   const userText = [txt || 'Analyse les documents joints.', ...prep.texts].join('\n\n');
   const content = [{type: 'input_text', text: userText}, ...prep.imgs.slice(0, 6).map(u => ({type: 'input_image', image_url: u}))];
-  const forceWeb = !!window.PHOTOJOB;
-  const steps = t.r === 'profond' ? 15 : t.r === 'raison' ? 8 : 4;
+  const asksWeb = !!window.PHOTOJOB || t.k === 'prix' || /\b(?:internet|sur le web|sur internet|source|sources|actualit[eé]|aujourd'hui|actuellement|prix actuel|compar(?:e|er|aison)|recherche en ligne)\b/i.test(userText);
+  const asksGithub = t.k === 'dev' || /\b(?:github|d[eé]p[oô]t|repo(?:sitory)?|pull request|commit|branche|issue)\b/i.test(userText);
+  const asksSandbox = /\b(?:ex[eé]cute|lance|compile|teste le code|script|terminal|bac [aà] sable)\b/i.test(userText);
+  const steps = t.r === 'profond' ? 8 : t.r === 'raison' ? 4 : 2;
   const tools = [];
-  if (forceWeb || eff.f !== 'glm') {
-    tools.push({type: 'web_search', max_results: t.r === 'rapide' ? 8 : 15});
+  if (asksWeb) {
+    tools.push({type: 'web_search', max_results: t.r === 'rapide' ? 4 : 8});
     tools.push({type: 'fetch_url'});
-    if (t.r !== 'rapide' || t.k === 'app' || t.k === 'projet' || t.k === 'dev') tools.push({type: 'sandbox'});
   }
-  if (S.cfg.ai.gh !== false) tools.push({type: 'connector', id: 'connector_github', server_label: 'github'});
-  const fort = '\n\nFORCE. Tu as les mêmes gestes utiles qu\'un agent : chercher sur le web, ouvrir les pages, calculer ou vérifier dans le bac à sable, et lire ou modifier le dépôt GitHub mikaelkapinova-boop/Devis-Ms-Plomberie-Chauffage- si la demande concerne le code. Pour le Chat développeur GitHub, une modification demandée doit être exécutée réellement avec le connecteur GitHub + sandbox quand les droits le permettent, puis vérifiée et commitée ou proposée en pull request. Ne demande pas de jeton dans le chat.';
-  const body = {model: eff.id, instructions: sysPrompt(t, eff) + fort, input: [...hist, {role: 'user', content}], max_output_tokens: Math.max(mode.tokens, t.r === 'profond' ? 8000 : 4000), max_steps: steps, reasoning: {effort: t.r === 'profond' ? 'high' : mode.effort}};
+  if (asksGithub && S.cfg.ai.gh !== false) tools.push({type: 'connector', id: 'connector_github', server_label: 'github'});
+  if (asksSandbox) tools.push({type: 'sandbox'});
+  const toolInstructions = asksGithub
+    ? '\n\nPour cette demande liée au dépôt, utilise le connecteur GitHub uniquement pour l’action demandée. Ne demande pas de jeton dans le chat.'
+    : asksWeb ? '\n\nRecherche sur le web uniquement les faits actuels demandés et appuie les faits importants sur les sources trouvées.' : '';
+  const tokenBudget = t.r === 'profond' ? 5000 : t.r === 'raison' ? 2400 : 1400;
+  const body = {model: eff.id, instructions: sysPrompt(t, eff) + toolInstructions, input: [...hist, {role: 'user', content}], max_output_tokens: tokenBudget, max_steps: steps, reasoning: {effort: t.r === 'profond' ? 'high' : mode.effort}};
   if (tools.length) body.tools = tools;
   ASBUSY = true; render();
   try {
@@ -440,7 +445,7 @@ async function apiSend(t, txt, clear) {
     }
     if (j._err) {
       const msg = j._st === 429
-        ? 'Perplexity est temporairement à sa limite de débit. J’ai attendu automatiquement avant de réessayer. Réessaie dans quelques instants si le fournisseur maintient encore la limite.'
+        ? 'Perplexity est temporairement à sa limite de débit. Réessaie dans quelques secondes.'
         : j._msg;
       throw new Error(msg);
     }
@@ -449,10 +454,7 @@ async function apiSend(t, txt, clear) {
   } catch (e) { chatPush({r: 'a', t: 'Erreur Perplexity : ' + (e.message || e) + (/401|403|auth/i.test(String(e.message)) ? '\nVérifie ta clé API dans le menu IA.' : ''), via: eff.n}); }
   finally { ASBUSY = false; render(); }
 }
-let API_LANE = Promise.resolve();
 let API_COOLDOWN_UNTIL = 0;
-
-function apiWait(ms) { return new Promise(resolve => setTimeout(resolve, Math.max(0, ms))); }
 
 async function _apiPostOnce(body) {
   /* Perplexity API directe via le proxy Vercel. Sur iPhone/GitHub Pages,
@@ -464,23 +466,22 @@ async function _apiPostOnce(body) {
   const payload = Object.assign({}, body);
   const key = pk();
   if (key) payload.apiKey = key;
-  const r = await fetch(endpoint, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(payload)
-  });
-  let j = {}; try { j = await r.json(); } catch (e) {}
-  if (r.status === 202 && j.id) {
-    for (let n = 0; n < 1200; n++) {
-      await apiWait(1000);
-      const sr = await fetch((typeof mcBase === 'function' ? mcBase() : '') + '/api/jobs/' + encodeURIComponent(j.id), {cache:'no-store'});
-      if (!sr.ok) break;
-      const sj = await sr.json();
-      if (sj.status === 'completed') return sj.result || {};
-      if (sj.status === 'failed') return {_err:1, _st:500, _msg:sj.error || 'La tâche Perplexity a échoué.'};
-    }
-    return {_err:1, _st:504, _msg:'La tâche continue côté serveur. Elle reprendra automatiquement.'};
-  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 52000);
+  let r, j = {};
+  try {
+    r = await fetch(endpoint, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    try { j = await r.json(); } catch (e) {}
+  } catch (error) {
+    if (error && error.name === 'AbortError') return {_err: 1, _st: 504, _msg: 'La réponse dépasse 52 secondes. Passe en mode Rapide ou enlève la recherche Web pour obtenir une réponse plus vite.'};
+    return {_err: 1, _st: 502, _msg: error && error.message || 'Connexion à l’API impossible.'};
+  } finally { clearTimeout(timeout); }
+  if (r.status === 202) return {_err: 1, _st: 504, _msg: 'Le fournisseur a accepté la demande sans fournir la réponse. Relance-la en mode Rapide.'};
   if (!r.ok) {
     const retryRaw = r.headers.get('Retry-After') || (j && (j.retry_after || j.retryAfter));
     const retrySec = Number(retryRaw);
@@ -495,30 +496,14 @@ async function _apiPostOnce(body) {
 }
 
 async function apiPost(body) {
-  /* Filet unique : évite que plusieurs soldats/requêtes frappent
-     simultanément la limite de débit du fournisseur. */
-  const run = async () => {
-    const now = Date.now();
-    if (now < API_COOLDOWN_UNTIL) await apiWait(API_COOLDOWN_UNTIL - now);
-
-    let last = null;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      last = await _apiPostOnce(body);
-      if (!last._err || last._st !== 429) return last;
-
-      const backoff = last._retry_ms || Math.min(1500 * Math.pow(2, attempt), 12000);
-      API_COOLDOWN_UNTIL = Date.now() + backoff;
-      await apiWait(backoff);
-    }
-    /* Ne retente plus en boucle : le prochain appel attendra le cooldown. */
-    return Object.assign(last || {_err: 1, _st: 429}, {
-      _msg: 'Perplexity limite temporairement le débit. L’application a attendu et évité les répétitions inutiles.'
-    });
-  };
-
-  const next = API_LANE.then(run, run);
-  API_LANE = next.catch(() => {});
-  return next;
+  if (Date.now() < API_COOLDOWN_UNTIL) return {_err:1,_st:429,_msg:'Perplexity limite temporairement le débit. Réessaie dans quelques secondes.'};
+  const result = await _apiPostOnce(body);
+  if (result && result._err && result._st === 429) {
+    const wait = Math.max(1000, Math.min(Number(result._retry_ms) || 5000, 15000));
+    API_COOLDOWN_UNTIL = Date.now() + wait;
+    result._msg = 'Perplexity limite temporairement le débit. Réessaie dans quelques secondes.';
+  }
+  return result;
 }
 
 /* ---- Computer dans l'appli : pont local serveur.py (MCP, OAuth) ---- */
@@ -661,7 +646,7 @@ function pxCfg(){
  return c;
 }
 function pxArmyOn(t){var c=pxCfg();return c.ai==="api"&&!(t&&t.ai==="loc")&&!!(c.army||(t&&t.army))}
-iaLabel=function(t){var engine=(t&&t.ai)||pxCfg().ai;return engine==="loc"?"Assistant local · gratuit":"Perplexity API"+(pxArmyOn(t)?" · 🧠 Armée active":"")};
+iaLabel=function(t){var engine=(t&&t.ai)||pxCfg().ai;return engine==="loc"?"Assistant données · local":"Perplexity API"+(pxArmyOn(t)?" · 🧠 Armée active":"")};
 window.pxEngineSet=function(engine){if(engine!=="loc"&&engine!=="api")return;var c=pxCfg(),t=TH();c.ai=engine;c.aiModeV=1;t.ai=engine;if(engine==="api"){c.m="auto";t.m="auto"}else{c.army=false;t.army=false}thSave();save("cfg");render();if(SHEET==="ia")pxSheet()};
 window.pxArmySet=function(on){var c=pxCfg(),t=TH();c.ai="api";c.aiModeV=1;c.army=!!on;t.ai="api";t.army=!!on;t.m="auto";thSave();save("cfg");render();if(SHEET==="ia")pxSheet()};
 window.pxReasonSet=function(v){if(!["rapide","raison","profond"].includes(v))return;var c=pxCfg(),t=TH();c.r=v;t.r=v;thSave();save("cfg");render();if(SHEET==="ia")pxSheet()};
@@ -672,10 +657,10 @@ function pxSheet(){
  var s=$("#sheet");if(!s)return;var c=pxCfg(),t=TH(),army=pxArmyOn(t),key=pk(),n=Math.max(1,Math.min(16,Number(t.ps||c.ps)||6));
  var engine=t.ai||c.ai,reason=t.r||c.r;
  var h="<h2>Moteur de l’assistant<button data-a='close'>Fermer</button></h2><div class='gl'>Choisir le moteur</div><div class='px-list'>";
- h+="<button class='px-mode "+(engine==="loc"?"on":"")+"' data-a='eng' data-v='loc'><span><b>Assistant local · gratuit</b><small>Sans clé API ni IA générative : recherche, calculs et lecture de listes sur cet appareil.</small></span><strong>"+(engine==="loc"?"✓":"")+"</strong></button>";
+  h+="<button class='px-mode "+(engine==="loc"?"on":"")+"' data-a='eng' data-v='loc'><span><b>Assistant données · local</b><small>Recherche précise, totaux, calculs et lecture des documents sans envoyer tes données.</small></span><strong>"+(engine==="loc"?"✓":"")+"</strong></button>";
  h+="<button class='px-mode "+(engine==="api"?"on":"")+"' data-a='eng' data-v='api'><span><b>Perplexity API</b><small>Réponses générées en ligne · clé API requise.</small></span><strong>"+(engine==="api"?"✓":"")+"</strong></button></div>";
  if(engine==="loc"){
-   h+="<p class='note'>L’assistant local consulte les données de cette application et lit les photos sur cet appareil. Les coordonnées reconnues sont enregistrées dans Clients. Aucun message ni photo n’est envoyé à une API. Choisis Perplexity API ci-dessus pour utiliser une clé.</p>";
+    h+="<p class='note'>L’assistant local consulte les données de l’application et lit les photos sur cet appareil. Il ne crée aucune fiche client sans demande explicite et n’envoie rien à une API. Pour les questions générales, choisis Perplexity API.</p>";
  }else{
    h+="<div class='px-card'><div class='px-title'><b>Perplexity API</b><small>Recherche et réponses en ligne dans l’application</small><span>✓</span></div>";
    h+="<div class='px-row'><div><b>Aide de l’armée</b><small>Pyramide d’agents : travail parallèle, vérification et consolidation.</small></div><button class='px-switch "+(army?"on":"")+"' onclick='pxArmySet("+(army?"false":"true")+")'><i></i></button></div></div>";
@@ -702,7 +687,7 @@ var oldSheetAct=sheetAct;sheetAct=function(a,v,b){
 chatV=function(){
  var t=TH(),d=DEM[t.k]||DEM.devis,msgs=t.msgs.slice(-80),off=t.msgs.length-msgs.length,doc=d.mod?S.docs.find(function(x){return x.id===t.doc}):null;
  var engine=(t.ai==="loc"||t.ai==="api")?t.ai:pxCfg().ai;
- var welcome=engine==="loc"?"<div class='bub a'>Bonjour ! Je suis l’assistant local de l’application. Je peux rechercher dans tes devis, factures, clients, achats et planning, lire des listes et préparer une estimation sans clé API. Les demandes compatibles sont traitées sur cet appareil.</div>":"<div class='bub a'>"+esc(d.l)+". "+(d.mod?(doc?esc(doc.num)+" · "+esc(doc.cn||""):"Choisis le document."):"Écris ta demande, ou joins une photo/PDF.")+"</div>";
+  var welcome=engine==="loc"?"<div class='bub a'>Assistant de gestion local : retrouve un numéro de devis, compte les documents, calcule les montants, cherche un client, lis un PDF et prépare un devis à partir d’une liste. Il ne modifie ni n’importe rien sans demande claire.</div>":"<div class='bub a'>"+esc(d.l)+". "+(d.mod?(doc?esc(doc.num)+" · "+esc(doc.cn||""):"Choisis le document."):"Écris ta demande, ou joins une photo/PDF.")+"</div>";
  var placeholder=engine==="loc"?"Pose une question sur tes données ou colle une liste…":"Écris ta demande…";
  var typing=ASBUSY?"<div class='bub a'><span class='typing'><i></i><i></i><i></i></span></div>":"";
  var pills="<button class='pill' onclick=\"sheetOpen('dem')\">"+esc(d.l)+"</button><button class='pill' onclick=\"sheetOpen('ia')\">"+esc(iaLabel(t))+"</button>";
@@ -758,7 +743,7 @@ var css=document.createElement("style");css.textContent=".px-card{background:var
 /* === VERSION 7.18.5 === */
 (function(){
 "use strict";
-var APP_VERSION="7.19.1",APP_RELEASE="Les documents et leurs PDF sources sont enregistrés dans le même espace privé partagé.";
+var APP_VERSION="7.21.0",APP_RELEASE="Montant global HT et tableaux personnalisés dans les devis.";
 window.APP_VERSION=APP_VERSION;
 var appVersionLabel=document.getElementById("appver");if(appVersionLabel)appVersionLabel.textContent="v"+APP_VERSION.split(".").slice(0,2).join(".");
 window.newsShow=function(){var d=document.createElement("div");d.className="news";d.innerHTML="<div><h2>Version "+APP_VERSION+"</h2><p>"+APP_RELEASE+"</p><button class='b' style='width:100%;margin-top:10px' onclick='this.closest(\".news\").remove()'><span>Compris</span></button></div>";d.addEventListener("click",function(e){if(e.target===d)d.remove()});document.body.appendChild(d)};

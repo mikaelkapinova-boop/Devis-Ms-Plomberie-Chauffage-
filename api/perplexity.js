@@ -20,6 +20,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: { message: 'Méthode non autorisée' } });
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 48000);
   try {
     const body = req.body || {};
     const { apiKey, ...payload } = body;
@@ -37,7 +39,8 @@ export default async function handler(req, res) {
         Authorization: 'Bearer ' + key,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
 
     const text = await upstream.text();
@@ -46,8 +49,13 @@ export default async function handler(req, res) {
       .setHeader('Content-Type', upstream.headers.get('content-type') || 'application/json')
       .send(text);
   } catch (error) {
+    if (error?.name === 'AbortError') {
+      return res.status(504).json({error:{message:'Le fournisseur met trop de temps à répondre. Réessaie en mode Rapide ou sans recherche Web.'}});
+    }
     res.status(502).json({
-      error: { message: error?.message || 'Passerelle Perplexity indisponible' }
+      error: { message: 'Passerelle Perplexity indisponible' }
     });
+  } finally {
+    clearTimeout(timeout);
   }
 }

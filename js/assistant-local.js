@@ -162,6 +162,15 @@ function localLooksLikeList(text, hasFile) {
     || (/\n/.test(text) && /^\s*(?:liste|fournitures?|mat[ée]riels?|main[- ]d['’]?oeuvre)\s*:?/im.test(text));
 }
 
+function localAttachmentSummary(extracted) {
+  return (extracted.documents || []).map(document => {
+    const parsed = document.parsed || {}, client = parsed.cli || {}, total = parsed.tot?.ttc;
+    const kind = parsed.type === 'f' ? 'Facture' : parsed.type === 'd' ? 'Devis' : parsed.type === 'x' ? 'Rapport' : 'Document';
+    const details = [parsed.num && `n° ${parsed.num}`, parsed.date && `du ${parsed.date}`, client.name && `client : ${client.name}`, Array.isArray(parsed.lines) && `${parsed.lines.length} ligne(s)`, total != null && total !== '' && Number.isFinite(Number(total)) && `TTC lu : ${new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(Number(total))}`].filter(Boolean);
+    return `${kind} « ${document.name} »${details.length ? ' — '+details.join(' · ') : ''}.`;
+  });
+}
+
 async function smartLocalSend() {
   if (LOCAL_ASSIST_BUSY || ASBUSY) return;
   const textarea = document.getElementById('cin');
@@ -169,14 +178,6 @@ async function smartLocalSend() {
   const files = Array.isArray(ATT) ? ATT.slice() : [];
   if (!text && !files.length) { toast('Écris une demande ou joins un fichier'); return; }
   const thread = typeof TH === 'function' ? TH() : null;
-  if (thread && DEM[thread.k]?.mod && !files.length) {
-    chatPush({r:'u',t:text || '(fichier joint)',att:files.map(a=>({n:a.f.name,k:a.k}))});
-    ATT = [];
-    chatPush({r:'a',t:'Le mode local peut retrouver le document et préparer des lignes, mais il ne modifie pas automatiquement une facture ou un devis existant. Ouvre le document pour le modifier manuellement.',via:'Assistant local'});
-    if (textarea) { textarea.value=''; cinGrow(textarea); }
-    render();
-    return;
-  }
 
   chatPush({r:'u',t:text || '(fichier joint)',att:files.map(a=>({n:a.f.name,k:a.k}))});
   ATT = [];
@@ -185,22 +186,37 @@ async function smartLocalSend() {
   LOCAL_ASSIST_BUSY = true; ASBUSY = true; render();
   try {
     const extracted = await localReadAttachments(files);
-    const clientNotices = localSaveDetectedContacts(extracted);
+    const asksToSaveClient = /\b(?:ajoute|ajouter|enregistre|enregistrer|cr[eé]e|cr[eé]er|importe|importer)\b/i.test(text) && /\b(?:client|contact|fiche)\b/i.test(text);
+    const clientNotices = asksToSaveClient ? localSaveDetectedContacts(extracted) : [];
+    if (files.length && !text) {
+      const summary = localAttachmentSummary(extracted);
+      const answer = [summary.length ? summary.join('\n') : `Fichier(s) reçu(s) : ${files.map(a=>a.f.name).join(', ')}.`, 'Je n’ai rien créé ni enregistré à partir de la pièce jointe. Écris « résume ce document », « prépare un devis » ou « ajoute ce client » pour préciser l’action.', extracted.errors.length ? 'À vérifier : '+extracted.errors.join(' · ') : ''].filter(Boolean).join('\n\n');
+      chatPush({r:'a',t:answer,via:'Assistant local'});
+      return;
+    }
     const input = [text,...extracted.texts].filter(Boolean).join('\n\n').slice(0,50000);
     if (!input) {
       chatPush({r:'a',t:[...clientNotices,`Je n’ai pas pu lire le texte joint.${extracted.errors.length ? '\n'+extracted.errors.join('\n') : ''}\n\nLe fichier n’a pas été envoyé à un service IA externe.`].join('\n\n'),via:'Assistant local'});
       return;
     }
 
-    if (thread && DEM[thread.k]?.mod) {
-      const limitation = 'Le mode local peut lire les coordonnées et créer une fiche client, mais il ne modifie pas automatiquement un devis ou une facture existants.';
+    if (thread && DEM[thread.k]?.mod && /\b(?:modifie|modifier|change|changer|ajoute|ajouter|supprime|supprimer|remplace|remplacer)\b/i.test(text)) {
+      const limitation = 'Le mode local peut rechercher et analyser les documents, mais il ne modifie pas directement un devis ou une facture existants. Ouvre ce document dans l’application pour appliquer le changement.';
       chatPush({r:'a',t:[...clientNotices,limitation].join('\n\n'),via:'Assistant local'});
       return;
     }
 
     const core = await localCore();
     let quote = null;
-    const explicitDocumentRequest = /\b(?:devis|facture|chiffr|chiffrage|chiffrer|preparer|prepare|creer|cree)\b/i.test(text);
+    const explicitDocumentRequest = /\b(?:cr[eé]e|cr[eé]er|pr[eé]pare|pr[eé]parer|[eé]tablis|[eé]tablir|g[eé]n[eé]re|g[eé]n[eé]rer|fais|faire|chiffre|chiffrer)\b/i.test(text) && /\b(?:devis|facture|chiffrage)\b/i.test(text);
+    const asksSummary = /\b(?:r[eé]sum[eé]|analyse|analyser|extrais|extraire|lis|lire|d[eé]taille|d[eé]tailler)\b/i.test(text);
+    if (files.length && asksSummary && !explicitDocumentRequest) {
+      const summary = localAttachmentSummary(extracted);
+      if (summary.length) {
+        chatPush({r:'a',t:[...clientNotices,...summary,extracted.errors.length ? 'Fichiers à revoir : '+extracted.errors.join(' · ') : 'Les données restent sur l’appareil tant que tu ne demandes pas leur import.'].join('\n\n'),via:'Assistant local'});
+        return;
+      }
+    }
     if (files.length && explicitDocumentRequest) {
       const parsedFiles = extracted.documents.map(x=>x.parsed).filter(x=>x && (x.type==='d'||x.type==='f'));
       const rows = parsedFiles.flatMap(d=>d.lines||[]).filter(x=>x.des).map(x=>({d:x.des,q:Number(x.q)||1,p:Number(x.pu)||''}));

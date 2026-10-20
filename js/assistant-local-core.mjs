@@ -190,6 +190,8 @@ function queryMonth(query, today) {
 
 const recordMatches = (corpus, kind) => corpus.filter(x => x.kind === kind).sort((a,b)=>dateOrder(b.date).localeCompare(dateOrder(a.date)));
 const previewMatches = list => list.slice(0,6).map(x=>({id:x.target||'',v:x.v||'h',label:x.label}));
+const kindForQuery = q => /\bdevis\b/.test(q)?'devis':/\bfacture/.test(q)?'facture':/\brapport/.test(q)?'rapport':/\bclient/.test(q)?'client':/\b(?:tarif|catalogue|fourniture|main d oeuvre)/.test(q)?'tarif':/\b(?:planning|agenda|intervention|rdv)/.test(q)?'planning':/\b(?:achat|depense|ticket|fournisseur)/.test(q)?'dépense':'';
+const normalizedRef = value => normalizeLocal(value).replace(/^devis\b/, 'dev').replace(/^facture\b/, 'fac').replace(/^rapport\b/, 'rap').replace(/\s+/g, '-').replace(/-+/g, '-');
 
 export async function answerLocal(query, state = {}, structuredQuote = null) {
   const original = String(query || '').trim();
@@ -197,12 +199,16 @@ export async function answerLocal(query, state = {}, structuredQuote = null) {
   const corpus = buildLocalCorpus(state);
   if (!q) return {text:'Écris une recherche, colle une liste de matériel ou demande un calcul. Aucune question ne part vers un service IA.'};
 
-  const ref = original.match(/\b(?:DEV|FAC|RAP)[-_ ]\d{4}[-_ ][A-Z0-9-]{1,}\b/i)?.[0];
-  if (ref && /\b(?:ouvre|ouvrir|voir|affiche|montre)\b/.test(q)) {
-    const key = normalizeLocal(ref).replace(/ /g,'');
-    const found = corpus.find(x => x.number && normalizeLocal(x.number).replace(/ /g,'') === key);
+  const ref = original.match(/\b(?:DEV(?:IS)?|FAC(?:TURE)?|RAP(?:PORT)?)[\s_-]*(?:\d{2,4}[\s_-]\d{1,6}|[A-Z0-9]{2,}(?:[\s_-][A-Z0-9]+){1,3}|\d{2,6})\b/i)?.[0];
+  if (ref) {
+    const key = normalizedRef(ref);
+    const found = corpus.find(x => {
+      if (!x.number) return false;
+      const number = normalizedRef(x.number);
+      return number === key || key.startsWith(number + '-');
+    });
     if (found) return {text:`${found.kind[0].toUpperCase()+found.kind.slice(1)} ${found.number} · ${found.label}.`, matches:previewMatches([found])};
-    return {text:`Je ne trouve pas le document ${ref} dans les données de cet appareil.`};
+    if (/\b(?:ouvre|ouvrir|voir|affiche|montre|cherche|trouve|retrouve)\b/.test(q)) return {text:`Je ne trouve pas le document ${ref} dans les données partagées chargées par l’application.`};
   }
 
   const direct = q.match(/^(?:(?:va|vas) (?:a|au|aux|sur) |ouvre |ouvre la page )(?:mes |la |le |les |l )?([a-z ]+)$/);
@@ -224,11 +230,21 @@ export async function answerLocal(query, state = {}, structuredQuote = null) {
     return {text:`J’ai reconnu ${rows.length} ligne(s) sur cet appareil. ${missing ? `${missing} prix sont manquants ou à vérifier. ` : ''}Vérifie les lignes puis choisis « Nouveau devis » ou « Nouvelle facture » pour les enregistrer.`, quote:structuredQuote};
   }
 
-  if (/\b(?:calcule|calculer|combien fait|fais le calcul)\b/.test(q)) {
-    const expression = original.replace(/.*?\b(?:calcule|calculer|combien fait|fais le calcul)\b/i,'').replace(/[=?€]/g,'').trim();
+  if (/\b(?:calcule|calculer|combien fait|combien font|fais le calcul|r[eé]sultat de)\b/.test(q) || /\b\d[\d ,.]*\s*(?:fois|plus|moins|multipli[eé] par|divis[eé] par|[+*/×x÷−-])\s*\d/i.test(original) || /\d\s*%\s*de\s*\d/i.test(original)) {
+    let expression = original.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/^.*?\b(?:calcule|calculer|combien(?: fait| font)?|fais le calcul|resultat de)\b/, '')
+      .replace(/\b(?:multiplie|multipliee) par\b/g, '*').replace(/\bfois\b/g, '*')
+      .replace(/\bplus\b/g, '+').replace(/\bmoins\b/g, '-')
+      .replace(/\b(?:divise|divisee) par\b/g, '/').replace(/\bvirgule\b/g, '.')
+      .replace(/\s*%\s*de\s*/g, '/100*').replace(/\b(?:euros?|euro)\b/g, '').replace(/[=?]/g, '').trim();
+    const percent = original.match(/(\d+(?:[,.]\d+)?)\s*%\s*de\s*(\d+(?:[,.]\d+)?)/i);
+    if (percent) expression = `${percent[1].replace(',','.')}/100*${percent[2].replace(',','.')}`;
     const value = calculateLocal(expression);
-    if (value !== null) return {text:`Résultat : ${money(value)}.`};
-    return {text:'Je n’ai pas compris le calcul. Utilise seulement des nombres, +, −, ×, ÷ et des parenthèses.'};
+    if (value !== null) {
+      const formatted = new Intl.NumberFormat('fr-FR', {maximumFractionDigits:2}).format(value);
+      return {text:`Résultat : ${formatted}${/[€]|\beuros?\b/i.test(original)?' €':''}.`};
+    }
+    return {text:'Je n’ai pas compris le calcul. Donne une expression comme « 18 fois 42 », « 120 + 35 » ou « 20 % de 150 ».'};
   }
 
   if (/impay|non pay|reste a payer|a encaisser|facture.*attente/.test(q)) {
@@ -265,8 +281,38 @@ export async function answerLocal(query, state = {}, structuredQuote = null) {
     return {text:`Les factures marquées payées représentent ${money(total)} au total. Pour l’estimation du bénéfice après cotisations et achats, ouvre la page Bénéfices.` ,page:q.includes('benefice')?'r':undefined};
   }
 
-  const kind = /\b(?:devis)\b/.test(q)?'devis':/\b(?:facture|factures)\b/.test(q)?'facture':/\b(?:rapport|rapports)\b/.test(q)?'rapport':/\b(?:client|clients)\b/.test(q)?'client':/\b(?:tarif|tarifs|catalogue|fourniture|main d oeuvre)\b/.test(q)?'tarif':/\b(?:planning|agenda|intervention|rdv)\b/.test(q)?'planning':/\b(?:achat|depense|ticket|fournisseur)\b/.test(q)?'dépense':'';
-  const genericList = /\b(?:liste|lister|montre|affiche|mes|retrouve|chercher|cherche|recherche|trouve|trouver|voir)\b/.test(q);
+  const kind = kindForQuery(q);
+  const asksCount = /\b(?:combien|nombre|quantite|total de|total des|compte)\b/.test(q);
+  const asksAmount = /\b(?:montant|somme|valent|coutent|cout|chiffre|euros?)\b/.test(q) || /\b(?:total|montant)\b/.test(q);
+  if (kind && (asksCount || asksAmount) && ['devis','facture','rapport','client'].includes(kind)) {
+    const client = (state.clients || []).find(c => {
+      const name = normalizeLocal(c.n);
+      return name.length > 2 && (` ${q} `).includes(` ${name} `);
+    });
+    if (kind === 'client') {
+      const clients = recordMatches(corpus,'client');
+      return {text:`${clients.length} client(s) enregistré(s).`,matches:previewMatches(clients)};
+    }
+    const records = (state.docs || []).filter(d => kind === 'facture' ? d.t === 'f' : kind === 'devis' ? d.t !== 'f' : false);
+    const reports = kind === 'rapport' ? (state.reports || state.rep || []) : [];
+    let selected = client ? records.filter(d => normalizeLocal(d.cn).includes(normalizeLocal(client.n)) || d.cid === client.id) : records;
+    if (kind === 'facture' && /\b(?:payee|reglee|encaissee)\b/.test(q)) selected = selected.filter(d => d.paid);
+    if (kind === 'rapport') selected = reports;
+    const list = kind === 'rapport' ? selected.map(d=>corpus.find(x=>x.kind==='rapport'&&x.id===d.id)).filter(Boolean) : selected.map(d=>corpus.find(x=>x.kind===kind&&x.id===d.id)).filter(Boolean);
+    if (asksAmount && kind !== 'rapport') {
+      const total = selected.reduce((sum,d)=>sum+asNumber(d.total),0);
+      const who = client ? ` pour ${client.n}` : '';
+      return {text:`Total enregistré des ${kind === 'devis'?'devis':'factures'}${who} : ${money(total)} (${selected.length} document(s)).`,matches:previewMatches(list)};
+    }
+    const who = client ? ` pour ${client.n}` : '';
+    return {text:`${selected.length} ${kind}(s) enregistré(s)${who}.`,matches:previewMatches(list)};
+  }
+  if (kind && asksCount) {
+    const records = recordMatches(corpus,kind);
+    return {text:`${records.length} ${kind === 'tarif'?'tarif':kind}(s) enregistré(s).`,matches:previewMatches(records)};
+  }
+
+  const genericList = /\b(?:liste|lister|montre|affiche|mes|retrouve|chercher|cherche|recherche|trouve|trouver|voir|tous|toutes|quels|quelles|enregistre|enregistres)\b/.test(q);
   if (genericList && kind) {
     const filtered = recordMatches(corpus,kind);
     return {text:filtered.length?`${filtered.length} résultat(s) dans ${kind === 'tarif'?'Mes tarifs':kind === 'dépense'?'les achats':kind+'s'}.`:`Aucun ${kind} enregistré pour le moment.`,matches:previewMatches(filtered)};
