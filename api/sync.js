@@ -118,13 +118,18 @@ module.exports = async function handler(req, res) {
     }
     const name = String(error && error.name || 'UnknownError');
     const status = Number(error && (error.status || error.statusCode) || 0);
-    console.error('Cloud sync error:', {method: req.method, name, status});
+    // GitHubStorageError messages are fixed, secret-free diagnostics. Preserve
+    // them so a private-repository/permission failure can be repaired without
+    // exposing credentials or the stored file contents.
+    const githubMessage = error instanceof githubStorage.GitHubStorageError ? String(error.message || '') : '';
+    console.error('Cloud sync error:', {method: req.method, name, status, ...(githubMessage ? {reason: githubMessage} : {})});
     if (status === 401 || status === 403 || /BlobAccess|InvalidToken/i.test(name)) {
       return res.status(503).json({error: 'Accès au stockage en ligne refusé. La configuration du stockage Vercel Blob est à vérifier.'});
     }
     if (/BlobStoreNotFound|Suspended/i.test(name)) {
       return res.status(503).json({error: 'Le stockage Vercel Blob est introuvable ou suspendu.'});
     }
+    if (githubMessage) return res.status(status >= 500 ? status : 502).json({error: githubMessage});
     return res.status(502).json({error: 'Stockage en ligne temporairement indisponible. Le serveur a enregistré le motif.'});
   }
 };
