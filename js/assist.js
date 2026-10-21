@@ -459,6 +459,7 @@ let API_COOLDOWN_UNTIL = 0;
 async function _apiPostOnce(body) {
   /* Perplexity API directe via le proxy Vercel. Sur iPhone/GitHub Pages,
      il ne faut jamais dépendre du serveur local Computer/localhost. */
+  if (!CLOUD_SYNC_TOKEN) return {_err: 1, _st: 401, _msg: 'Connecte-toi à l’application pour utiliser l’assistant.'};
   const host = String(location.hostname || '');
   const endpoint = /github\.io$/i.test(host)
     ? 'https://devis-ms-plomberie-chauffage.vercel.app/api/perplexity'
@@ -472,7 +473,7 @@ async function _apiPostOnce(body) {
   try {
     r = await fetch(endpoint, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + CLOUD_SYNC_TOKEN},
       body: JSON.stringify(payload),
       signal: controller.signal
     });
@@ -743,7 +744,7 @@ var css=document.createElement("style");css.textContent=".px-card{background:var
 /* === VERSION 7.18.5 === */
 (function(){
 "use strict";
-var APP_VERSION="7.22.3",APP_RELEASE="Démarrage de l’application corrigé sur iPhone.";
+var APP_VERSION="7.22.4",APP_RELEASE="Assistant accessible après connexion.";
 window.APP_VERSION=APP_VERSION;
 var appVersionLabel=document.getElementById("appver");if(appVersionLabel)appVersionLabel.textContent="v"+APP_VERSION.split(".").slice(0,2).join(".");
 window.newsShow=function(){var d=document.createElement("div");d.className="news";d.innerHTML="<div><h2>Version "+APP_VERSION+"</h2><p>"+APP_RELEASE+"</p><button class='b' style='width:100%;margin-top:10px' onclick='this.closest(\".news\").remove()'><span>Compris</span></button></div>";d.addEventListener("click",function(e){if(e.target===d)d.remove()});document.body.appendChild(d)};
