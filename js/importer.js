@@ -449,7 +449,31 @@ function parse(text,name,rowsIn){
   for(const r of top){const ds=datesIn(r.t);if(!ds.length)continue;
     if(/valid|[ée]ch[ée]ance|valable|\bdue\b/i.test(r.t)){due=due||ds[0]}else if(!date||/date/i.test(r.t))date=date&&!/date/i.test(r.t)?date:ds[0]}
   const{cli,addrs}=findClient(L),lines=parseItems(L,type),tot=parseTotals(L),warns=[],repairs=[];
-  const sum=r2(lines.reduce((a,l)=>a+l.q*l.pu,0));
+  let sum=r2(lines.reduce((a,l)=>a+l.q*l.pu,0));
+  // Répare un zéro final perdu par l'OCR uniquement si le total HT confirme
+  // une et une seule correction exacte. Ne jamais deviner à partir du seul prix.
+  if(tot.ht!=null&&sum>0){
+    const discount=Math.min(99.999,Math.max(0,nv(tot.rmPct)));
+    const target=discount? r2(tot.ht/(1-discount/100)) : r2(tot.ht);
+    if(Math.abs(sum-target)>.05){
+      const candidates=[];
+      lines.forEach((line,index)=>{
+        const oldPrice=nv(line.pu),qty=nv(line.q);
+        if(!(oldPrice>0&&qty>0))return;
+        [10,100,1000].forEach(factor=>{
+          const price=r2(oldPrice*factor);
+          const revised=r2(sum-qty*oldPrice+qty*price);
+          if(Math.abs(revised-target)<=.05)candidates.push({index,price,revised});
+        });
+      });
+      const unique=candidates.filter((c,i,a)=>a.findIndex(x=>x.index===c.index&&x.price===c.price)===i);
+      if(unique.length===1){
+        const c=unique[0],line=lines[c.index];
+        line.pu=c.price;line.ok=true;line.ocrRepaired=true;sum=c.revised;
+        repairs.push('prix de ligne (zéro manquant confirmé par le total HT)');
+      }
+    }
+  }
   const dropLeadingOcrGlyph=v=>{const s=String(v==null?'':v);if(!/^\d{4,}(?:\.\d{1,2})?$/.test(s))return null;const n=pn(s.slice(1));return isFinite(n)?r2(n):null};
   const matches=(a,b)=>a!=null&&b!=null&&Math.abs(a-b)<=.01;
   if(tot.ht!=null&&sum>0&&!matches(tot.ht,sum)&&matches(dropLeadingOcrGlyph(tot.ht),sum)){tot.ht=sum;repairs.push('sous-total')}
