@@ -1185,20 +1185,20 @@ function layoutSet(k,v){const d=cur();if(!d)return;if(!d.layout)d.layout=layoutD
 function layoutReset(){const d=cur();if(!d)return;delete d.layout;save('docs');layoutOpen()}
 function layoutRender(){const d=cur(),l={...layoutDefaults(),...(d.layout||{})};let e=document.querySelector('#layout-studio');if(e)e.remove();e=document.createElement('div');e.id='layout-studio';e.innerHTML='<div class="ls-panel"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div><b style="font-size:18px">Studio de mise en page libre</b><div class="mu" style="font-size:12px;margin-top:4px">Réglages avancés pour ce document uniquement. Le modèle d’origine n’est pas modifié.</div></div><button class="b gh sm" type="button" onclick="layoutClose()">Fermer</button></div>'+
 '<h4 style="margin:16px 0 8px">Style général</h4><div class="ls-controls">'+
-'<label>Couleur d’accent<input type="color" value="'+l.accent+'" oninput="layoutSet(\\'accent\\',this.value)"></label>'+
-'<label>Couleur des titres<input type="color" value="'+l.heading+'" oninput="layoutSet(\\'heading\\',this.value)"></label>'+
-'<label>Couleur des bordures<input type="color" value="'+l.border+'" oninput="layoutSet(\\'border\\',this.value)"></label>'+
-'<label>Police CSS<input value="'+esc(l.fontFamily)+'" oninput="layoutSet(\\'fontFamily\\',this.value)" placeholder="Helvetica, Arial, sans-serif"></label>'+
-'<label>Taille du texte (px)<input type="number" step="0.5" value="'+l.fontSize+'" oninput="layoutSet(\\'fontSize\\',this.value)"></label>'+
-'<label>Interligne<input type="number" step="0.05" value="'+l.lineHeight+'" oninput="layoutSet(\\'lineHeight\\',this.value)"></label>'+
-'<label>Marges gauche/droite (px)<input type="number" step="1" value="'+l.margin+'" oninput="layoutSet(\\'margin\\',this.value)"></label>'+
-'<label>Marge haute (px)<input type="number" step="1" value="'+l.top+'" oninput="layoutSet(\\'top\\',this.value)"></label>'+
-'<label>Marge basse (px)<input type="number" step="1" value="'+l.bottom+'" oninput="layoutSet(\\'bottom\\',this.value)"></label>'+
-'<label>Largeur du logo (px)<input type="number" step="1" value="'+l.logoWidth+'" oninput="layoutSet(\\'logoWidth\\',this.value)"></label>'+
-'<label>Taille du titre principal (px)<input type="number" step="1" value="'+l.titleSize+'" oninput="layoutSet(\\'titleSize\\',this.value)"></label>'+
-'<label>Espacement des cellules du tableau (px)<input type="number" step="0.5" value="'+l.cellPadding+'" oninput="layoutSet(\\'cellPadding\\',this.value)"></label></div>'+
+'<label>Couleur d’accent<input type="color" value="'+l.accent+'" oninput="layoutSet(\'accent\',this.value)"></label>'+
+'<label>Couleur des titres<input type="color" value="'+l.heading+'" oninput="layoutSet(\'heading\',this.value)"></label>'+
+'<label>Couleur des bordures<input type="color" value="'+l.border+'" oninput="layoutSet(\'border\',this.value)"></label>'+
+'<label>Police CSS<input value="'+esc(l.fontFamily)+'" oninput="layoutSet(\'fontFamily\',this.value)" placeholder="Helvetica, Arial, sans-serif"></label>'+
+'<label>Taille du texte (px)<input type="number" step="0.5" value="'+l.fontSize+'" oninput="layoutSet(\'fontSize\',this.value)"></label>'+
+'<label>Interligne<input type="number" step="0.05" value="'+l.lineHeight+'" oninput="layoutSet(\'lineHeight\',this.value)"></label>'+
+'<label>Marges gauche/droite (px)<input type="number" step="1" value="'+l.margin+'" oninput="layoutSet(\'margin\',this.value)"></label>'+
+'<label>Marge haute (px)<input type="number" step="1" value="'+l.top+'" oninput="layoutSet(\'top\',this.value)"></label>'+
+'<label>Marge basse (px)<input type="number" step="1" value="'+l.bottom+'" oninput="layoutSet(\'bottom\',this.value)"></label>'+
+'<label>Largeur du logo (px)<input type="number" step="1" value="'+l.logoWidth+'" oninput="layoutSet(\'logoWidth\',this.value)"></label>'+
+'<label>Taille du titre principal (px)<input type="number" step="1" value="'+l.titleSize+'" oninput="layoutSet(\'titleSize\',this.value)"></label>'+
+'<label>Espacement des cellules du tableau (px)<input type="number" step="0.5" value="'+l.cellPadding+'" oninput="layoutSet(\'cellPadding\',this.value)"></label></div>'+
 '<h4 style="margin:18px 0 8px">CSS personnalisé — contrôle avancé</h4><p class="mu" style="font-size:12px">Modifiez librement les blocs avec du CSS : position, largeur, hauteur, alignement, bordures, tableaux, logo, titres, espacements et règles d’impression. Ces règles s’appliquent à l’aperçu et au PDF de ce document. Exemple : <code>.pd .ph { align-items: flex-start; }</code></p>'+
-'<label>Votre CSS<textarea id="ls-custom-css" rows="8" spellcheck="false" placeholder=".pd .ph { gap: 24px; }&#10;.pd table { width: 100%; }&#10;.pd .pt { letter-spacing: 1px; }" oninput="layoutSet(\\'customCss\\',this.value)">'+esc(l.customCss||'')+'</textarea></label>'+
+'<label>Votre CSS<textarea id="ls-custom-css" rows="8" spellcheck="false" placeholder=".pd .ph { gap: 24px; }&#10;.pd table { width: 100%; }&#10;.pd .pt { letter-spacing: 1px; }" oninput="layoutSet(\'customCss\',this.value)">'+esc(l.customCss||'')+'</textarea></label>'+
 '<div class="ls-actions"><button class="b gh" type="button" onclick="layoutReset()">Réinitialiser ce document</button><button class="b cu" type="button" onclick="layoutClose()">Terminer</button></div><small id="ls-saved" class="mu">Modifications enregistrées automatiquement</small>'+
 '<div class="ls-preview"><div class="ls-page" id="ls-preview-page">'+cd(d)+'</div></div></div>';document.body.appendChild(e)}
 function pvo(){$('#pvs').innerHTML=cd(cur());$('#pv').classList.add('o');document.body.classList.add('lk');pvf()}
