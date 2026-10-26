@@ -697,8 +697,8 @@ class Gestionnaire(BaseHTTPRequestHandler):
             try:
                 status, _, raw = http_json("http://127.0.0.1:11434/api/tags", timeout=3)
                 data = json.loads(raw.decode("utf-8")) if status == 200 else {}
-                ready = any(x.get("name") == "qwen2.5:3b" for x in data.get("models", []))
-                return self._json(200, {"ok": ready, "model": "qwen2.5:3b" if ready else "absent"})
+                ready = any(x.get("name") == "qwen3.5:0.8b" for x in data.get("models", []))
+                return self._json(200, {"ok": ready, "model": "qwen3.5:0.8b" if ready else "absent"})
             except Exception:
                 return self._json(503, {"ok": False, "error": {"message": "Ollama ne répond pas sur ce PC."}})
         if u.path == "/api/status":
@@ -787,7 +787,7 @@ class Gestionnaire(BaseHTTPRequestHandler):
                     temperature = float(d.get("temperature") or 0.2)
                 except (TypeError, ValueError):
                     return self._json(400, {"error": {"message": "Paramètres du modèle invalides."}})
-                payload = {"model": "qwen2.5:3b", "stream": False, "keep_alive": "5m", "options": {
+                payload = {"model": "qwen3.5:0.8b", "stream": False, "think": False, "keep_alive": "5m", "options": {
                     "num_ctx": 6144,
                     "num_thread": 3,
                     "num_predict": max(128, min(1400, requested_tokens)),
