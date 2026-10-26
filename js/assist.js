@@ -638,9 +638,11 @@ pwa = function () {
 /* === MS PLOMBERIE — IA LOCALE ORACLE === */
 (function(){
 "use strict";
+var PX_BRIDGE_STORAGE_KEY="devis_private_assistant_bridge_v1";
 function pxCfg(){
  if(!S.cfg.as||typeof S.cfg.as!=="object")S.cfg.as={k:"devis",ai:"ollama",m:"auto",r:"rapide",ps:1,army:false,webSearch:true,aiModeV:4};
  var c=S.cfg.as,migrated=false;
+ try{var savedBridge=localStorage.getItem(PX_BRIDGE_STORAGE_KEY);if(savedBridge!==null)c.bridgeUrl=savedBridge;else if(c.bridgeUrl)localStorage.setItem(PX_BRIDGE_STORAGE_KEY,String(c.bridgeUrl))}catch(e){}
  if(S.cfg.pk){S.cfg.pk="";migrated=true}
  if(S.cfg.px){S.cfg.px="";migrated=true}
  if(S.cfg.ai&&S.cfg.ai.key){S.cfg.ai.key="";migrated=true}
@@ -660,14 +662,14 @@ window.pxEngineSet=function(){var c=pxCfg(),t=TH();c.ai="ollama";c.aiModeV=4;t.a
 window.pxArmySet=function(){toast("Qwen3.5 tourne localement sur ce PC, une demande à la fois.")};
 window.pxReasonSet=function(v){if(!["rapide","raison","profond"].includes(v))return;var c=pxCfg(),t=TH();c.r=v;t.r=v;thSave();save("cfg");render();if(SHEET==="ia")pxSheet()};
 window.pxWebToggle=function(on){var c=pxCfg();c.webSearch=!!on;save("cfg");if(SHEET==="ia")pxSheet()};
-window.pxBridgeSave=function(){var input=$("#px-bridge-url"),raw=String(input&&input.value||"").trim(),c=pxCfg();if(!raw){c.bridgeUrl="";save("cfg");toast("Lien privé supprimé. L’IA utilisera ce PC.");pxSheet();return}var u;try{u=new URL(raw)}catch(e){return toast("Adresse de relais invalide.")}if(u.protocol!=="https:"||u.username||u.password||u.search||u.hash||u.pathname!=="/"||!(u.hostname==="ts.net"||u.hostname.toLowerCase().endsWith(".ts.net")))return toast("Utilise l’adresse HTTPS privée Tailscale du PC, en .ts.net.");c.bridgeUrl=u.origin;save("cfg");toast("Adresse privée enregistrée.");pxSheet()};
+window.pxBridgeSave=function(){var input=$("#px-bridge-url"),raw=String(input&&input.value||"").trim(),c=pxCfg();if(!raw){c.bridgeUrl="";try{localStorage.removeItem(PX_BRIDGE_STORAGE_KEY)}catch(e){}save("cfg");toast("Lien privé supprimé. L’IA utilisera ce PC.");pxSheet();return}var u;try{u=new URL(raw)}catch(e){return toast("Adresse de relais invalide.")}if(u.protocol!=="https:"||u.username||u.password||u.search||u.hash||u.pathname!=="/"||!(u.hostname==="ts.net"||u.hostname.toLowerCase().endsWith(".ts.net")))return toast("Utilise l’adresse HTTPS privée Tailscale du PC, en .ts.net.");try{localStorage.setItem(PX_BRIDGE_STORAGE_KEY,u.origin)}catch(e){return toast("Le navigateur a refusé l’enregistrement sur cet appareil.")}c.bridgeUrl=u.origin;save("cfg");toast("Adresse privée enregistrée sur cet appareil.");pxSheet()};
 var pxBoot=boot;boot=async function(){var r=await pxBoot.apply(this,arguments);pxCfg();render();return r};
 
 function pxSheet(){
  var s=$("#sheet");if(!s)return;var c=pxCfg(),t=TH();
  var reason=t.r||c.r;
  var h="<h2>Assistant IA<button data-a='close'>Fermer</button></h2><div class='px-card'><div class='px-title'><b>Qwen3.5 0.8B</b><span>Sur ce PC</span></div><small class='mu'>Ollama exécute le modèle sur ton ASUS. Le PC doit rester allumé avec Ollama et le relais Devis MS ouverts.</small><button class='b gh sm' style='width:100%;margin-top:10px' onclick='pxOllamaCheck()'>Vérifier la connexion au PC</button></div>";
- h+="<div class='px-card'><b>Connexion privée depuis l’iPhone</b><small>Pour utiliser le modèle du PC depuis le téléphone, les deux appareils doivent être connectés au même réseau privé Tailscale. Colle ici l’adresse HTTPS du PC en .ts.net.</small><input id='px-bridge-url' type='url' inputmode='url' autocomplete='off' autocapitalize='none' spellcheck='false' placeholder='https://mon-pc.mon-reseau.ts.net' value='"+esc(c.bridgeUrl||"")+"' style='width:100%;margin-top:9px'><button class='b gh sm' style='width:100%;margin-top:8px' onclick='pxBridgeSave()'>Enregistrer le lien privé</button></div>";
+ h+="<div class='px-card'><b>Connexion privée depuis l’iPhone</b><small>Pour utiliser le modèle du PC depuis le téléphone, les deux appareils doivent être connectés au même réseau privé Tailscale. Colle ici l’adresse HTTPS du PC en .ts.net.</small><input id='px-bridge-url' type='url' inputmode='url' autocomplete='off' autocapitalize='none' spellcheck='false' placeholder='https://mon-pc.mon-reseau.ts.net' value='"+esc(c.bridgeUrl||"")+"' style='width:100%;margin-top:9px'><button class='b gh sm' style='width:100%;margin-top:8px' onclick='pxBridgeSave()'>Enregistrer le lien privé</button>"+(c.bridgeUrl?"<div role='status' style='margin-top:9px;padding:10px 12px;border-radius:11px;background:rgba(41,160,91,.16);color:#48b66d;font-weight:700'>✅ Lien privé enregistré sur cet iPhone</div>":"")+"</div>";
  h+="<div class='gl'>Mode de réponse</div><div class='px-list'>";
  [["rapide","Rapide","Priorité au délai de réponse"],["raison","Raisonnement","Plus de contexte pour les tâches complexes"],["profond","Approfondi","Analyse plus longue selon la puissance du PC"]].forEach(function(o){h+="<button class='px-mode "+(reason===o[0]?"on":"")+"' onclick=\"pxReasonSet('"+o[0]+"')\"><span><b>"+o[1]+"</b><small>"+o[2]+"</small></span><strong>"+(reason===o[0]?"✓":"")+"</strong></button>"});
  h+="</div>";
@@ -814,10 +816,10 @@ window.asSend=asSend;
 var css=document.createElement("style");css.textContent=".px-card{background:var(--cd);border-radius:18px;padding:14px;box-shadow:0 0 0 1px var(--ln);margin-bottom:10px}.px-title{display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--ln)}.px-title b{display:block;font-size:18px}.px-title small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.px-title span{margin-left:auto;color:var(--ok);font-weight:700}.px-row{display:flex;align-items:center;gap:12px;padding-top:13px}.px-row>div{flex:1}.px-row b{display:block}.px-row small{display:block;color:var(--mu);font-size:12px;line-height:1.3;margin-top:2px}.px-switch{width:52px;height:30px;border:0;border-radius:16px;padding:3px;background:#777}.px-switch i{display:block;width:24px;height:24px;border-radius:50%;background:#fff;transition:.18s}.px-switch.on{background:var(--ok)}.px-switch.on i{transform:translateX(22px)}.px-list{background:var(--cd);border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px var(--ln)}.px-mode{display:flex;align-items:center;gap:12px;width:100%;padding:14px;border:0;border-bottom:1px solid var(--ln);background:var(--cd);color:var(--ink);text-align:left;font:inherit}.px-mode:last-child{border-bottom:0}.px-mode.on{background:color-mix(in srgb,var(--ac) 10%,var(--cd))}.px-mode span{flex:1}.px-mode b{display:block}.px-mode small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.px-mode strong{color:var(--ac)}.px-key{background:var(--cd);padding:10px;border-radius:14px;box-shadow:0 0 0 1px var(--ln)}.px-key input{width:100%;margin-bottom:8px}.px-key .b{width:100%}.px-ok{padding:11px 13px;border-radius:13px;background:color-mix(in srgb,var(--ok) 12%,var(--cd));color:var(--ok);font-size:13px}.px-pyramid{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.px-pyramid span{font-size:11px;padding:6px 8px;background:var(--in);border:1px solid var(--ln);border-radius:9px;color:var(--mu)}";document.head.appendChild(css);
 })();
 
-/* === VERSION 7.30.0 === */
+/* === VERSION 7.32.0 === */
 (function(){
 "use strict";
-var APP_VERSION="7.30.0",APP_RELEASE="Assistant en page dédiée, aperçu personnalisable et liaison privée configurable entre l’iPhone et le modèle local du PC.";
+var APP_VERSION="7.32.0",APP_RELEASE="Enregistrement de l’adresse Tailscale sur l’iPhone avec confirmation visible.";
 window.APP_VERSION=APP_VERSION;
 var appVersionLabel=document.getElementById("appver");if(appVersionLabel)appVersionLabel.textContent="v"+APP_VERSION.split(".").slice(0,2).join(".");
 window.newsShow=function(){var d=document.createElement("div");d.className="news";d.innerHTML="<div><h2>Version "+APP_VERSION+"</h2><p>"+APP_RELEASE+"</p><button class='b' style='width:100%;margin-top:10px' onclick='this.closest(\".news\").remove()'><span>Compris</span></button></div>";d.addEventListener("click",function(e){if(e.target===d)d.remove()});document.body.appendChild(d)};
