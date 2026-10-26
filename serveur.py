@@ -17,6 +17,7 @@ Lancement   : python serveur.py
 
 import base64
 import hashlib
+from html.parser import HTMLParser
 import json
 import os
 import re
@@ -46,7 +47,8 @@ HOTE = "127.0.0.1"
 PORT = 8765
 DOSSIER = os.path.dirname(os.path.abspath(__file__))
 FICHIER_TOKENS = os.path.join(DOSSIER, "tokens.json")  # ignoré par git (.gitignore)
-ORIGINES = {"https://mikaelkapinova-boop.github.io", f"http://{HOTE}:{PORT}", f"http://localhost:{PORT}"}
+ORIGINES = {"https://mikaelkapinova-boop.github.io", "https://devis-ms-plomberie-chauffage.vercel.app",
+            f"http://{HOTE}:{PORT}", f"http://localhost:{PORT}"}
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
          ".json": "application/json; charset=utf-8", ".webmanifest": "application/manifest+json", ".png": "image/png",
          ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".ico": "image/x-icon", ".txt": "text/plain; charset=utf-8"}
@@ -102,6 +104,80 @@ def http_json(url, data=None, headers=None, methode=None, timeout=60, form=False
             return r.status, dict(r.headers), r.read()
     except urllib.error.HTTPError as e:
         return e.code, dict(e.headers), e.read()
+
+
+class _DuckDuckGoResults(HTMLParser):
+    """Extract only the visible title, URL and snippet from DuckDuckGo HTML."""
+    def __init__(self):
+        super().__init__()
+        self.results = []
+        self.active = None
+        self.field = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        classes = attrs.get("class", "").split()
+        if tag == "a" and "result__a" in classes:
+            href = attrs.get("href", "")
+            parsed = urllib.parse.urlparse(href)
+            query = urllib.parse.parse_qs(parsed.query)
+            href = query.get("uddg", [href])[0]
+            href = urllib.parse.unquote(href)
+            if urllib.parse.urlparse(href).scheme in ("http", "https"):
+                self.active = {"title": "", "url": href, "snippet": ""}
+                self.field = "title"
+        elif tag in ("div", "span", "a") and "result__snippet" in classes and self.results:
+            self.active = self.results[-1]
+            self.field = "snippet"
+
+    def handle_data(self, data):
+        if self.active is not None and self.field:
+            self.active[self.field] += data
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.field == "title" and self.active is not None:
+            self.active["title"] = re.sub(r"\s+", " ", self.active["title"]).strip()
+            self.results.append(self.active)
+            self.active = None
+            self.field = None
+        elif tag in ("div", "span", "a") and self.field == "snippet" and self.active is not None:
+            self.active["snippet"] = re.sub(r"\s+", " ", self.active["snippet"]).strip()
+            self.active = None
+            self.field = None
+
+
+def rechercher_web_duckduckgo(query):
+    url = "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(query)
+    status, _, body = http_json(url, headers={"User-Agent": "Mozilla/5.0 (compatible; DevisMS/1.0)"}, timeout=15)
+    if status != 200:
+        raise RuntimeError("La recherche Web est momentanément indisponible.")
+    parser = _DuckDuckGoResults()
+    parser.feed(body.decode("utf-8", errors="replace"))
+    results = []
+    for item in parser.results:
+        title = item["title"].strip()
+        if title:
+            results.append({"title": title[:240], "url": item["url"], "snippet": item["snippet"][:700]})
+        if len(results) >= 6:
+            break
+    return results
+
+
+def session_locale_presente(authorization):
+    """Require the app's short-lived login session before accepting local AI work."""
+    match = re.fullmatch(r"Bearer\s+([A-Za-z0-9_.-]{40,4096})", authorization or "", re.I)
+    if not match:
+        return False
+    try:
+        parts = match.group(1).split(".")
+        if len(parts) != 3:
+            return False
+        payload = parts[1] + "=" * (-len(parts[1]) % 4)
+        claims = json.loads(base64.urlsafe_b64decode(payload).decode("utf-8"))
+        return (claims.get("aud") == "ms-plomberie-cloud" and bool(claims.get("sub"))
+                and int(claims.get("exp") or 0) > time.time())
+    except Exception:
+        return False
 
 
 # ----------------------------------------------------------------------------
@@ -552,7 +628,7 @@ class Gestionnaire(BaseHTTPRequestHandler):
         if o in ORIGINES:
             self.send_header("Access-Control-Allow-Origin", o)
             self.send_header("Vary", "Origin")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Filename, X-Mime")
+            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Filename, X-Mime")
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
             self.send_header("Access-Control-Allow-Private-Network", "true")
 
@@ -617,6 +693,14 @@ class Gestionnaire(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         q = urllib.parse.parse_qs(u.query)
+        if u.path == "/api/ollama/status":
+            try:
+                status, _, raw = http_json("http://127.0.0.1:11434/api/tags", timeout=3)
+                data = json.loads(raw.decode("utf-8")) if status == 200 else {}
+                ready = any(x.get("name") == "qwen2.5:3b" for x in data.get("models", []))
+                return self._json(200, {"ok": ready, "model": "qwen2.5:3b" if ready else "absent"})
+            except Exception:
+                return self._json(503, {"ok": False, "error": {"message": "Ollama ne répond pas sur ce PC."}})
         if u.path == "/api/status":
             tk = lire_tokens()
             jobs = lire_jobs()
@@ -672,6 +756,57 @@ class Gestionnaire(BaseHTTPRequestHandler):
         if not self._origine_ok():
             return self._json(403, {"erreur": "origine refusée"})
         try:
+            if u.path in ("/api/ollama", "/api/web-search"):
+                if not session_locale_presente(self.headers.get("Authorization", "")):
+                    return self._json(401, {"error": {"message": "Reconnecte-toi à Devis MS pour utiliser l’assistant."}})
+                if int(self.headers.get("Content-Length") or 0) > 90000:
+                    return self._json(413, {"error": {"message": "Demande trop volumineuse."}})
+                d = self._lire_json()
+                if u.path == "/api/web-search":
+                    query = re.sub(r"\s+", " ", str(d.get("query") or "")).strip()[:600]
+                    if not query:
+                        return self._json(400, {"error": {"message": "La recherche est vide."}})
+                    try:
+                        return self._json(200, {"results": rechercher_web_duckduckgo(query)})
+                    except Exception as e:
+                        return self._json(502, {"error": {"message": str(e)[:240]}})
+                messages = d.get("messages")
+                if not isinstance(messages, list) or not 1 <= len(messages) <= 12:
+                    return self._json(400, {"error": {"message": "Conversation invalide."}})
+                safe_messages, total = [], 0
+                for item in messages:
+                    if not isinstance(item, dict) or item.get("role") not in ("system", "user", "assistant") or not isinstance(item.get("content"), str):
+                        return self._json(400, {"error": {"message": "Message invalide."}})
+                    content = item["content"].strip()
+                    total += len(content)
+                    if not content or len(content) > 18000 or total > 42000:
+                        return self._json(413, {"error": {"message": "Le texte est trop volumineux. Réduis le document ou sépare-le en plusieurs demandes."}})
+                    safe_messages.append({"role": item["role"], "content": content})
+                try:
+                    requested_tokens = int(d.get("max_tokens") or 900)
+                    temperature = float(d.get("temperature") or 0.2)
+                except (TypeError, ValueError):
+                    return self._json(400, {"error": {"message": "Paramètres du modèle invalides."}})
+                payload = {"model": "qwen2.5:3b", "stream": False, "keep_alive": "5m", "options": {
+                    "num_ctx": 6144,
+                    "num_thread": 3,
+                    "num_predict": max(128, min(1400, requested_tokens)),
+                    "temperature": max(0.0, min(0.7, temperature))
+                }, "messages": safe_messages}
+                try:
+                    status, _, raw = http_json("http://127.0.0.1:11434/api/chat", payload,
+                                               headers={"Content-Type": "application/json"}, timeout=180)
+                    try:
+                        answer = json.loads(raw.decode("utf-8"))
+                    except Exception:
+                        answer = {"error": "Réponse Ollama illisible."}
+                    if status != 200:
+                        message = answer.get("error") or "Ollama n’a pas pu répondre."
+                        return self._json(status if status in (400, 404, 429, 500, 503) else 502,
+                                          {"error": {"message": str(message)[:300]}})
+                    return self._json(200, answer)
+                except Exception:
+                    return self._json(503, {"error": {"message": "Ollama ne répond pas sur ce PC. Ouvre Ollama puis réessaie."}})
             if u.path == "/api/config":
                 d = self._lire_json()
                 key = str(d.get("api_key") or "").strip()
@@ -765,7 +900,7 @@ class Gestionnaire(BaseHTTPRequestHandler):
         
         # Lire les données du fichier
         file_data = self._lire_corps()
-        if not file_data or len(file_data) === 0:
+        if not file_data or len(file_data) == 0:
             return self._json(400, {"erreur": "fichier_vide", "message": "Aucun fichier reçu"})
         
         # Générer un nom de fichier unique
@@ -955,17 +1090,18 @@ _worker = threading.Thread(target=job_worker, name="perplexity-worker", daemon=T
 def main():
     global _worker
     serveur = ThreadingHTTPServer((HOTE, PORT), Gestionnaire)
-    if not _worker.is_alive():
+    if os.environ.get("DEVIS_DISABLE_COMPUTER_WORKER") != "1" and not _worker.is_alive():
         _worker.start()
     serveur.daemon_threads = True
     url = f"http://{HOTE}:{PORT}/"
     print("=" * 60)
-    print(" Ms Plomberie & Chauffage – pont Computer")
+    print(" Ms Plomberie & Chauffage – relais Ollama local")
     print(f" Ouverte sur {url}")
-    print(" Utilisable aussi depuis le site GitHub Pages (onglet Assistant)")
+    print(" Utilisable depuis le navigateur de ce PC avec Ollama")
     print(" Arrêt : Ctrl+C")
     print("=" * 60)
-    threading.Timer(0.8, lambda: webbrowser.open(url)).start()
+    if os.environ.get("DEVIS_NO_AUTO_OPEN") != "1":
+        threading.Timer(0.8, lambda: webbrowser.open(url)).start()
     try:
         serveur.serve_forever()
     except KeyboardInterrupt:

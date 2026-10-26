@@ -56,11 +56,6 @@ let PHOTOJOB = '';
 function camSvg() {
   return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
 }
-const _chatVcam = chatV;
-chatV = function () {
-  return _chatVcam().replace('<button class="plus"', '<button class="camb" onclick="camOpen()" aria-label="Appareil photo">' + camSvg() + '</button><button class="plus"');
-};
-
 async function camOpen() {
   sheetClose();
   const box = $('#cam');
@@ -69,7 +64,6 @@ async function camOpen() {
   $('#camv').hidden = false;
   CAM.file = null;
   const hint = $('#camhint');
-  if (typeof dansPanneau === 'function' && dansPanneau() && hint) hint.textContent = 'Les 3 partent sur cette page Perplexity, sans ouvrir une autre appli.';
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     if (hint) hint.textContent = 'Ce navigateur n\'ouvre pas le viseur. La caméra iPhone va s\'ouvrir.';
     camNative();
@@ -135,22 +129,18 @@ function camShot(kind) {
 }
 
 const PHOTO_TXT = {
-  search: 'PHOTO. Identifie ce qui est visible (pièce, marque, modèle, référence, diamètre). Cherche sur le web des correspondants vendus en France, au moins deux si possible. Tableau article | fournisseur | prix HT | lien. Dis où le fournisseur se fournit et si l\'achat direct est possible. N\'invente pas une référence absente de la photo ou d\'une page.',
-  demande: 'PHOTO. Identifie l\'objet, puis prépare la demande (devis) : fournitures vues ou correspondantes, et la main-d\'œuvre probable. Prix HT France, estimations marquées dans note.',
-  all: 'PHOTO, puis les 3 étapes. 1) Décris ce que tu vois. 2) Cherche sur le web le correspondant (article, fournisseur, prix HT, lien, achat direct possible). 3) Prépare la demande complète pour créer le devis. N\'invente pas une référence que ni la photo ni une page ne montrent.'
+  search: 'PHOTO. Lis les noms, coordonnées ou références de société visibles. Recherche sur le Web le correspondant ou l’entreprise concernée et ses coordonnées publiques. Cite les sources et sépare les éléments lus sur la photo des correspondances possibles. Ne crée aucun document.',
+  demande: 'PHOTO. Lis les informations visibles et prépare un brouillon de devis à partir de cette demande. Recopie les lignes et coordonnées lisibles ; n’invente aucun nom, numéro ou prix. Mets 0 pour un prix absent et indique ce qui doit être vérifié.',
+  all: 'PHOTO, puis les 3 étapes. 1) Lis les informations visibles. 2) Recherche sur le Web le correspondant ou l’entreprise uniquement si son nom est lisible, cite les sources et signale les correspondances incertaines. 3) Prépare un brouillon de devis. N’invente ni coordonnées ni prix ; mets 0 si le prix est absent.'
 };
 
 function photoEngine() {
-  const t = TH();
-  if (t.ai === 'cmp') return 'cmp';
-  if (t.ai === 'api' && pk()) return 'api';
-  return 'pro';
+  return 'oracle';
 }
 function photoRun(kind) {
   if (!ATT.some(a => a.k === 'img')) return toast('Prends d\'abord la photo');
   const eng = photoEngine();
-  if (!eng) return toast('Choisis une IA');
-  const want = kind === 'search' ? 'prix' : 'devis';
+  const want = kind === 'search' ? 'correspondant' : 'devis';
   const cur = TH();
   if (cur.msgs.length && cur.k !== want) thNew({ k: want, ai: eng, r: 'raison' });
   else { cur.k = want; cur.ai = eng; if (cur.r === 'rapide') cur.r = 'raison'; thSave(); }
@@ -184,7 +174,9 @@ sheetRender = function () {
   _sheetRenderCam();
   if (SHEET !== 'plus') return;
   const grp = document.querySelector('#sheet .grp');
-  if (!grp || grp.querySelector('[data-a=photo3]')) return;
+  if (!grp) return;
+  grp.querySelectorAll('[data-a="shortcut"],[data-a="sheet"][data-v="doc"]').forEach(function (item) { item.remove(); });
+  if (grp.querySelector('[data-a=photo3]')) return;
   const row = document.createElement('div');
   row.innerHTML = `<button class="it" data-a="photo3"><span class="ic">📷</span><span class="tx"><b>Les 3</b><small>Photo dans l'appli, recherche web du correspondant, création de la demande</small></span></button>
 <button class="it" data-a="photosearch"><span class="ic">🔎</span><span class="tx"><b>Recherche du correspondant</b><small>Avec la photo déjà prise</small></span></button>

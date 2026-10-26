@@ -1,69 +1,38 @@
-# Devis – Ms Plomberie & Chauffage
+# Devis MS — Ms Plomberie & Chauffage
 
-Application web (PWA, installable sur téléphone) de gestion pour artisan plombier-chauffagiste :
-devis, factures, rapports d'intervention, clients, tarifs avec marge, planning, bénéfices et .
+Application web installable pour gérer les devis, factures, rapports, clients, tarifs, achats, planning et bénéfices.
 
-Site : https://mikaelkapinova-boop.github.io/Devis-Ms-Plomberie-Chauffage-/
+Application : https://mikaelkapinova-boop.github.io/Devis-Ms-Plomberie-Chauffage-/
 
-## Structure
-- `index.html` — application (une seule page) ; `js/ext.js` — réglages, , planning, tarifs, sauvegarde ; `js/chat2.js` — tchat Computer intégré, types de demande, corbeille, glisser pour supprimer, sélection multiple, brouillons ; `js/logo.js` — logos (fond transparent).
-- `serveur.py` + `lancer.bat` — pont local vers  (OAuth avec ton compte, sans clé API).
-- `img/` — logo et icônes ; `manifest.webmanifest` + `sw.js` — mode application / hors-ligne.
-- `inbox/` — éléments déposés par Perplexity (devis, tarifs, planning) à importer dans l'appli. Voir `inbox/README.md`.
-- `api/sync.js` — synchronisation chiffrée avec le stockage privé Vercel Blob.
+## Assistant
 
-## Synchronisation entre téléphones
+Le chat Devis MS reprend une interface de conversation simple, avec un champ de message, des conversations séparées et un menu **+** pour joindre une photo ou un PDF, utiliser l’appareil photo ou lancer un appel vocal. Le menu contient les raccourcis **Créer la demande**, **Recherche du correspondant** et **Les 3** (photo, recherche Web et préparation du devis). Les réglages rapides permettent de choisir la profondeur de réponse et d’activer la recherche Internet.
 
-Après cette mise à jour, connecte chaque iPhone une fois avec le même identifiant et le même mot de passe. L'appli crée une session sécurisée et synchronise automatiquement les devis, factures, clients, tarifs, achats, rapports, planning et photos avec le stockage privé Vercel Blob. Les données sont chiffrées sur l'appareil avant leur envoi. La synchronisation se lance à l'ouverture, après chaque modification et toutes les deux minutes tant que l'appli reste ouverte.
+Le chat utilise Qwen2.5 3B via Ollama sur le PC. Le relais local Devis MS transmet au modèle le texte de la conversation et le texte extrait des PDF/photos ; il n’envoie pas les pièces jointes brutes. Le PC, Ollama et `lancer.bat` doivent rester démarrés. Dans le menu Assistant > Intelligence artificielle, « Vérifier la connexion au PC » confirme qu’Ollama est joignable. L’app bloque la demande si le PC n’est pas joignable ; aucune bascule vers un fournisseur payant n’est faite. La recherche Internet utilise DuckDuckGo et envoie uniquement la requête à ce moteur. Un montant structuré par l’assistant reste en attente : deux cases doivent être cochées avant de créer un devis, une facture, d’ajouter des lignes ou des tarifs, ou de modifier un document. Cette validation ne déclenche jamais de paiement.
 
-## Passerelle Perplexity
-Depuis l'onglet ****, « Envoyer à Perplexity » envoie la demande par e-mail (sujet `[DEVIS]`).
-Une automatisation Perplexity lit l'e-mail, prépare le résultat et le dépose dans `inbox/` (ou modifie l'appli), puis l'appli le propose à l'import.
+La recherche Web passe par DuckDuckGo depuis le relais sur le PC. Le moteur public peut appliquer ses propres limites de fréquence.
 
-## Assistant local gratuit
-Dans l'assistant, ouvre le bouton du moteur et sélectionne **Assistant local · gratuit**. Ce mode ne requiert ni compte, ni clé API, ni abonnement : il exécute des règles et des calculs dans le navigateur, puis recherche dans les devis, factures, rapports, clients, tarifs, planning et achats enregistrés sur cet appareil. Il peut aussi préparer une carte de devis/facture à partir de lignes déjà chiffrées, sans inventer les prix. Les résultats de recherche incluent des boutons pour ouvrir les éléments trouvés.
+## Données partagées
 
-La recherche floue utilise [Fuse.js 7.5.0](https://github.com/krisk/Fuse), intégré au dépôt sous licence Apache 2.0 (`js/vendor/FUSE-LICENSE.txt`). Les historiques de moins de 10 000 éléments utilisent le moteur simple; les plus grands peuvent basculer sur `FuseWorker`, qui répartit la recherche sur plusieurs cœurs du processeur. Le code, le moteur et les données de recherche sont servis par l'application; aucune demande n'est envoyée à Perplexity ou à un moteur distant. Le cache local permet de retrouver ces fonctions hors connexion après le premier chargement.
+Les appareils qui se connectent avec l’identifiant et le mot de passe Devis MS existants voient le même espace partagé quand le stockage distant est configuré. Les données métier et les PDF archivés sont chiffrés sur l’appareil avant synchronisation. Le quota applicatif est limité à **2 Go** ; à sa limite, l’application bloque les nouveaux enregistrements et conserve les données déjà stockées. Le service Oracle n’est pas actif pour le moment, donc la synchronisation distante dépend de sa configuration.
 
-Ce mode reste déterministe : il ne répond pas aux questions générales, ne recherche pas de prix sur Internet et ne modifie pas automatiquement un document existant. Pour lire un fichier joint, il réutilise le lecteur local de l'importateur; celui-ci peut télécharger ses bibliothèques de lecture/OCR au premier usage, mais n'envoie pas le fichier.
+L’authentification renouvelle une session de huit heures ; le serveur vérifie cette session pour les synchronisations et les demandes à l’assistant. Le mot de passe existant sert aussi à déchiffrer l’espace commun sur les appareils autorisés.
 
-##  v3.5
+## Ancienne configuration Oracle
 
-- **Conversations séparées** (☰) : chaque sujet garde son historique, sa demande, son IA, son modèle et son mode.
-- **Menu Demande** : créer / modifier un devis ou une facture, faire un rapport, recherche de prix, améliorer l'appli, projet IA, autre. Les réponses JSON créent ou modifient automatiquement le document (modification annulable).
-- **Menu IA** :
-  - *Perplexity* (dans l'appli, PC et iPhone) : Agent API `https://api.perplexity.ai/v1/agent`, clé API Perplexity (facturée à l'usage, séparée de l'abonnement Pro). Tous les modèles de l'API avec leur identifiant exact.
-  - *Computer* (dans l'appli) : pont `serveur.py` (MCP + OAuth, crédits Computer). Le modèle choisi est demandé à Computer comme sous-agent.
-  - ** : ouvre le chat Perplexity pré-rempli ; coller la réponse dans l'appli pour l'appliquer.
-  - *Computer e-mail* et *Sans IA* (liste rapide).
-- **Modes** : Rapide / Raisonnement / Profond (méthode de travail + `reasoning.effort` low / medium / high).
-- **Orchestre** (`js/models.js`) : fiche de chaque modèle (façon de raisonner, points forts, consignes), règles communes, et orchestrateur « Auto » qui choisit le modèle selon la demande et le mode.
-- Service worker « réseau d'abord » : les mises à jour s'affichent sans vider le cache.
+Le dossier [`oracle-ai/`](oracle-ai/README.md) contient les fichiers de la configuration serveur envisagée précédemment. Elle n’est pas utilisée par l’assistant actuel.
 
-## Computer dans l'appli (v3.4)
-1. Sur le PC : double-clic sur `lancer.bat` (Python 3 requis, rien à installer). L'appli s'ouvre sur http://127.0.0.1:8765.
-2. Onglet **** → mode « Computer (dans l'appli) » → **Se connecter** (compte Perplexity, une seule fois).
-3. Choisis le type de demande (Documents ou Application) et écris : la réponse arrive dans le tchat, les devis/factures sont créés automatiquement.
+Pour lancer le relais local sur Windows, démarre Ollama puis lance `lancer.bat` dans ce dossier. Il écoute uniquement sur `127.0.0.1:8765`; l’API Ollama reste sur `127.0.0.1:11434` et n’est jamais publiée sur le réseau.
 
-Le site GitHub Pages peut aussi utiliser le pont s'il tourne sur le même PC. Le jeton OAuth reste dans `tokens.json` (jamais envoyé sur GitHub).
+## Importation et documents
 
-## Corbeille
-Glisse un devis, une facture ou un rapport vers la gauche → « Supprimer ». « Sélectionner » permet de tout cocher et supprimer d'un coup. Tout part dans la **Corbeille** (restaurer, effacer, vider).
+L’importateur accepte les PDF, photos/scans, documents Word `.docx`, texte et CSV. Il propose un aperçu modifiable avant l’enregistrement. Le format Word `.doc` n’est pas lu ; enregistre-le en `.docx`. La qualité de l’OCR dépend de la lisibilité du scan.
 
+Les devis, factures et rapports sont recréés dans la mise en page de l’application. Les achats importés peuvent être classés par mois ou rattachés à un chantier. Les montants extraits sont à vérifier avant validation.
 
-## Ms Devis 6.0 — Bridge PC
-La V6 utilise une application locale optionnelle sur le PC. La page `bridge/` sert de point de téléchargement et d'instructions. Le PC exécute le bridge, tandis que l'iPhone reste uniquement l'interface utilisateur. Aucune clé API ou identifiant n'est stocké dans le dépôt.
+## Version 7.26
 
-## Import intelligent (v6.1)
-Menu **Importer** : choisir un ou plusieurs fichiers (PDF, scan/photo avec OCR, Word `.docx`, texte ou CSV). L’extraction et la reconnaissance sont locales et fonctionnent sans IA ; seules les bibliothèques de lecture de fichiers et l’OCR nécessitent une connexion. Sélectionner la reconnaissance automatique ou un type précis : devis, facture, rapport, clients (CSV/VCF), fournitures, main-d'œuvre ou objets/travaux réutilisables.
-1. L'extracteur (`js/importer.js`) reconnaît les données et propose un aperçu modifiable avant enregistrement. Pour éviter de confondre l’entreprise et le client, les coordonnées client d’un document ne sont extraites que depuis un bloc « Client / Destinataire » clairement identifié ; les coordonnées correspondant au profil de l’entreprise sont exclues.
-2. Les devis, factures et rapports sont recréés dans la mise en page de l'appli ; les clients et tarifs peuvent être importés seuls, sans créer de document. Les modèles « Objet / travaux » importés sont disponibles dans l'éditeur de devis.
-3. Les fichiers et lignes en attente peuvent être retirés, y compris par glissement vers la gauche sur mobile.
-
-Limites : l'OCR et les bibliothèques PDF/Word se chargent depuis Internet ; `.doc` ancien format non lu (enregistrer en `.docx`) ; la qualité d'un scan flou limite l'extraction, d'où l'écran de vérification.
-
-## Ms Devis 7.3 — Lignes compactes et achats
-- Les lignes de devis et facture sont compactes et colorées : bleu pour les fournitures, violet pour la main-d’œuvre. Une désignation, son prix et son unité peuvent être mémorisés depuis la ligne, puis retrouvés dans Mes tarifs avec une recherche.
-- La main-d’œuvre peut être répartie par pièce. Les pièces, affectations et sous-totaux sont repris dans l’aperçu imprimable.
-- L’importateur des achats accepte les tickets et factures fournisseur en PDF, photo, DOCX, TXT et CSV. Après vérification, chaque justificatif peut être classé au mois comptable ou rattaché à un chantier, avec suivi des dépenses et du solde provisoire.
-- Les montants d’import restent à vérifier avant validation. Un HT sans TVA lisible est affiché comme montant disponible et n’est pas présenté comme un TTC estimé.
+- Chat simplifié avec menu d’ajout inspiré de l’interface mobile, gestion des conversations, raccourcis photo et appel vocal.
+- Assistant Qwen2.5 3B via Ollama sur le PC, avec recherche Web DuckDuckGo.
+- Double validation obligatoire avant d’appliquer des montants suggérés par l’assistant ; aucun paiement n’est envoyé par cette confirmation.
+- Données chiffrées avant synchronisation et limite applicative de 2 Go (stockage Oracle en attente de disponibilité).

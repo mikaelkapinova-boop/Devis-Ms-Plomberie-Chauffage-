@@ -1,6 +1,6 @@
 /* Appel vocal à l'IA — pensé pour l'iPhone (Safari, micro, voix française).
    Ce n'est pas un appel du réseau téléphonique : Apple ne laisse pas un site appeler Siri.
-   Le micro de l'iPhone écoute, le modèle choisi répond, la voix française lit la réponse,
+   Le micro du téléphone écoute, l’assistant Oracle répond, la voix française lit la réponse,
    puis l'écoute reprend. Tu ne quittes pas l'appli. */
 'use strict';
 
@@ -33,7 +33,7 @@ const CALL = {on: false, phase: 'idle', rec: null, said: '', lock: 0};
   d.innerHTML = `<div><p class="who" id="callwho">Appel au modèle</p><h2 id="callname">Intelligence artificielle</h2></div>
 <div class="stage"><span class="ring"></span><span class="ring d2"></span><img class="mark" alt="Logo" src="img/drop-hd.png"></div>
 <div style="width:100%"><div class="st" id="callst">Écoute…</div><p class="tr" id="calltr"></p></div>
-<div><button class="hang" onclick="callStop()" aria-label="Raccrocher"><svg viewBox="0 0 24 24"><path d="M4 15c2-4 14-4 16 0l-2.2 2.2a2 2 0 0 1-2.6.2l-1.5-1a12 12 0 0 0-3.4 0l-1.5 1a2 2 0 0 1-2.6-.2z"/></svg></button><p class="hint">Ce n'est pas un appel Apple ni Siri. Tu parles au modèle choisi (Perplexity ou Computer). Le micro sert seulement à dicter. Si l'écoute ne reprend pas, touche le logo.</p></div>`;
+<div><button class="hang" onclick="callStop()" aria-label="Raccrocher"><svg viewBox="0 0 24 24"><path d="M4 15c2-4 14-4 16 0l-2.2 2.2a2 2 0 0 1-2.6.2l-1.5-1a12 12 0 0 0-3.4 0l-1.5 1a2 2 0 0 1-2.6-.2z"/></svg></button><p class="hint">Le micro sert à dicter ta demande à l’assistant Devis MS. La réponse est lue à voix haute ; touche le logo pour reprendre l’écoute.</p></div>`;
   d.querySelector('.stage').addEventListener('click', function () { if (CALL.on && CALL.phase !== 'think' && CALL.phase !== 'speak') callListen(); });
   document.body.appendChild(d);
 })();
@@ -41,12 +41,6 @@ const CALL = {on: false, phase: 'idle', rec: null, said: '', lock: 0};
 function callPhoneSvg() {
   return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h3l1.5 4-2 1.2a12 12 0 0 0 6.3 6.3L17 12.5 21 14v3a2 2 0 0 1-2.2 2A17 17 0 0 1 5 6.2 2 2 0 0 1 7 3z"/></svg>';
 }
-
-const _chatVcall = chatV;
-chatV = function () {
-  const html = _chatVcall();
-  return html.replace('<button class="plus"', '<button class="callb" onclick="callStart()" aria-label="Appeler l\'IA">' + callPhoneSvg() + '</button><button class="plus"');
-};
 
 function callSet(phase, status, transcript) {
   CALL.phase = phase;
@@ -58,18 +52,16 @@ function callSet(phase, status, transcript) {
 
 function callStart() {
   const t = TH();
-  if (t.ai === 'pro' || t.ai === 'mail' || t.ai === 'loc') {
-    toast('Pour l\'appel dans l\'appli, choisis Perplexity ou Computer');
-    sheetOpen('ia');
-    return;
-  }
-  if (t.ai === 'api' && !pk()) { toast('Ajoute ta clé API Perplexity'); sheetOpen('ia'); return; }
+  if (typeof pxEngineSet === 'function') pxEngineSet('oracle');
+  t.ai = 'oracle';
+  if (!S.cfg.as) S.cfg.as = {};
+  S.cfg.as.ai = 'oracle';
+  thSave(); save('cfg');
   sheetClose();
   CALL.on = true; CALL.said = '';
-  const eff = typeof modEff === 'function' ? modEff(t) : null;
   const who = $('#callwho'), nm = $('#callname');
-  if (who) who.textContent = t.ai === 'cmp' ? 'Appel Computer' : 'Appel Perplexity';
-  if (nm) nm.textContent = eff && eff.n ? eff.n : 'Modèle choisi';
+  if (who) who.textContent = 'Assistant local Oracle';
+  if (nm) nm.textContent = 'Qwen3.5';
   $('#call').classList.add('on');
   try {
     const u = new SpeechSynthesisUtterance(' ');
@@ -78,7 +70,7 @@ function callStart() {
   } catch (e) {}
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
-    callSet('listen', 'Micro indisponible', 'Autorise le micro pour ce site, puis rappelle. La réponse viendra du modèle choisi, pas d\'Apple.');
+    callSet('listen', 'Micro indisponible', 'Autorise le micro pour ce site ou utilise le champ de message.');
     const ta = $('#cin'); if (ta) ta.focus();
     return;
   }

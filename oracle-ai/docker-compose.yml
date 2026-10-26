@@ -1,0 +1,118 @@
+name: devis-ms-oracle-ai
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      AI_HOSTNAME: ${AI_HOSTNAME:?Configure AI_HOSTNAME in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - gateway
+    networks: [edge, private]
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      LLAMA_URL: http://llama:8080
+      SEARCH_URL: http://searxng:8080
+      DATA_DIR: /data
+      PORT: "8081"
+    expose:
+      - "8081"
+    volumes:
+      - devis-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    mem_limit: 256m
+    cpus: 0.5
+    depends_on:
+      - llama
+      - searxng
+    networks: [private]
+
+  llama:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    restart: unless-stopped
+    command:
+      - --hf
+      - SoAIHQ/Qwen3.5-4B-GGUF:Q4_K_M
+      - --alias
+      - Qwen3.5-4B-Q4_K_M
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --threads
+      - "2"
+      - --ctx-size
+      - "8192"
+      - --parallel
+      - "1"
+      - --n-gpu-layers
+      - "0"
+      - --reasoning
+      - "off"
+      - --no-webui
+    volumes:
+      - model-cache:/root/.cache
+    expose:
+      - "8080"
+    mem_limit: 9g
+    cpus: 2.0
+    security_opt:
+      - no-new-privileges:true
+    networks: [private]
+
+  searxng:
+    image: ghcr.io/searxng/searxng:latest
+    restart: unless-stopped
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?Configure SEARXNG_SECRET in .env}
+      SEARXNG_VALKEY_URL: valkey://valkey:6379/0
+    volumes:
+      - ./searxng-settings.yml:/etc/searxng/settings.yml:ro
+    expose:
+      - "8080"
+    mem_limit: 768m
+    cpus: 0.5
+    depends_on:
+      - valkey
+    networks: [private]
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--save", "", "--appendonly", "no", "--maxmemory", "96mb", "--maxmemory-policy", "allkeys-lru"]
+    expose:
+      - "6379"
+    mem_limit: 128m
+    cpus: 0.25
+    security_opt:
+      - no-new-privileges:true
+    networks: [private]
+
+networks:
+  edge:
+  private:
+    internal: false
+
+volumes:
+  caddy-data:
+  caddy-config:
+  model-cache:
+  devis-data:

@@ -1,0 +1,19 @@
+use_default_settings: true
+
+general:
+  debug: false
+  instance_name: "Devis MS Search"
+
+search:
+  safe_search: 1
+  formats:
+    - html
+    - json
+
+server:
+  secret_key: "replace-by-SEARXNG_SECRET-environment-variable"
+  limiter: true
+  image_proxy: false
+
+valkey:
+  url: valkey://valkey:6379/0
