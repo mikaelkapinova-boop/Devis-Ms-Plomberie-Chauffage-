@@ -30,12 +30,15 @@ L’importateur accepte les PDF, photos/scans, documents Word `.docx`, texte et 
 
 Les devis, factures et rapports sont recréés dans la mise en page de l’application. Les achats importés peuvent être classés par mois ou rattachés à un chantier. Les montants extraits sont à vérifier avant validation.
 
-## Version 7.29
+## Version 7.30
 
+- Assistant affiché dans une page dédiée, avec la zone de saisie toujours en bas et une flèche pour revenir au dernier message.
+- Bouton `+` simplifié : ouvre directement la sélection d’une photo ou d’un PDF, sans panneau « Ajouter ».
 - Historique des conversations en panneau latéral, avec recherche, regroupement par date, renommage et suppression.
-- Aperçu des documents modifiable directement : textes, titres, taille des tableaux et largeur des colonnes, avec export PDF des modifications.
+- Aperçu personnalisable : textes, couleurs, fonds, alignement, taille, déplacement et ordre des blocs, tableaux et logo, avec export PDF des modifications.
 - Importation plus compacte : lignes repliables, complètes importées automatiquement et lignes incomplètes ignorées.
-- Chat simplifié avec menu d’ajout inspiré de l’interface mobile, raccourcis photo et appel vocal.
+- Chat sur une page dédiée, saisie toujours visible, flèche vers le dernier message et ajout direct de photos/PDF.
 - Assistant Qwen3.5 0.8B via Ollama sur le PC, avec recherche Web DuckDuckGo.
+- Adresse HTTPS Tailscale configurable pour joindre en privé l’assistant du PC depuis un téléphone.
 - Double validation obligatoire avant d’appliquer des montants suggérés par l’assistant ; aucun paiement n’est envoyé par cette confirmation.
 - Données chiffrées avant synchronisation et limite applicative de 2 Go (stockage Oracle en attente de disponibilité).

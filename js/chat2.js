@@ -197,6 +197,10 @@ const _go = go;
 go = function (v, id) { if (v !== V.v) { TRV = null; SELM = false; SELS.clear(); } return _go(v, id); };
 const _render = render;
 render = function () {
+  const oldChat = V.v === 'a' ? $('#cm') : null;
+  const threadId = V.v === 'a' && typeof S !== 'undefined' && S.cfg ? S.cfg.thc : null;
+  window.__chatScrollSnapshot = oldChat && window.__chatRenderedThreadId === threadId ? {top: oldChat.scrollTop, follow: oldChat.scrollHeight - oldChat.scrollTop - oldChat.clientHeight < 96} : null;
+  window.__chatRenderedThreadId = threadId;
   _render.apply(this, arguments);
   if (TRV && (TRV === V.v || TRV === 'all')) { $('#app').innerHTML = trV(); $('#ad').style.display = 'none'; if (TRV === 'all') { $('#ttl').textContent = 'Corbeille'; document.querySelectorAll('.ni').forEach(b => b.classList.toggle('a', b.dataset.v === 't')); } }
   else listDecorate();

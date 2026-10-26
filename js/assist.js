@@ -180,12 +180,12 @@ chatV = function () {
   const typing = ASBUSY ? `<div class="bub a"><span class="typing"><i></i><i></i><i></i></span></div>` : '';
   return `<div class="ash"><button class="icb" onclick="sheetOpen('fils')" aria-label="Conversations">☰</button><div class="ttl" onclick="thRename()">${esc(thTitle(t))}</div><button class="icb" onclick="thNew();render()" aria-label="Nouvelle conversation">✎</button></div>
 <div id="inbx"></div>
-<div id="cm" class="cm">${msgs.length ? msgs.map((m, i) => bub2(m, off + i)).join('') : welcome}${typing}</div>
+<div class="chat-scroll-wrap"><div id="cm" class="cm">${msgs.length ? msgs.map((m, i) => bub2(m, off + i)).join('') : welcome}${typing}</div><button id="chat-bottom" class="chat-bottom" onclick="chatGoBottom(true)" aria-label="Aller au dernier message" title="Aller au dernier message" hidden>↓</button></div>
 <div class="cmp2">
 <div class="pills"><button class="pill" onclick="sheetOpen('dem')">${esc(d.l)}</button>${d.mod ? `<button class="pill" onclick="sheetOpen('doc')">${doc ? esc(doc.num) : 'Document'}</button>` : ''}<button class="pill" onclick="sheetOpen('ia')">${esc(iaLabel(t))}</button></div>
 <div class="atts2">${ATT.map((a, i) => `<span class="chip">${a.k === 'pdf' ? '📄' : '🖼️'} ${esc(a.f.name.slice(0, 22))}<button onclick="ATT.splice(${i},1);render()" aria-label="Retirer">×</button></span>`).join('')}</div>
-<div class="crow2"><button class="plus" onclick="sheetOpen('plus')" aria-label="Ajouter">+</button><textarea id="cin" rows="1" placeholder="${t.ai === 'loc' ? 'Ex. factures impayées, dépense de septembre, ou lignes à chiffrer…' : 'Écris ta demande…'}" oninput="cinGrow(this)" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))asSend()"></textarea><button class="send" id="sendb" onclick="asSend()" ${ASBUSY ? 'disabled' : ''} aria-label="Envoyer">↑</button></div>
-<input type="file" id="fpick" accept="image/*,application/pdf" multiple hidden onchange="attAdd(this.files)"><input type="file" id="fcam" accept="image/*" capture="environment" hidden onchange="attAdd(this.files)">
+<div class="crow2"><button class="plus" onclick="$('#fpick').click()" aria-label="Joindre une photo ou un PDF" title="Joindre une photo ou un PDF">+</button><textarea id="cin" rows="1" placeholder="${t.ai === 'loc' ? 'Ex. factures impayées, dépense de septembre, ou lignes à chiffrer…' : 'Écris ta demande…'}" oninput="cinGrow(this)" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))asSend()"></textarea><button class="send" id="sendb" onclick="asSend()" ${ASBUSY ? 'disabled' : ''} aria-label="Envoyer">↑</button></div>
+<input type="file" id="fpick" accept="image/*,application/pdf" multiple hidden onchange="attAdd(this.files)">
 </div>`;
 };
 function cinGrow(e) { e.style.height = 'auto'; e.style.height = Math.min(e.scrollHeight, innerHeight * .45) + 'px'; }
@@ -248,11 +248,7 @@ function sheetRender() {
   const s = $('#sheet'); if (!SHEET) return sheetClose();
   const t = TH(), IT = (a, v, ic, b, sm, on) => `<button class="it" data-a="${a}" data-v="${esc(v)}"><span class="ic">${ic}</span><span class="tx"><b>${b}</b>${sm ? `<small>${sm}</small>` : ''}</span>${on ? '<span class="ck">✓</span>' : ''}</button>`;
   let h = '';
-  if (SHEET === 'plus') {
-    h = `<h2>Ajouter<button data-a="close">OK</button></h2><div class="grp">${IT('call', '', '📞', 'Appeler l’IA', 'Tu parles, la réponse est lue · micro du téléphone')}${IT('pick', '', '📎', 'Photo ou PDF', 'Depuis la photothèque ou les fichiers')}${IT('cam', '', '📷', 'Prendre une photo', 'Appareil photo')}</div>
-<div class="gl">Réglages rapides</div><div class="grp">${IT('sheet', 'dem', DEM[t.k].ic, 'Demande', DEM[t.k].l)}${IT('sheet', 'ia', '🧠', 'Intelligence artificielle', iaLabel(t))}</div>
-<div class="gl">Conversations</div><div class="grp">${IT('new', '', '✎', 'Nouvelle conversation', '')}${IT('sheet', 'fils', '☰', 'Toutes les conversations', S.threads.length + ' conversation(s)')}</div>`;
-  } else if (SHEET === 'dem') {
+  if (SHEET === 'dem') {
     h = `<h2>Sélectionner la demande<button data-a="close">OK</button></h2>` + DEM_GRP.map(([g, ks]) => `<div class="gl">${g}</div><div class="grp">${ks.map(k => IT('dem', k, DEM[k].ic, DEM[k].l, '', t.k === k)).join('')}</div>`).join('') +
       `<p class="note">Changer de type de demande dans une conversation déjà commencée ouvre une nouvelle conversation, pour ne pas tout mélanger.</p>`;
   } else if (SHEET === 'doc') {
@@ -296,8 +292,6 @@ function sheetAct(a, v, b) {
   const t = TH();
   if (a === 'close') return sheetClose();
   if (a === 'sheet') return sheetOpen(v);
-  if (a === 'pick') { sheetClose(); return $('#fpick').click(); }
-  if (a === 'cam') { sheetClose(); return $('#fcam').click(); }
   if (a === 'new') { sheetClose(); thNew(); return render(); }
   if (a === 'open') return thOpen(v);
   if (a === 'threname') return thRename(v);
@@ -666,14 +660,16 @@ window.pxEngineSet=function(){var c=pxCfg(),t=TH();c.ai="ollama";c.aiModeV=4;t.a
 window.pxArmySet=function(){toast("Qwen3.5 tourne localement sur ce PC, une demande à la fois.")};
 window.pxReasonSet=function(v){if(!["rapide","raison","profond"].includes(v))return;var c=pxCfg(),t=TH();c.r=v;t.r=v;thSave();save("cfg");render();if(SHEET==="ia")pxSheet()};
 window.pxWebToggle=function(on){var c=pxCfg();c.webSearch=!!on;save("cfg");if(SHEET==="ia")pxSheet()};
+window.pxBridgeSave=function(){var input=$("#px-bridge-url"),raw=String(input&&input.value||"").trim(),c=pxCfg();if(!raw){c.bridgeUrl="";save("cfg");toast("Lien privé supprimé. L’IA utilisera ce PC.");pxSheet();return}var u;try{u=new URL(raw)}catch(e){return toast("Adresse de relais invalide.")}if(u.protocol!=="https:"||u.username||u.password||u.search||u.hash||u.pathname!=="/"||!(u.hostname==="ts.net"||u.hostname.toLowerCase().endsWith(".ts.net")))return toast("Utilise l’adresse HTTPS privée Tailscale du PC, en .ts.net.");c.bridgeUrl=u.origin;save("cfg");toast("Adresse privée enregistrée.");pxSheet()};
 var pxBoot=boot;boot=async function(){var r=await pxBoot.apply(this,arguments);pxCfg();render();return r};
 
 function pxSheet(){
  var s=$("#sheet");if(!s)return;var c=pxCfg(),t=TH();
  var reason=t.r||c.r;
  var h="<h2>Assistant IA<button data-a='close'>Fermer</button></h2><div class='px-card'><div class='px-title'><b>Qwen3.5 0.8B</b><span>Sur ce PC</span></div><small class='mu'>Ollama exécute le modèle sur ton ASUS. Le PC doit rester allumé avec Ollama et le relais Devis MS ouverts.</small><button class='b gh sm' style='width:100%;margin-top:10px' onclick='pxOllamaCheck()'>Vérifier la connexion au PC</button></div>";
+ h+="<div class='px-card'><b>Connexion privée depuis l’iPhone</b><small>Pour utiliser le modèle du PC depuis le téléphone, les deux appareils doivent être connectés au même réseau privé Tailscale. Colle ici l’adresse HTTPS du PC en .ts.net.</small><input id='px-bridge-url' type='url' inputmode='url' autocomplete='off' autocapitalize='none' spellcheck='false' placeholder='https://mon-pc.mon-reseau.ts.net' value='"+esc(c.bridgeUrl||"")+"' style='width:100%;margin-top:9px'><button class='b gh sm' style='width:100%;margin-top:8px' onclick='pxBridgeSave()'>Enregistrer le lien privé</button></div>";
  h+="<div class='gl'>Mode de réponse</div><div class='px-list'>";
- [["rapide","Rapide","Priorité au délai de réponse"],["raison","Raisonnement","Plus de contexte pour les tâches complexes"],["profond","Approfondi","Analyse plus longue sur le processeur du VPS"]].forEach(function(o){h+="<button class='px-mode "+(reason===o[0]?"on":"")+"' onclick=\"pxReasonSet('"+o[0]+"')\"><span><b>"+o[1]+"</b><small>"+o[2]+"</small></span><strong>"+(reason===o[0]?"✓":"")+"</strong></button>"});
+ [["rapide","Rapide","Priorité au délai de réponse"],["raison","Raisonnement","Plus de contexte pour les tâches complexes"],["profond","Approfondi","Analyse plus longue selon la puissance du PC"]].forEach(function(o){h+="<button class='px-mode "+(reason===o[0]?"on":"")+"' onclick=\"pxReasonSet('"+o[0]+"')\"><span><b>"+o[1]+"</b><small>"+o[2]+"</small></span><strong>"+(reason===o[0]?"✓":"")+"</strong></button>"});
  h+="</div>";
  h+="<div class='px-card'><div class='px-row'><div><b>Recherche Internet</b><small>Recherche DuckDuckGo gratuite ; seul le texte de la recherche est transmis à DuckDuckGo.</small></div><button class='px-switch "+(c.webSearch?"on":"")+"' onclick='pxWebToggle("+(!c.webSearch)+")' aria-label='Activer ou désactiver la recherche Internet'><i></i></button></div></div>";
  h+="<div class='px-card'><b>Coûts et validations</b><small>Qwen tourne sur ton PC : aucun frais d’IA par requête. Les recherches Web dépendent de DuckDuckGo. Les coûts éventuels de Vercel et du stockage partagé ne sont pas suivis dans cette page. Les montants proposés doivent être confirmés deux fois avant leur application à un document ou aux tarifs.</small></div>";
@@ -697,7 +693,7 @@ chatV=function(){
  var placeholder="Message à l’assistant…";
  var typing=ASBUSY?"<div class='bub a'><span class='typing'><i></i><i></i><i></i></span></div>":"";
  var pills="<button class='pill' onclick=\"sheetOpen('dem')\">"+esc(d.l)+"</button><button class='pill' onclick=\"sheetOpen('ia')\">"+esc(iaLabel(t))+"</button>";
- return "<div class='ash'><button class='icb' onclick=\"sheetOpen('fils')\">☰</button><div class='ttl'>"+esc(thTitle(t))+"</div><button class='icb' onclick='thNew();render()'>✎</button></div><div id='cm' class='cm'>"+(msgs.length?msgs.map(function(m,i){return bub2(m,off+i)}).join(""):welcome)+typing+"</div><div class='cmp2'><div class='pills'>"+pills+"</div><div class='atts2'>"+ATT.map(function(a,i){return "<span class='chip'>"+(a.k==="pdf"?"📄":"🖼️")+" "+esc(a.f.name.slice(0,22))+"<button onclick='ATT.splice("+i+",1);render()'>×</button></span>"}).join("")+"</div><div class='crow2'><button class='plus' onclick=\"sheetOpen('plus')\">+</button><textarea id='cin' rows='1' placeholder='"+placeholder+"' oninput='cinGrow(this)' onkeydown=\"if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))asSend()\"></textarea><button class='send' id='sendb' onclick='window.asSend()' "+(ASBUSY?"disabled":"")+">↑</button></div><input type='file' id='fpick' accept='image/*,application/pdf' multiple hidden onchange='attAdd(this.files)'><input type='file' id='fcam' accept='image/*' capture='environment' hidden onchange='attAdd(this.files)'></div>"
+ return "<div class='ash'><button class='icb' onclick=\"sheetOpen('fils')\" aria-label='Historique des conversations'>☰</button><div class='ttl'>"+esc(thTitle(t))+"</div><button class='icb' onclick='thNew();render()' aria-label='Nouvelle conversation'>✎</button></div><div class='chat-scroll-wrap'><div id='cm' class='cm'>"+(msgs.length?msgs.map(function(m,i){return bub2(m,off+i)}).join(""):welcome)+typing+"</div><button id='chat-bottom' class='chat-bottom' onclick='chatGoBottom(true)' aria-label='Aller au dernier message' title='Aller au dernier message' hidden>↓</button></div><div class='cmp2'><div class='pills'><button class='pill' onclick=\"sheetOpen('dem')\">"+esc(d.l)+"</button><button class='pill' onclick=\"sheetOpen('ia')\">"+esc(iaLabel(t))+"</button></div><div class='atts2'>"+ATT.map(function(a,i){return "<span class='chip'>"+(a.k==="pdf"?"📄":"🖼️")+" "+esc(a.f.name.slice(0,22))+"<button onclick='ATT.splice("+i+",1);render()'>×</button></span>"}).join("")+"</div><div class='crow2'><button class='plus' onclick=\"$('#fpick').click()\" aria-label='Joindre une photo ou un PDF' title='Joindre une photo ou un PDF'>+</button><textarea id='cin' rows='1' placeholder='"+placeholder+"' oninput='cinGrow(this)' onkeydown=\"if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))asSend()\"></textarea><button class='send' id='sendb' onclick='window.asSend()' "+(ASBUSY?"disabled":"")+">↑</button></div><input type='file' id='fpick' accept='image/*,application/pdf' multiple hidden onchange='attAdd(this.files)'></div>"
 };
 
 async function pxArmyAgent(t,q,role,effort){
@@ -724,20 +720,20 @@ async function pxArmySend(t,txt,clear){
  finally{ASBUSY=false;render()}
 }
 async function oraclePost(body){
- var host=String(location.hostname||''),endpoint=/github\.io$/i.test(host)||/\.vercel\.app$/i.test(host)||location.protocol==='file:'
-   ?'http://127.0.0.1:8765/api/ollama':'/api/ollama';
+ var endpoint=ollamaBridgeUrl('/api/ollama');
  var controller=new AbortController(),timeout=setTimeout(function(){controller.abort()},58000),r,j={};
  try{
   r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+CLOUD_SYNC_TOKEN},body:JSON.stringify(body),signal:controller.signal});
   try{j=await r.json()}catch(e){}
- }catch(e){return {_err:1,_st:e&&e.name==='AbortError'?504:502,_msg:e&&e.name==='AbortError'?'Le modèle local dépasse le délai de réponse.':'Impossible de joindre Ollama sur ce PC. Ouvre Ollama et lance lancer.bat dans le dossier Devis MS.'}}
+ }catch(e){return {_err:1,_st:e&&e.name==='AbortError'?504:502,_msg:e&&e.name==='AbortError'?'Le modèle local dépasse le délai de réponse.':ollamaConnectionMessage()}}
  finally{clearTimeout(timeout)}
  if(!r.ok)return {_err:1,_st:r.status,_msg:j&&j.error&&(j.error.message||j.error.type)||'Erreur Ollama (HTTP '+r.status+')'};
  return {choices:[{message:{content:j&&j.message&&j.message.content||''}}]}
 }
-function ollamaBridgeUrl(path){var host=String(location.hostname||'');return /github\.io$/i.test(host)||/\.vercel\.app$/i.test(host)||location.protocol==='file:'?'http://127.0.0.1:8765'+path:path}
-window.pxOllamaCheck=async function(){try{var r=await fetch(ollamaBridgeUrl('/api/ollama/status'),{cache:'no-store'}),j=await r.json();if(r.ok&&j.ok)return toast('Qwen3.5 0.8B est prêt sur ce PC.');throw new Error(j&&j.error&&j.error.message||'Modèle indisponible.')}catch(e){toast('PC non joignable. Ouvre Ollama, puis lance lancer.bat dans le dossier Devis MS.')}};
-async function ollamaWebSearch(query){var r,j={};try{r=await fetch(ollamaBridgeUrl('/api/web-search'),{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+CLOUD_SYNC_TOKEN},body:JSON.stringify({query:query}),cache:'no-store'});try{j=await r.json()}catch(e){}}catch(e){return {_err:1,_msg:'Recherche Web impossible depuis ce PC.'}}if(!r.ok)return {_err:1,_msg:j&&j.error&&j.error.message||'Recherche Web indisponible.'};return j}
+function ollamaBridgeUrl(path){var configured=String(pxCfg().bridgeUrl||'').trim().replace(/\/+$/,'');if(configured)return configured+path;var host=String(location.hostname||'');return /github\.io$/i.test(host)||/\.vercel\.app$/i.test(host)||location.protocol==='file:'?'http://127.0.0.1:8765'+path:path}
+function ollamaConnectionMessage(){if(String(pxCfg().bridgeUrl||'').trim())return'Le relais privé du PC ne répond pas. Vérifie que le PC, Ollama et Tailscale sont connectés.';if(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent||''))return'Cet iPhone cherche Ollama sur lui-même, pas sur le PC. Connecte le PC et l’iPhone à Tailscale, puis indique l’adresse privée du PC dans Assistant → IA.';return'Ollama fonctionne, mais le relais Devis MS ne répond pas. Lance lancer.bat sur le PC.'}
+window.pxOllamaCheck=async function(){try{var r=await fetch(ollamaBridgeUrl('/api/ollama/status'),{cache:'no-store'}),j=await r.json();if(r.ok&&j.ok)return toast('Qwen3.5 0.8B répond sur le PC.');throw new Error(j&&j.error&&j.error.message||'Le modèle Qwen3.5 0.8B est absent.')}catch(e){toast(e&&e.message&&e.message!=='Failed to fetch'?e.message:ollamaConnectionMessage())}};
+async function ollamaWebSearch(query){var r,j={};try{r=await fetch(ollamaBridgeUrl('/api/web-search'),{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+CLOUD_SYNC_TOKEN},body:JSON.stringify({query:query}),cache:'no-store'});try{j=await r.json()}catch(e){}}catch(e){return {_err:1,_msg:'Recherche Web impossible. '+ollamaConnectionMessage()}}if(!r.ok)return {_err:1,_msg:j&&j.error&&j.error.message||'Recherche Web indisponible.'};return j}
 function ollamaAppContext(query,thread){
  var q=String(query||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(),words=q.split(/[^a-z0-9]+/).filter(function(w){return w.length>=5&&!/^(pour|dans|avec|faire|faire|devis|facture|client|chiffrage|travaux|recherche|internet|prix|tarif|bonjour|merci)$/.test(w)}),context={};
  var clients=(S.clients||[]).filter(function(c){var name=String(c.n||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();return name.length>2&&q.includes(name)}).slice(0,4).map(function(c){return {nom:c.n,adresse:c.a,code_postal_ville:c.c,tel:c.t,email:c.e}});
@@ -818,10 +814,10 @@ window.asSend=asSend;
 var css=document.createElement("style");css.textContent=".px-card{background:var(--cd);border-radius:18px;padding:14px;box-shadow:0 0 0 1px var(--ln);margin-bottom:10px}.px-title{display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--ln)}.px-title b{display:block;font-size:18px}.px-title small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.px-title span{margin-left:auto;color:var(--ok);font-weight:700}.px-row{display:flex;align-items:center;gap:12px;padding-top:13px}.px-row>div{flex:1}.px-row b{display:block}.px-row small{display:block;color:var(--mu);font-size:12px;line-height:1.3;margin-top:2px}.px-switch{width:52px;height:30px;border:0;border-radius:16px;padding:3px;background:#777}.px-switch i{display:block;width:24px;height:24px;border-radius:50%;background:#fff;transition:.18s}.px-switch.on{background:var(--ok)}.px-switch.on i{transform:translateX(22px)}.px-list{background:var(--cd);border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px var(--ln)}.px-mode{display:flex;align-items:center;gap:12px;width:100%;padding:14px;border:0;border-bottom:1px solid var(--ln);background:var(--cd);color:var(--ink);text-align:left;font:inherit}.px-mode:last-child{border-bottom:0}.px-mode.on{background:color-mix(in srgb,var(--ac) 10%,var(--cd))}.px-mode span{flex:1}.px-mode b{display:block}.px-mode small{display:block;color:var(--mu);font-size:12px;margin-top:2px}.px-mode strong{color:var(--ac)}.px-key{background:var(--cd);padding:10px;border-radius:14px;box-shadow:0 0 0 1px var(--ln)}.px-key input{width:100%;margin-bottom:8px}.px-key .b{width:100%}.px-ok{padding:11px 13px;border-radius:13px;background:color-mix(in srgb,var(--ok) 12%,var(--cd));color:var(--ok);font-size:13px}.px-pyramid{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.px-pyramid span{font-size:11px;padding:6px 8px;background:var(--in);border:1px solid var(--ln);border-radius:9px;color:var(--mu)}";document.head.appendChild(css);
 })();
 
-/* === VERSION 7.18.5 === */
+/* === VERSION 7.30.0 === */
 (function(){
 "use strict";
-var APP_VERSION="7.29.0",APP_RELEASE="Historique du chat en panneau latéral, importation simplifiée et aperçu de document modifiable.";
+var APP_VERSION="7.30.0",APP_RELEASE="Assistant en page dédiée, aperçu personnalisable et liaison privée configurable entre l’iPhone et le modèle local du PC.";
 window.APP_VERSION=APP_VERSION;
 var appVersionLabel=document.getElementById("appver");if(appVersionLabel)appVersionLabel.textContent="v"+APP_VERSION.split(".").slice(0,2).join(".");
 window.newsShow=function(){var d=document.createElement("div");d.className="news";d.innerHTML="<div><h2>Version "+APP_VERSION+"</h2><p>"+APP_RELEASE+"</p><button class='b' style='width:100%;margin-top:10px' onclick='this.closest(\".news\").remove()'><span>Compris</span></button></div>";d.addEventListener("click",function(e){if(e.target===d)d.remove()});document.body.appendChild(d)};
