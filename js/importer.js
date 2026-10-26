@@ -469,14 +469,14 @@ function parse(text,name,rowsIn){
   return{type,num,date,due,cli,addrs,lines,tot:{ht:tot.ht,ttc:tot.ttc,rate:tot.rate,rmPct:tot.rmPct||0},warns,txt:type==='x'?text.slice(0,6000):'',reportType:type==='x'?reportCategory(text):'',paid:/acquitt/i.test(text)}}
 const calc=d=>{const s=r2(d.lines.reduce((a,l)=>a+nv(l.q)*nv(l.pu),0)),rm=r2(s*nv(d.tot.rmPct)/100),ht=r2(s-rm),tva=r2(ht*nv(d.tot.rate)/100);return{s,rm,ht,tva,ttc:r2(ht+tva)}};
 const lineIncomplete=l=>!String(l&&l.des||'').trim()||!(nv(l&&l.q)>0);
-function transferProblems(it){const d=it&&it.data;if(!d||d.type==='x')return[];const problems=[],lines=Array.isArray(d.lines)?d.lines:[];
-  if(!lines.length)problems.push('Aucune ligne reconnue : ajoute une prestation ou une fourniture avant de créer le document.');
-  const incomplete=lines.filter(lineIncomplete).length;if(incomplete)problems.push(`${incomplete} ligne${incomplete>1?'s':''} incomplète${incomplete>1?'s':''} : renseigne la désignation et une quantité supérieure à zéro.`);
-  const unchecked=lines.filter(l=>!l.ok).length;if(unchecked)problems.push(`${unchecked} ligne${unchecked>1?'s':''} encadrée${unchecked>1?'s':''} en orange à confirmer après comparaison avec le fichier original.`);
-  if(lines.length){const c=calc(d);
-    if(d.tot.ht!=null&&Math.abs(d.tot.ht-c.ht)>.05)problems.push(`Le total HT lu (${eur(d.tot.ht)}) ne correspond pas au calcul des lignes (${eur(c.ht)}). Corrige les lignes ou la remise.`);
-    if(d.tot.ttc!=null&&Math.abs(d.tot.ttc-c.ttc)>.05)problems.push(`Le TTC lu (${eur(d.tot.ttc)}) ne correspond pas au calcul (${eur(c.ttc)}). Vérifie les lignes, la TVA et la remise.`)}
-  return problems}
+function transferProblems(it){const d=it&&it.data;if(!d||d.type==='x')return[];const lines=Array.isArray(d.lines)?d.lines:[];
+  return lines.some(l=>!lineIncomplete(l))?[]:['Aucune ligne complète reconnue. Ajoute au moins une désignation et une quantité pour créer le document.']}
+function transferWarnings(it){const d=it&&it.data;if(!d||d.type==='x')return[];const lines=Array.isArray(d.lines)?d.lines:[],warnings=[],incomplete=lines.filter(lineIncomplete).length,unchecked=lines.filter(l=>!l.ok&&!lineIncomplete(l)).length;
+  if(incomplete)warnings.push(`${incomplete} ligne${incomplete>1?'s':''} incomplète${incomplete>1?'s':''} ignorée${incomplete>1?'s':''} automatiquement.`);
+  if(unchecked)warnings.push(`${unchecked} ligne${unchecked>1?'s':''} importée${unchecked>1?'s':''} automatiquement.`);
+  if(lines.some(l=>!lineIncomplete(l))){const c=calc(d);if(d.tot.ht!=null&&Math.abs(d.tot.ht-c.ht)>.05)warnings.push(`Le total HT lu (${eur(d.tot.ht)}) diffère du calcul des lignes (${eur(c.ht)}).`);if(d.tot.ttc!=null&&Math.abs(d.tot.ttc-c.ttc)>.05)warnings.push(`Le TTC lu (${eur(d.tot.ttc)}) diffère du calcul (${eur(c.ttc)}).`)}
+  if(!d.cli.name)warnings.push('Aucun client reconnu : le document sera importé sans client associé.');
+  return warnings}
 
 /* ---------- adaptation au modèle de données de l'app (détecté sur tes données) ---------- */
 let PR=null,PRsig='';
@@ -573,7 +573,7 @@ function upTarifs(ls,K,out){const s=SS(),C=s.cat||(s.cat=[]);let add=0,skip=0;
 function mkLine(l,K){const o={};if(K.lId)o.id=uid();o[K.lDes]=l.des;o.q=l.q;o.p=l.pu;if(K.lUnit&&l.u)o[K.lUnit]=l.u;return o}
 function mkDoc(it,K,cid,out){const s=SS(),d=it.data,t=d.type==='f'?'f':'d',docs=s.docs||(s.docs=[]),dup=dupDoc(it);
   const tpl=docs.slice().reverse().find(x=>x&&x.t===t)||docs[docs.length-1]||{};
-  const F=d.lines.filter(l=>l.kind==='F').map(l=>mkLine(l,K)),M=d.lines.filter(l=>l.kind==='M').map(l=>mkLine(l,K)),travel=d.lines.filter(l=>l.kind==='T'),travelAmount=r2(travel.reduce((sum,l)=>sum+nv(l.q)*nv(l.pu),0));
+  const usable=d.lines.filter(l=>!lineIncomplete(l)),F=usable.filter(l=>l.kind==='F').map(l=>mkLine(l,K)),M=usable.filter(l=>l.kind==='M').map(l=>mkLine(l,K)),travel=usable.filter(l=>l.kind==='T'),travelAmount=r2(travel.reduce((sum,l)=>sum+nv(l.q)*nv(l.pu),0));
   const rate=d.tot.rate!=null?d.tot.rate:(tpl.tva!=null?tpl.tva:10);
   if(dup&&it.dup==='replace'){dup.F=F;dup.M=M;dup.travelOn=travel.length>0;dup.travelAmount=travelAmount;dup.rm=d.tot.rmPct||0;dup.tva=rate;if(cid)dup[K.dCli]=cid;out.push('Document '+dup[K.dNum]+' remis dans ta mise en page');return dup}
   const o=emptyLike(tpl);o.id=uid();o.t=t;
@@ -592,17 +592,18 @@ async function commit(it){const s=SS();if(!s)return say('Application non prête'
   let archive=it.archive||null;
   if(it.kind==='pdf'&&it.file&&!archive){try{if(typeof G.uploadSourcePdf!=='function')throw new Error('Le stockage des PDF en ligne n’est pas disponible.');archive=await G.uploadSourcePdf(it.file);it.archive=archive;indexArchive(s,it,archive,null);G.save&&G.save('cfg')}catch(e){it.err='PDF non archivé en ligne : '+e.message;it.status='warn';paint();say(it.err);return}}
   if(sc.all){const problems=transferProblems(it);if(problems.length)return say('Transfert complet bloqué : '+problems[0])}
-  else if(sc.pre||sc.fou){const lines=d.lines.filter(l=>(sc.pre&&l.kind!=='F')||(sc.fou&&l.kind==='F'));if(lines.some(l=>!l.ok))return say('Vérifie ou confirme les lignes orange avant de les ajouter à Mes tarifs')}
+  else if(sc.pre||sc.fou){const lines=d.lines.filter(l=>(sc.pre&&l.kind!=='F')||(sc.fou&&l.kind==='F'));if(!lines.some(l=>!lineIncomplete(l)))return say('Aucune ligne complète à enregistrer dans Mes tarifs.')}
   const K=probe(),out=[];let snapped=false;
   try{snap();snapped=true;let cid=null;
     if((sc.all||sc.cli)&&d.cli.name)cid=upCli(it,K,out);
     const kinds=[];if(sc.pre||(sc.all&&it.opt.keep))kinds.push('M');if(sc.fou||(sc.all&&it.opt.keep))kinds.push('F');
-    if(kinds.length&&d.type!=='x')upTarifs(d.lines.filter(l=>kinds.includes(l.kind==='F'?'F':'M')&&l.des&&l.pu>0),K,out);
+    if(kinds.length&&d.type!=='x')upTarifs(d.lines.filter(l=>kinds.includes(l.kind==='F'?'F':'M')&&!lineIncomplete(l)&&l.des&&l.pu>0),K,out);
     let doc=null;if(sc.all)doc=d.type==='x'?mkRapport(it,K,cid,out):mkDoc(it,K,cid,out);
     if(doc){doc._sourceFile=String(it.name||'').slice(0,180);doc._sourceText=String(it.raw||'').slice(0,200000);if(archive)doc._archive=archive}
     if(archive)indexArchive(s,it,archive,doc);
     ['clients','cat','docs','rep','seq'].forEach(k=>{try{G.save&&G.save(k)}catch(e){}});if(archive)try{G.save&&G.save('cfg')}catch(e){}
     if(typeof G.cliBackfill==='function')try{G.cliBackfill()}catch(e){}
+    const skipped=d.type==='x'?0:d.lines.filter(lineIncomplete).length;if(skipped)out.push(`${skipped} ligne${skipped>1?'s':''} incomplète${skipped>1?'s':''} ignorée${skipped>1?'s':''}.`);
     it.status='done';it.res={msg:out,id:doc&&doc.id,rep:d.type==='x'};persist();paint();say('Transfert terminé')}
   catch(e){if(snapped)undo();it.err='Transfert annulé : '+e.message;it.status='warn';paint();say((snapped?'Erreur, rien n\'a été modifié. ':'PDF non archivé en ligne : ')+e.message)}}
 
@@ -625,8 +626,11 @@ const CSS=`.imp svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-
 .imp-g{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.imp-g>*{min-width:0}.imp-g .w{grid-column:1/-1}
 .imp-f{display:block;margin:0 0 8px;font-size:13px;color:var(--mu);font-weight:500}.imp-f input,.imp-f select,.imp-f textarea{margin-top:4px;width:100%;font-size:16px}
 .imp-sub{font-size:15px;font-weight:700;margin:16px 0 8px;color:var(--ink)}
-.imp-ln{padding:10px;margin-bottom:8px;border:1.5px solid var(--ln);border-radius:14px}.imp-ln.w{border-color:var(--cu);background:color-mix(in srgb,var(--cu) 7%,transparent)}
+.imp-ln{margin-bottom:6px;border:1px solid var(--ln);border-radius:12px;background:var(--cd);overflow:hidden}.imp-ln.w{border-color:var(--cu);background:color-mix(in srgb,var(--cu) 7%,transparent)}
+.imp-ln>summary{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:center;padding:10px 12px;cursor:pointer;list-style:none}.imp-ln>summary::-webkit-details-marker,.imp-lines>summary::-webkit-details-marker,.imp-review-notes>summary::-webkit-details-marker{display:none}.imp-ln>summary:after{content:'⌄';grid-column:2;grid-row:1/3;color:var(--mu);font-size:16px}.imp-ln[open]>summary:after{content:'⌃'}.imp-line-label{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.imp-line-total{font-size:14px;font-weight:700;white-space:nowrap}.imp-line-meta{font-size:11px;color:var(--mu)}.imp-ln-edit{padding:0 10px 10px;border-top:1px solid var(--ln)}
 .imp-ln .imp-g{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:6px}.imp-tt{font-size:12px;color:var(--mu)}.imp-tt b{display:block;font-size:15px;color:var(--ink);padding-top:4px}
+.imp-lines{margin:10px 0}.imp-lines>summary{display:flex;justify-content:space-between;gap:8px;padding:9px 11px;border-radius:11px;background:var(--in);font-size:13px;font-weight:700;cursor:pointer;list-style:none}.imp-lines>summary small{font-weight:500;color:var(--mu)}.imp-lines[open]>summary{margin-bottom:6px}
+.imp-review-notes{margin:8px 0}.imp-review-notes>summary{padding:8px 10px;border-radius:10px;background:color-mix(in srgb,var(--cu) 9%,var(--in));font-size:12px;color:var(--mu);cursor:pointer;list-style:none}.imp-review-notes[open]>summary{margin-bottom:8px}
 .imp-la{display:flex;gap:8px;margin-top:8px}.imp-la button{flex:1;min-height:40px;border:0;border-radius:10px;background:var(--in);color:var(--ink);font:inherit;font-size:14px;font-weight:600}
 .imp-row{display:flex;justify-content:space-between;gap:8px;padding:5px 0}.imp-row.big{border-top:1px solid var(--ln);margin-top:4px;padding-top:8px;font-size:18px;font-weight:700}
 .imp-w{margin:8px 0;padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--cu) 12%,var(--in));font-size:13px;line-height:1.4}.imp-w.ok{background:color-mix(in srgb,var(--ok) 14%,var(--in))}
@@ -642,27 +646,26 @@ function itemRow(it){return`<div class="imp-it ${it.id===ST.sel?'sel':''}" data-
   <div class="imp-nm"><b>${H(it.name)}</b><small>${fsz(it.size||0)}</small>${it.status==='run'?`<div class="imp-bar"><i id="bar-${it.id}" style="width:${Math.round((it.prog||0)*100)}%"></i></div>`:''}${it.err?`<span class="imp-er">${H(it.err)}</span>`:''}</div>
   <span class="imp-st ${it.status}">${LAB[it.status]||''}</span>
   <div class="imp-ac"><button data-a="pv" aria-label="Aperçu">${IC.eye}</button><button data-a="re" aria-label="Réanalyser">${IC.re}</button><button data-a="rm" aria-label="Supprimer">${IC.tr}</button></div></div>`}
-function lineCard(l,i){return`<div class="imp-ln ${l.ok&&!lineIncomplete(l)?'':'w'}" data-i="${i}"><input data-l="des" value="${H(l.des)}" aria-label="Désignation">
-  <div class="imp-g"><label class="imp-f">Qté<input data-l="q" inputmode="decimal" value="${H(l.q)}"></label><label class="imp-f">Unité<input data-l="u" value="${H(l.u)}"></label><label class="imp-f">P.U. HT<input data-l="pu" inputmode="decimal" value="${H(l.pu)}"></label></div>
-  <div class="imp-row"><span class="imp-tt">Total ligne</span><b data-lt>${eur(nv(l.q)*nv(l.pu))}</b></div>
-  <div class="imp-la"><button data-a="kind">${l.kind==='M'?'→ Fournitures':'→ Prestations'}</button>${l.ok?'':`<button data-a="confirm-line">Confirmer la ligne</button>`}<button data-a="dl">Supprimer</button></div></div>`}
+function lineCard(l,i){const meta=`${H(l.q||0)} ${H(l.u||'u')} × ${eur(nv(l.pu))}`;return`<details class="imp-ln ${lineIncomplete(l)?'w':''}" data-i="${i}"><summary><span class="imp-line-label">${H(l.des||'Ligne sans désignation')}</span><b class="imp-line-total" data-lsummary-total>${eur(nv(l.q)*nv(l.pu))}</b><small class="imp-line-meta" data-lsummary-meta>${meta}</small></summary>
+  <div class="imp-ln-edit"><label class="imp-f">Désignation<input data-l="des" value="${H(l.des)}" aria-label="Désignation"></label><div class="imp-g"><label class="imp-f">Qté<input data-l="q" inputmode="decimal" value="${H(l.q)}"></label><label class="imp-f">Unité<input data-l="u" value="${H(l.u)}"></label><label class="imp-f">P.U. HT<input data-l="pu" inputmode="decimal" value="${H(l.pu)}"></label></div>
+  <div class="imp-row"><span class="imp-tt">Total ligne</span><b data-lt>${eur(nv(l.q)*nv(l.pu))}</b></div><div class="imp-la"><button data-a="kind">${l.kind==='M'?'→ Fournitures':'→ Prestations'}</button><button data-a="dl">Supprimer</button></div></div></details>`}
 function plan(it){const d=it.data,sc=it.sc,p=[];if(sc.all)p.push((d.type==='x'?'Rapport':d.type==='f'?'Facture':'Devis')+' complet'+(d.num?' '+d.num:'')+' dans ta mise en page');else{if(sc.cli)p.push('client');if(sc.pre)p.push('prestations → Mes tarifs');if(sc.fou)p.push('fournitures → Mes tarifs')}
   return p.length?'Sera enregistré : '+p.join(' · '):'Choisis au moins une catégorie.'}
-function reviewWarnings(it){const d=it.data,base=(d.warns||[]).filter(w=>!/^Écart entre le (?:total lu|TTC lu)/.test(w)&&!/^Certaines lignes sont à vérifier/.test(w)&&!/^Aucune ligne de prestation ou fourniture reconnue/.test(w));return base.concat(transferProblems(it))}
+function reviewWarnings(it){const d=it.data,base=(d.warns||[]).filter(w=>!/^Écart entre le (?:total lu|TTC lu)/.test(w)&&!/^Certaines lignes sont à vérifier/.test(w)&&!/^Aucune ligne de prestation ou fourniture reconnue/.test(w));return base.concat(transferWarnings(it))}
 function review(it){const d=it.data,c=calc(d),sc=it.sc,K=probe();
   if(it.status==='done'&&it.res)return`<div class="c imp"><h3>Transfert terminé</h3>${it.res.msg.map(m=>`<div class="imp-w ok">${H(m)}</div>`).join('')}
     ${it.res.id?`<button class="b cu" data-a="open"><span>Ouvrir dans l'app</span></button>`:''}<button class="b gh" data-a="un"><span>Annuler ce transfert</span></button></div>`;
-  const cands=clientCands(d.cli),dup=dupDoc(it),issues=transferProblems(it),M=d.lines.map((l,i)=>[l,i]).filter(x=>x[0].kind==='M'),F=d.lines.map((l,i)=>[l,i]).filter(x=>x[0].kind==='F'),T=d.lines.map((l,i)=>[l,i]).filter(x=>x[0].kind==='T');
-  const grp=(t,a)=>`<div class="imp-sub">${t} (${a.length})</div>${a.map(x=>lineCard(x[0],x[1])).join('')}`;
+  const cands=clientCands(d.cli),dup=dupDoc(it),issues=transferProblems(it),notes=reviewWarnings(it),M=d.lines.map((l,i)=>[l,i]).filter(x=>x[0].kind==='M'),F=d.lines.map((l,i)=>[l,i]).filter(x=>x[0].kind==='F'),T=d.lines.map((l,i)=>[l,i]).filter(x=>x[0].kind==='T');
+  const grp=(t,a)=>a.length?`<details class="imp-lines"><summary><span>${t} · ${a.length} ligne${a.length>1?'s':''}</span><small>${eur(a.reduce((s,x)=>s+nv(x[0].q)*nv(x[0].pu),0))}</small></summary>${a.map(x=>lineCard(x[0],x[1])).join('')}</details>`:'';
   return`<div class="c imp"><h3>Données extraites</h3>
-  <div data-review-warnings>${reviewWarnings(it).map(w=>`<div class="imp-w">${H(w)}</div>`).join('')}</div>
+  ${notes.length?`<details class="imp-review-notes"><summary>Analyse automatique · ${notes.length} note${notes.length>1?'s':''}</summary><div data-review-warnings>${notes.map(w=>`<div class="imp-w">${H(w)}</div>`).join('')}</div></details>`:`<div class="imp-w ok">Analyse automatique terminée.</div>`}
   <div class="imp-seg">${[['d','Devis'],['f','Facture'],['x','Rapport']].map(t=>`<button data-a="ty" data-t="${t[0]}" class="${d.type===t[0]?'on':''}">${t[1]}</button>`).join('')}</div>
   <div class="imp-g">${field('N° du document','num',d.num)}${field('Date','date',d.date||'',{t:'date'})}</div>
   ${dup?`<div class="imp-w">Ce numéro existe déjà dans l'app.<label class="imp-f">Que faire ?<select data-dup><option value="copy" ${it.dup!=='replace'?'selected':''}>Créer une copie (nouveau numéro)</option><option value="replace" ${it.dup==='replace'?'selected':''}>Remplacer le contenu de l'existant</option></select></label></div>`:''}
-  <div class="imp-sub">Client</div><div class="imp-g">${field('Nom','cli.name',d.cli.name,{w:1})}${field('Adresse','cli.addr',d.cli.addr,{w:1})}${field('Code postal','cli.cp',d.cli.cp,{m:'numeric'})}${field('Ville','cli.ville',d.cli.ville)}${field('Téléphone','cli.tel',d.cli.tel,{t:'tel'})}${field('E-mail','cli.email',d.cli.email,{t:'email'})}</div>
+  <details class="imp-lines"><summary><span>Client · ${H(d.cli.name||'non détecté')}</span><small>Déplier pour modifier</small></summary><div class="imp-g">${field('Nom','cli.name',d.cli.name,{w:1})}${field('Adresse','cli.addr',d.cli.addr,{w:1})}${field('Code postal','cli.cp',d.cli.cp,{m:'numeric'})}${field('Ville','cli.ville',d.cli.ville)}${field('Téléphone','cli.tel',d.cli.tel,{t:'tel'})}${field('E-mail','cli.email',d.cli.email,{t:'email'})}</div></details>
   ${d.addrs.length>1?`<div class="imp-f">Adresse à enregistrer</div>${d.addrs.map((a,i)=>`<label class="imp-opt o2 ${(it.addr||0)===i?'on':''}"><input type="radio" name="ad" data-ad="${i}" ${(it.addr||0)===i?'checked':''}><i class="imp-ck">${IC.ok}</i><span>${H(a.t)} : ${H([a.addr,a.cp,a.ville].filter(Boolean).join(' '))}</span></label>`).join('')}`:''}
   ${cands.length||(SS()&&(SS().clients||[]).length)?`<label class="imp-f">Client dans l'app<select data-match><option value="new" ${it.match==='new'?'selected':''}>Créer un nouveau client</option>${cands.map(x=>`<option value="${x.c.id}" ${it.match===x.c.id?'selected':''}>Utiliser : ${H(x.n)}</option>`).join('')}</select></label>`:''}
-  ${d.type==='x'?`<div class="imp-sub">Texte du rapport</div><label class="imp-f"><textarea data-f="txt" rows="8">${H(d.txt)}</textarea></label>`:`
+  ${d.type==='x'?`<details class="imp-lines"><summary><span>Texte du rapport</span><small>Déplier pour modifier</small></summary><label class="imp-f"><textarea data-f="txt" rows="8">${H(d.txt)}</textarea></label></details>`:`
   ${grp('Prestations',M)}<button class="b gh" data-a="add" data-k="M"><span>+ Ajouter une prestation</span></button>
   ${grp('Déplacements',T)}
   ${grp('Fournitures',F)}<button class="b gh" data-a="add" data-k="F"><span>+ Ajouter une fourniture</span></button>
@@ -674,8 +677,7 @@ function review(it){const d=it.data,c=calc(d),sc=it.sc,K=probe();
   ${[['cli','Client uniquement'],['pre','Prestations'],['fou','Fournitures'],['all','Tout le document']].map(o=>`<label class="imp-opt ${sc[o[0]]?'on':''}"><input type="checkbox" data-s="${o[0]}" ${sc[o[0]]?'checked':''}><i class="imp-ck">${IC.ok}</i><span>${o[1]}</span></label>`).join('')}
   <label class="imp-opt o2 ${it.opt.keep?'on':''}"><input type="checkbox" data-o="keep" ${it.opt.keep?'checked':''}><i class="imp-ck">${IC.ok}</i><span>Conserver les prix dans « Mes tarifs »</span></label>
   <label class="imp-opt o2 ${it.opt.num?'on':''}"><input type="checkbox" data-o="num" ${it.opt.num?'checked':''}><i class="imp-ck">${IC.ok}</i><span>Détecter et enregistrer le numéro du devis / facture</span></label>
-  <p class="imp-p" id="imp-plan">${H(plan(it))}</p><div class="imp-w ${issues.length?'':'ok'}" data-transfer-state ${sc.all&&issues.length?'':'hidden'}>${issues.length?'Transfert complet bloqué : corrige les points signalés ci-dessus.':'Lignes et totaux vérifiés.'}</div><button class="b cu" data-a="tr" ${sc.all&&issues.length?'disabled':''}><span>Valider le transfert</span></button>
-  <details style="margin-top:12px"><summary class="mu">Détails techniques</summary><pre>${H(JSON.stringify({numero:K.dNum,date:K.dDate,client:K.dCli,ligne:[K.lDes,K.lUnit],clients:K.c,tarifs:K.cat},null,1))}</pre></details></div>`}
+  <p class="imp-p" id="imp-plan">${H(plan(it))}</p><div class="imp-w ${issues.length?'':'ok'}" data-transfer-state ${sc.all&&issues.length?'':'hidden'}>${issues.length?'Aucune ligne complète à importer.':'Les lignes complètes seront importées automatiquement. Les lignes incomplètes seront ignorées.'}</div><button class="b cu" data-a="tr" ${sc.all&&issues.length?'disabled':''}><span>Importer sans vérifier chaque ligne</span></button></div>`}
 function view(){restore();const it=cur();
   return`<div class="c imp"><h3>Importer des documents</h3><p class="imp-p">Dépose un devis, une facture ou un rapport (PDF, photo, Word). Les données sont lues et rangées par catégorie, puis transférées dans ta mise en page.</p>
   <label class="imp-drop" id="imp-drop" for="imp-file">${IC.up}<b>Sélectionner des fichiers</b><small>PDF, Images, Word</small></label>
@@ -687,10 +689,10 @@ function view(){restore();const it=cur();
   ${it&&it.data?review(it):''}${UNDO&&!(it&&it.status==='done')?`<div class="c imp"><button class="b gh" data-a="un"><span>Annuler le dernier transfert</span></button></div>`:''}`}
 function paint(){const r=document.getElementById('imp-root');if(r)r.innerHTML=view()}
 function bar(it){const e=document.getElementById('bar-'+it.id);if(e)e.style.width=Math.round((it.prog||0)*100)+'%'}
-function updateReviewStatus(it){const r=document.getElementById('imp-root');if(!r||!it.data)return;const problems=transferProblems(it),warnings=reviewWarnings(it),list=r.querySelector('[data-review-warnings]'),state=r.querySelector('[data-transfer-state]'),btn=r.querySelector('[data-a="tr"]');
-  if(list)list.innerHTML=warnings.map(w=>`<div class="imp-w">${H(w)}</div>`).join('');if(state){state.hidden=!(it.sc&&it.sc.all);state.classList.toggle('ok',!problems.length);state.textContent=problems.length?'Transfert complet bloqué : corrige les points signalés ci-dessus.':'Lignes et totaux vérifiés.'}
+function updateReviewStatus(it){const r=document.getElementById('imp-root');if(!r||!it.data)return;const problems=transferProblems(it),warnings=reviewWarnings(it),list=r.querySelector('[data-review-warnings]'),note=r.querySelector('.imp-review-notes'),state=r.querySelector('[data-transfer-state]'),btn=r.querySelector('[data-a="tr"]');
+  if(list)list.innerHTML=warnings.map(w=>`<div class="imp-w">${H(w)}</div>`).join('');if(note){note.hidden=!warnings.length;const summary=note.querySelector('summary');if(summary)summary.textContent=`Analyse automatique · ${warnings.length} note${warnings.length>1?'s':''}`}if(state){state.hidden=!(it.sc&&it.sc.all);state.classList.toggle('ok',!problems.length);state.textContent=problems.length?'Aucune ligne complète à importer.':'Les lignes complètes seront importées automatiquement. Les lignes incomplètes seront ignorées.'}
   if(btn)btn.disabled=!!(it.sc&&it.sc.all&&problems.length);
-  r.querySelectorAll('.imp-ln[data-i]').forEach(box=>{const l=it.data.lines[+box.dataset.i];if(l)box.classList.toggle('w',!l.ok||lineIncomplete(l))})}
+  r.querySelectorAll('.imp-ln[data-i]').forEach(box=>{const l=it.data.lines[+box.dataset.i];if(l){box.classList.toggle('w',lineIncomplete(l));const label=box.querySelector('.imp-line-label'),total=box.querySelector('[data-lsummary-total]'),meta=box.querySelector('[data-lsummary-meta]');if(label)label.textContent=l.des||'Ligne sans désignation';if(total)total.textContent=eur(nv(l.q)*nv(l.pu));if(meta)meta.textContent=`${l.q||0} ${l.u||'u'} × ${eur(nv(l.pu))}`}})}
 function updTot(it){const r=document.getElementById('imp-root');if(!r||!it.data||it.data.type==='x')return;const c=calc(it.data);
   [['ht',c.ht],['tva',c.tva],['ttc',c.ttc]].forEach(a=>{const e=r.querySelector('[data-t="'+a[0]+'"]');if(e)e.textContent=eur(a[1])});updateReviewStatus(it)}
 function setPath(o,p,v){const k=p.split('.');let t=o;while(k.length>1)t=t[k.shift()];t[k[0]]=v}

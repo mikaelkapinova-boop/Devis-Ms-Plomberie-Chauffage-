@@ -67,8 +67,9 @@ function thNew(o, silent) {
 }
 function TH() { return S.threads.find(t => t.id === S.cfg.thc) || S.threads[0]; }
 function thSave() { const t = TH(); if (t) t.up = now(); save('threads'); }
-function thOpen(id) { S.cfg.thc = id; S.chat = TH().msgs; save('cfg'); SHEET = null; ATT = []; render(); }
+function thOpen(id) { S.cfg.thc = id; S.chat = TH().msgs; save('cfg'); sheetClose(); ATT = []; render(); }
 function thTitle(t) { return t.ti || (t.msgs.find(m => m.r === 'u') || {}).t?.slice(0, 48) || (DEM[t.k] ? DEM[t.k].l : 'Nouvelle conversation') + ' · ' + new Date(t.up).toLocaleDateString('fr-FR', {day: '2-digit', month: 'short'}); }
+function thBucket(t) { const d=new Date(t.up||0),n=new Date(),a=new Date(n.getFullYear(),n.getMonth(),n.getDate()).getTime(),b=new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime(),days=Math.max(0,Math.floor((a-b)/86400000));return days===0?'Aujourd’hui':days===1?'Hier':days<7?'7 derniers jours':'Plus anciens'; }
 
 /* chatPush / chatClear : fil courant */
 chatPush = function (m) { m.ts = now(); const t = TH(); t.msgs.push(m); if (t.msgs.length > 300) t.msgs.splice(0, t.msgs.length - 300); S.chat = t.msgs; if (!t.ti && m.r === 'u' && m.t && m.t[0] !== '(') t.ti = m.t.replace(/\s+/g, ' ').slice(0, 48); thSave(); save('chat'); };
@@ -124,6 +125,9 @@ chatClear = function () { thNew(); render(); };
 #sheet input{background:var(--cd)}
 #sheet .note{font-size:12.5px;color:var(--mu);margin:8px 6px 0;line-height:1.4}
 #sheet .fiche{background:var(--cd);border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.45;white-space:pre-wrap;color:var(--ink)}
+#sheet.history-open .pn{left:0;right:auto;top:0;bottom:0;width:min(380px,88vw);height:100dvh;max-height:none;margin:0;padding:calc(16px + env(safe-area-inset-top,0px)) 12px calc(16px + env(safe-area-inset-bottom,0px));border-radius:0 20px 20px 0;animation:hs .22s cubic-bezier(.2,.8,.2,1)}
+#sheet.history-open .grab{display:none}#sheet.history-open h2{margin:2px 4px 14px}#sheet.history-open h2 span{display:flex;gap:12px;align-items:center}#sheet.history-open #thq{margin-bottom:14px}#sheet .th-row{display:flex;align-items:stretch;border-bottom:1px solid var(--ln)}#sheet .th-row:last-child{border-bottom:0}#sheet .th-entry{flex:1;min-width:0;padding:11px 8px 11px 12px;border:0}#sheet .th-entry .ic{width:28px;height:28px;font-size:15px}#sheet .th-entry .tx b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#sheet .th-entry .tx small{font-size:11px}#sheet .th-tools{display:flex;align-items:center;gap:2px;padding:0 6px}#sheet .th-tools button{width:32px;height:36px;border:0;border-radius:9px;background:transparent;color:var(--mu);font-size:17px}#sheet .th-tools button:active{background:var(--in)}#sheet .th-tools .del{color:var(--rd)}
+@keyframes hs{from{transform:translateX(-100%)}to{transform:none}}
 @keyframes su{from{transform:translateY(100%)}to{transform:none}}@keyframes fi{from{opacity:0}to{opacity:1}}
 .mcdot{width:8px;height:8px;border-radius:50%;background:#aaa;display:inline-block;margin-right:4px}.mcdot.on{background:var(--ok)}
 `;
@@ -235,11 +239,11 @@ function bub2(m, i) {
   acts += B('Copier', `copyMsg(${i},this)`, 'b gh sm');
   return `<div class="bub ${m.r}">${at ? `<div class="atts">${at}</div>` : ''}${m.r === 'u' ? esc(m.t).replace(/\n/g, '<br>') : mdl(m.t)}${m.q ? qCard(m.q, i) : ''}${acts ? `<div class="acts">${acts}</div>` : ''}<span class="meta">${m.via ? esc(m.via) + ' · ' : ''}${m.ts ? new Date(m.ts).toLocaleString('fr-FR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) : ''}</span></div>`;
 }
-function thRename() { const t = TH(), v = prompt('Nom de la conversation :', thTitle(t)); if (v === null) return; t.ti = v.trim().slice(0, 60); thSave(); render(); }
+function thRename(id) { const t = id ? S.threads.find(x=>x.id===id) : TH(); if(!t)return; const v = prompt('Nom de la conversation :', thTitle(t)); if (v === null) return; t.ti = v.trim().slice(0, 60); t.up=now(); save('threads'); if(t.id===S.cfg.thc)render(); if(SHEET==='fils')sheetRender(); }
 
 /* ---------- Feuilles (menus du bas) ---------- */
 function sheetOpen(n) { SHEET = n; THQ = ''; sheetRender(); }
-function sheetClose() { SHEET = null; const s = $('#sheet'); s.classList.remove('o'); s.innerHTML = ''; }
+function sheetClose() { SHEET = null; const s = $('#sheet'); s.classList.remove('o','history-open'); s.innerHTML = ''; }
 function sheetRender() {
   const s = $('#sheet'); if (!SHEET) return sheetClose();
   const t = TH(), IT = (a, v, ic, b, sm, on) => `<button class="it" data-a="${a}" data-v="${esc(v)}"><span class="ic">${ic}</span><span class="tx"><b>${b}</b>${sm ? `<small>${sm}</small>` : ''}</span>${on ? '<span class="ck">✓</span>' : ''}</button>`;
@@ -280,11 +284,13 @@ function sheetRender() {
     }
   } else if (SHEET === 'fils') {
     const L = S.threads.slice().sort((a, b) => b.up - a.up).filter(x => !THQ || (thTitle(x) + ' ' + x.msgs.map(m => m.t).join(' ')).toLowerCase().includes(THQ));
-    h = `<h2>Conversations<button data-a="new">Nouvelle</button></h2><input id="thq" type="search" placeholder="Rechercher" value="${esc(THQ)}" oninput="THQ=this.value.toLowerCase();sheetRender();setTimeout(()=>{const e=$('#thq');e.focus();e.setSelectionRange(e.value.length,e.value.length)},0)" style="margin-bottom:10px">
-<div class="grp">${L.map(x => { const last = x.msgs[x.msgs.length - 1]; return `<div class="it" style="padding-right:8px"><span class="ic">${DEM[x.k]?.ic || '💬'}</span><span class="tx" data-a="open" data-v="${x.id}" style="cursor:pointer"><b>${esc(thTitle(x))}</b><small>${esc(DEM[x.k]?.l || '')} · ${esc(iaLabel(x))}<br>${last ? esc(String(last.t || '').replace(/\s+/g, ' ').slice(0, 70)) : 'Vide'} · ${new Date(x.up).toLocaleDateString('fr-FR', {day: '2-digit', month: 'short'})}</small></span>${x.id === S.cfg.thc ? '<span class="ck">✓</span>' : ''}<button class="del" data-a="thdel" data-v="${x.id}">Supprimer</button></div>`; }).join('') || '<p class="note" style="padding:12px">Aucune conversation.</p>'}</div>`;
+    const groups=['Aujourd’hui','Hier','7 derniers jours','Plus anciens'];
+    const rows=groups.map(g=>{const list=L.filter(x=>thBucket(x)===g);if(!list.length)return '';return `<div class="gl">${g}</div><div class="grp">${list.map(x=>{const last=[...x.msgs].reverse().find(m=>m.r==='u')||x.msgs[x.msgs.length-1];return `<div class="th-row"><button class="it th-entry" data-a="open" data-v="${esc(x.id)}"><span class="ic">${DEM[x.k]?.ic||'💬'}</span><span class="tx"><b>${esc(thTitle(x))}</b><small>${last?esc(String(last.t||'').replace(/\s+/g,' ').slice(0,72)):'Nouvelle conversation'}</small></span>${x.id===S.cfg.thc?'<span class="ck">✓</span>':''}</button><span class="th-tools"><button data-a="threname" data-v="${esc(x.id)}" aria-label="Renommer la conversation" title="Renommer">✎</button><button class="del" data-a="thdel" data-v="${esc(x.id)}" aria-label="Supprimer la conversation" title="Supprimer">×</button></span></div>`}).join('')}</div>`}).join('');
+    h = `<h2>Conversations<span><button data-a="close">Fermer</button><button data-a="new">Nouvelle</button></span></h2><input id="thq" type="search" placeholder="Rechercher dans l’historique" aria-label="Rechercher dans l’historique" value="${esc(THQ)}" oninput="THQ=this.value.toLowerCase();sheetRender();setTimeout(()=>{const e=$('#thq');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}},0)">
+${rows||'<p class="note" style="padding:12px">Aucune conversation trouvée.</p>'}`;
   }
   s.innerHTML = `<div class="bg"></div><div class="pn"><div class="grab"></div>${h}</div>`;
-  s.classList.add('o');
+  s.classList.add('o'); s.classList.toggle('history-open',SHEET==='fils');
 }
 function sheetAct(a, v, b) {
   const t = TH();
@@ -294,6 +300,7 @@ function sheetAct(a, v, b) {
   if (a === 'cam') { sheetClose(); return $('#fcam').click(); }
   if (a === 'new') { sheetClose(); thNew(); return render(); }
   if (a === 'open') return thOpen(v);
+  if (a === 'threname') return thRename(v);
   if (a === 'thdel') { if (b.dataset.ok) { S.threads = S.threads.filter(x => x.id !== v); if (!S.threads.length) thNew({}, false); if (S.cfg.thc === v) S.cfg.thc = S.threads[0].id; S.chat = TH().msgs; save('threads'); save('cfg'); render(); return sheetRender(); } b.dataset.ok = '1'; b.textContent = 'Confirmer ?'; return; }
   if (a === 'dem') {
     if (t.k !== v) {
@@ -814,7 +821,7 @@ var css=document.createElement("style");css.textContent=".px-card{background:var
 /* === VERSION 7.18.5 === */
 (function(){
 "use strict";
-var APP_VERSION="7.28.0",APP_RELEASE="Assistant local Qwen3.5 0.8B et réflexion rapide sur PC.";
+var APP_VERSION="7.29.0",APP_RELEASE="Historique du chat en panneau latéral, importation simplifiée et aperçu de document modifiable.";
 window.APP_VERSION=APP_VERSION;
 var appVersionLabel=document.getElementById("appver");if(appVersionLabel)appVersionLabel.textContent="v"+APP_VERSION.split(".").slice(0,2).join(".");
 window.newsShow=function(){var d=document.createElement("div");d.className="news";d.innerHTML="<div><h2>Version "+APP_VERSION+"</h2><p>"+APP_RELEASE+"</p><button class='b' style='width:100%;margin-top:10px' onclick='this.closest(\".news\").remove()'><span>Compris</span></button></div>";d.addEventListener("click",function(e){if(e.target===d)d.remove()});document.body.appendChild(d)};
