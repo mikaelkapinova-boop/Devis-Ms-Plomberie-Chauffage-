@@ -30,7 +30,7 @@ L’importateur accepte les PDF, photos/scans, documents Word `.docx`, texte et 
 
 Les devis, factures et rapports sont recréés dans la mise en page de l’application. Les achats importés peuvent être classés par mois ou rattachés à un chantier. Les montants extraits sont à vérifier avant validation.
 
-## Version 7.27
+## Version 7.28
 
 - Chat simplifié avec menu d’ajout inspiré de l’interface mobile, gestion des conversations, raccourcis photo et appel vocal.
 - Assistant Qwen3.5 0.8B via Ollama sur le PC, avec recherche Web DuckDuckGo.
