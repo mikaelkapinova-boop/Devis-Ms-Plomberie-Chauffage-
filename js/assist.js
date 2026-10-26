@@ -728,11 +728,11 @@ async function pxArmySend(t,txt,clear){
 }
 async function oraclePost(body){
  var endpoint=ollamaBridgeUrl('/api/ollama');
- var controller=new AbortController(),timeout=setTimeout(function(){controller.abort()},58000),r,j={};
+ var controller=new AbortController(),timeout=setTimeout(function(){controller.abort()},175000),r,j={};
  try{
   r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+CLOUD_SYNC_TOKEN},body:JSON.stringify(body),signal:controller.signal});
   try{j=await r.json()}catch(e){}
- }catch(e){return {_err:1,_st:e&&e.name==='AbortError'?504:502,_msg:e&&e.name==='AbortError'?'Le modèle local dépasse le délai de réponse.':ollamaConnectionMessage()}}
+ }catch(e){return {_err:1,_st:e&&e.name==='AbortError'?504:502,_msg:e&&e.name==='AbortError'?'Ollama n’a pas terminé après presque 3 minutes. Le PC répond, mais cette demande est trop longue pour le modèle local.':ollamaConnectionMessage()}}
  finally{clearTimeout(timeout)}
  if(!r.ok)return {_err:1,_st:r.status,_msg:j&&j.error&&(j.error.message||j.error.type)||'Erreur Ollama (HTTP '+r.status+')'};
  return {choices:[{message:{content:j&&j.message&&j.message.content||''}}]}
@@ -822,10 +822,10 @@ var css=document.createElement("style");css.textContent=".px-card{background:var
 var pxRender=render;render=function(){var result=pxRender.apply(this,arguments);if(V.v==="a"||SHEET==="ia")setTimeout(pxPresenceCheck,50);return result};
 })();
 
-/* === VERSION 7.36.0 === */
+/* === VERSION 7.37.0 === */
 (function(){
 "use strict";
-var APP_VERSION="7.36.0",APP_RELEASE="Statut PC séparé de la disponibilité d’Ollama.";
+var APP_VERSION="7.37.0",APP_RELEASE="L’assistant local peut répondre jusqu’à 175 secondes.";
 window.APP_VERSION=APP_VERSION;
 var appVersionLabel=document.getElementById("appver");if(appVersionLabel)appVersionLabel.textContent="v"+APP_VERSION.split(".").slice(0,2).join(".");
 window.newsShow=function(){var d=document.createElement("div");d.className="news";d.innerHTML="<div><h2>Version "+APP_VERSION+"</h2><p>"+APP_RELEASE+"</p><button class='b' style='width:100%;margin-top:10px' onclick='this.closest(\".news\").remove()'><span>Compris</span></button></div>";d.addEventListener("click",function(e){if(e.target===d)d.remove()});document.body.appendChild(d)};
