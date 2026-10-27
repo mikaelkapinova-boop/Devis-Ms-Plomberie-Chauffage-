@@ -694,13 +694,20 @@ var oldSheetAct=sheetAct;sheetAct=function(a,v,b){
  return oldSheetAct.apply(this,arguments)
 };
 
+window.importPdfDirect=function(){
+ if(typeof go!=="function")return;
+ go("i");
+ var picker=document.getElementById("imp-file");
+ if(picker)picker.click();
+};
+
 chatV=function(){
  var t=TH(),d=DEM[t.k]||DEM.devis,msgs=t.msgs.slice(-80),off=t.msgs.length-msgs.length,doc=d.mod?S.docs.find(function(x){return x.id===t.doc}):null;
  var welcome="<div class='bub a'><b>Bonjour, je suis l’assistant Devis MS.</b><br>Je peux préparer un devis, lire un PDF ou une photo, retrouver un client et chercher des informations actuelles sur Internet. Les documents restent à vérifier avant enregistrement.</div>";
  var placeholder="Message à l’assistant…";
  var typing=ASBUSY?"<div class='bub a'><span class='typing'><i></i><i></i><i></i></span></div>":"";
- var pills="<button class='pill' onclick=\"sheetOpen('dem')\">"+esc(d.l)+"</button><button class='pill' onclick=\"sheetOpen('ia')\">"+esc(iaLabel(t))+"</button>";
- return "<div class='ash'><button class='icb' onclick=\"sheetOpen('fils')\" aria-label='Historique des conversations'>☰</button><div class='ttl'>"+esc(thTitle(t))+"</div><button class='icb' onclick='thNew();render()' aria-label='Nouvelle conversation'>✎</button></div><div class='chat-scroll-wrap'><div id='cm' class='cm'>"+(msgs.length?msgs.map(function(m,i){return bub2(m,off+i)}).join(""):welcome)+typing+"</div><button id='chat-bottom' class='chat-bottom' onclick='chatGoBottom(true)' aria-label='Aller au dernier message' title='Aller au dernier message' hidden>↓</button></div><div class='cmp2'><div class='pills'><button class='pill' onclick=\"sheetOpen('dem')\">"+esc(d.l)+"</button><button class='pill px-presence px-presence-pill px-checking' onclick=\"sheetOpen('ia')\" title='Connexion au PC en cours de vérification'><i class='px-ollama-dot'></i>"+esc(iaLabel(t))+"</button></div><div class='atts2'>"+ATT.map(function(a,i){return "<span class='chip'>"+(a.k==="pdf"?"📄":"🖼️")+" "+esc(a.f.name.slice(0,22))+"<button onclick='ATT.splice("+i+",1);render()'>×</button></span>"}).join("")+"</div><div class='crow2'><button class='plus' onclick=\"$('#fpick').click()\" aria-label='Joindre une photo ou un PDF' title='Joindre une photo ou un PDF'>+</button><textarea id='cin' rows='1' placeholder='"+placeholder+"' oninput='cinGrow(this)' onkeydown=\"if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))asSend()\"></textarea><button class='send' id='sendb' onclick='window.asSend()' "+(ASBUSY?"disabled":"")+">↑</button></div><input type='file' id='fpick' accept='image/*,application/pdf' multiple hidden onchange='attAdd(this.files)'></div>"
+ var pills="<button class='pill' onclick=\"sheetOpen('dem')\">"+esc(d.l)+"</button><button class='pill px-presence px-presence-pill px-checking' onclick=\"sheetOpen('ia')\" title='Connexion au PC en cours de vérification'><i class='px-ollama-dot'></i>"+esc(iaLabel(t))+"</button><button class='pill' onclick='importPdfDirect()' title='Importer un PDF dans ta mise en page'>📄 Importer PDF</button>";
+ return "<div class='ash'><button class='icb' onclick=\"sheetOpen('fils')\" aria-label='Historique des conversations'>☰</button><div class='ttl'>"+esc(thTitle(t))+"</div><button class='icb' onclick='thNew();render()' aria-label='Nouvelle conversation'>✎</button></div><div class='chat-scroll-wrap'><div id='cm' class='cm'>"+(msgs.length?msgs.map(function(m,i){return bub2(m,off+i)}).join(""):welcome)+typing+"</div><button id='chat-bottom' class='chat-bottom' onclick='chatGoBottom(true)' aria-label='Aller au dernier message' title='Aller au dernier message' hidden>↓</button></div><div class='cmp2'><div class='pills'>"+pills+"</div><div class='atts2'>"+ATT.map(function(a,i){return "<span class='chip'>"+(a.k==="pdf"?"📄":"🖼️")+" "+esc(a.f.name.slice(0,22))+"<button onclick='ATT.splice("+i+",1);render()'>×</button></span>"}).join("")+"</div><div class='crow2'><button class='plus' onclick=\"$('#fpick').click()\" aria-label='Joindre une photo ou un PDF' title='Joindre une photo ou un PDF'>+</button><textarea id='cin' rows='1' placeholder='"+placeholder+"' oninput='cinGrow(this)' onkeydown=\"if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))asSend()\"></textarea><button class='send' id='sendb' onclick='window.asSend()' "+(ASBUSY?"disabled":"")+">↑</button></div><input type='file' id='fpick' accept='image/*,application/pdf' multiple hidden onchange='attAdd(this.files)'></div>"
 };
 
 async function pxArmyAgent(t,q,role,effort){
