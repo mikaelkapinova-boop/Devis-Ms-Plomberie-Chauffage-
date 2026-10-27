@@ -48,6 +48,7 @@ PORT = 8765
 DOSSIER = os.path.dirname(os.path.abspath(__file__))
 FICHIER_TOKENS = os.path.join(DOSSIER, "tokens.json")  # ignoré par git (.gitignore)
 ORIGINES = {"https://mikaelkapinova-boop.github.io", "https://devis-ms-plomberie-chauffage.vercel.app",
+            "https://devis-pc.tailea7e05.ts.net",
             f"http://{HOTE}:{PORT}", f"http://localhost:{PORT}"}
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
          ".json": "application/json; charset=utf-8", ".webmanifest": "application/manifest+json", ".png": "image/png",
